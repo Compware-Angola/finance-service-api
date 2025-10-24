@@ -1,46 +1,43 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config'; 
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { InvoiceModule } from './module/invoice/invoice.module';
 
 @Module({
   imports: [
-    // 1. Configuração do ConfigModule (DEVE SER O PRIMEIRO)
     ConfigModule.forRoot({
-      isGlobal: true, 
+      isGlobal: true,
     }),
-
-    // 2. Configuração do TypeORM usando useFactory para ler variáveis de ambiente
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule], 
-      inject: [ConfigService], 
-      useFactory: (config: ConfigService) => ({ 
-        type: 'mysql',
-        
- 
-        host: config.get<string>('DB_HOST', '192.168.30.45'), 
-        port: config.get<number>('DB_PORT', 3306),
-        username: config.get<string>('DB_USERNAME', 'root'), 
-        password: config.get<string>('DB_PASSWORD', 'root123'), 
-        database: config.get<string>('DB_DATABASE', 'uma_db_dev'),
-        
-        entities: [
-          __dirname + '/**/*.entity{.ts,.js}', 
-        ],
-        
-        synchronize: true, 
-        extra: {
-          ssl: false, 
-          timezone: 'UTC', 
-        }
-      }),
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const isSSL = config.get<string>('DB_SSL') === 'true';
+
+        return {
+          type: 'mysql',
+          host: config.get<string>('DB_HOST'),
+          port: config.get<number>('DB_PORT', 3306),
+          username: config.get<string>('DB_USERNAME'),
+          password: config.get<string>('DB_PASSWORD'),
+          database: config.get<string>('DB_DATABASE'),
+
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize: false,
+
+          extra: isSSL
+            ? {
+                ssl: {
+                  rejectUnauthorized: true,
+                },
+              }
+            : {},
+        };
+      },
     }),
-    
     InvoiceModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+
+
 })
 export class AppModule {}

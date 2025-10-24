@@ -33,7 +33,7 @@ async function bootstrap() {
   );
   // Use o processo.env.PORT ou 3001 como fallback
   await app.listen(process.env.PORT ?? 3001);
-  console.log(`🚀 API Listening on port ${process.env.PORT ?? 3001}.`);
+  console.log(`🚀 API Listening on port ${process.env.PORT ?? 3002}.`);
   console.log(`📖 Swagger Docs available at ${await app.getUrl()}/api/docs`);
 }
 bootstrap();

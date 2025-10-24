@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { InvoiceModule } from './module/invoice/invoice.module';
+import { PaymentsModule } from './module/payments/payments.module';
+import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { InvoiceModule } from './module/invoice/invoice.module';
       },
     }),
     InvoiceModule,
+    PaymentsModule,
+    DebtNegotiationModule,
   ],
 
 

@@ -9,6 +9,7 @@ import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
 import { InvoiceFilterPreEnrollmentDto } from './dto/invoice-filter-preenrollment.dto';
+import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
 
 @ApiTags('Faturas')
 @Controller('invoices')
@@ -35,6 +36,15 @@ export class InvoiceController {
   async findAll(@Query() paginationQuery: PaginationQueryDto): Promise<PagedResult<Invoice>> {
     return this.invoiceService.findAll(paginationQuery);
   }
+
+
+  @Get('types')
+  @ApiOperation({ summary: 'Retorna todos os tipos de documento de faturação' })
+  @ApiResponse({ status: 200, description: 'Lista de tipos de documento de faturação retornada com sucesso.' })
+  async findAllTypeInvoiceDocument(): Promise<TypeInvoiceDocument[]> {
+    return this.invoiceService.findAllTypeInvoiceDocument();
+  }
+
   // ------------------------------------
   // 6. FIND BY MATRICULA (GET /invoices/by-matricula)
   // ------------------------------------
@@ -73,7 +83,7 @@ export class InvoiceController {
     return this.invoiceService.findOne(Codigo);
   }
 
-
+ /*
   // ------------------------------------
   // 4. UPDATE (PATCH :id) - CORRIGIDO O NaN
   // ------------------------------------
@@ -87,7 +97,7 @@ export class InvoiceController {
     return this.invoiceService.update(Codigo, updateInvoiceDto);
   }
 
-  /* ------------------------------------
+  ------------------------------------
   // 5. REMOVE (DELETE :id) - CORRIGIDO O NaN
   // ------------------------------------
   @Delete(':id')

@@ -70,20 +70,15 @@ export class InvoiceNumberingAndHashService {
 
             const diff = datactual.diff(data_factura, 'years').years;
 
-         console.log('Data actual:', datactual.toISO());
-console.log('Data factura:', data_factura.toISO());
-console.log('Diferença em anos:', diff);
-console.log('Última fatura:', ultimaFatura);
-console.log('Número anterior:', ultimaFatura?.numSequenciaFactura);
+     
 
 const numSequenciaFactura =
   diff < 1 && ultimaFatura?.numSequenciaFactura != null
     ? ultimaFatura.numSequenciaFactura + 1
     : 1;
 
-console.log('Novo número sequencial:', numSequenciaFactura);
 
-            const numeracaoFactura = `${tipo_factura_sigla} ${ano_designacao}/${numSequenciaFactura}`;
+            const numeracaoFactura = `${tipo_factura_sigla} UMA ${ano_designacao}/${numSequenciaFactura}`;
 
 
             const privateKeyString = await this.key.getPrivateKey();

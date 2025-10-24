@@ -10,16 +10,24 @@ import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
 import { InvoiceFilterPreEnrollmentDto } from './dto/invoice-filter-preenrollment.dto';
 import { InvoiceNumberingAndHashService } from './invoice-numbering-hash.service'; 
+import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
+import { AcademicYear } from './entities/academic.year.entity';
 
 
 @Injectable()
 export class InvoiceService {
-  constructor(
-    @InjectRepository(Invoice)
-    private readonly invoiceRepository: Repository<Invoice>,
-    private readonly hashService: InvoiceNumberingAndHashService, 
-  ) { }
+constructor(
+  @InjectRepository(Invoice)
+  private readonly invoiceRepository: Repository<Invoice>,
 
+  @InjectRepository(TypeInvoiceDocument)
+  private readonly typeInvoiceDocumentRepository: Repository<TypeInvoiceDocument>,
+
+  @InjectRepository(AcademicYear)
+  private readonly academicYearRepository: Repository<AcademicYear>,
+
+  private readonly hashService: InvoiceNumberingAndHashService,
+) {}
   /**
    * Cria e salva uma nova fatura no banco de dados, incluindo a geração de hash e sequenciamento.
    * @param createInvoiceDto Dados da nova fatura.
@@ -30,15 +38,16 @@ export class InvoiceService {
     const tipoDocumentoId = createInvoiceDto.tipo_documento_factura_id || 2;
     
     // ⚠️ Busque o Tipo de Documento (ou injete um serviço que o faça)
-     // const tipoDocumento = await this.tipoDocumentoRepository.findOne({ where: { id: tipoDocumentoId } });
-    // if (!tipoDocumento) { throw new NotFoundException('Tipo de documento inválido.'); }
-    const tipoDocumentoSigla = 'FT'; // SIMULAÇÃO: Use o valor real de tipoDocumento.sigla
-    const anoLetivoId = 23; // SIMULAÇÃO: use o ID do ano letivo ativo ou do DTO
-    // Ex: const anoLetivo = await this.anoLetivoRepository.findOne({ where: { id: anoLetivoId } });
-    const anoLetivoDesignacao = '2025'; // SIMULAÇÃO: Use o valor real de anoLetivo.designacao
+     const document = await this.typeInvoiceDocumentRepository.findOne({ where: { id: tipoDocumentoId } });
+    if (!document) { throw new NotFoundException('Tipo de documento inválido.'); }
+    const tipoDocumentoSigla = document.sigla;
+     const academicyear = await this.academicYearRepository.findOne({ where: { estado: 'Activo'} });
+     if (!academicyear) { throw new NotFoundException('Ano letivo Não definido no sistema .'); }
+    const anoLetivoDesignacao = academicyear.Designacao; 
     // O ID do Polo/Condomínio vem do DTO
-    const poloId = createInvoiceDto.polo_id;
-    
+    const poloId = createInvoiceDto.polo_id || 1;
+    const anoLetivoId = academicyear.Codigo;
+   
     // 2. CHAMAR O SERVIÇO UTILIÁRIO
     const hashData = await this.hashService.generateInvoiceHashData(
       createInvoiceDto.TotalPreco,
@@ -51,9 +60,8 @@ export class InvoiceService {
   
     // 4. PREPARAÇÃO DA ENTIDADE ANTES DE SALVAR
     const invoiceToCreate = this.invoiceRepository.create({
-        ...createInvoiceDto, // Dados do DTO
+        ...createInvoiceDto, 
         poloId:poloId,
-        // Adiciona os dados gerados pelo serviço utilitário
         numSequenciaFactura: hashData.numSequenciaFactura,
         NextFactura: hashData.numeracaoFactura ,
         next: hashData.numeracaoFactura,
@@ -98,6 +106,12 @@ export class InvoiceService {
       totalPages,
     };
   }
+
+  async findAllTypeInvoiceDocument(): Promise<TypeInvoiceDocument[]> {
+    return this.typeInvoiceDocumentRepository.find();
+  }
+
+
 async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<Invoice>> {
     const { limit = 10, page = 1, codigoMatricula } = filterQuery;
     

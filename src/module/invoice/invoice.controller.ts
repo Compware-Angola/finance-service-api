@@ -11,7 +11,7 @@ import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code
 import { InvoiceFilterPreEnrollmentDto } from './dto/invoice-filter-preenrollment.dto';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
 
-@ApiTags('Faturas')
+@ApiTags('Invoices')
 @Controller('invoices')
 export class InvoiceController {
   constructor(private readonly invoiceService: InvoiceService) { }

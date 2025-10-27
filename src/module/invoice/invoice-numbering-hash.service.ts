@@ -19,9 +19,9 @@ interface InvoiceHashData {
     hashValor: string;
     plaintext: string;
     numeracaoFactura: string;
-    referencia: string;
+   
     numSequenciaFactura: number;
-    dataVencimento?: string;
+  
 }
 
 @Injectable()
@@ -103,9 +103,9 @@ const numSequenciaFactura =
                 hashValor: signature,
                 plaintext,
                 numeracaoFactura,
-                referencia: reference_key,
+               
                 numSequenciaFactura,
-                dataVencimento: dueDate
+              
             };
         } catch (error) {
             console.error('❌ Erro ao gerar hash e sequência da fatura:', error);

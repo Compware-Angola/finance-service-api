@@ -2,8 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { InvoiceModule } from './module/invoice/invoice.module';
-import { PaymentsModule } from './module/payments/payments.module';
-import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
+import { PaymentReferencesModule } from './module/payment-references/payment-references.module';
 
 @Module({
   imports: [
@@ -15,7 +14,6 @@ import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiatio
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const isSSL = config.get<string>('DB_SSL') === 'true';
-
         return {
           type: 'mysql',
           host: config.get<string>('DB_HOST'),
@@ -38,8 +36,8 @@ import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiatio
       },
     }),
     InvoiceModule,
-    PaymentsModule,
-    DebtNegotiationModule,
+    PaymentReferencesModule,
+ 
   ],
 
 

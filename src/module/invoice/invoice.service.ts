@@ -9,45 +9,55 @@ import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
 import { InvoiceFilterPreEnrollmentDto } from './dto/invoice-filter-preenrollment.dto';
-import { InvoiceNumberingAndHashService } from './invoice-numbering-hash.service'; 
+import { InvoiceNumberingAndHashService } from './invoice-numbering-hash.service';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
 import { AcademicYear } from './entities/academic.year.entity';
+import { genearateKeyNumber } from '../util/generate-key-number';
+import { generateDueDate } from '../util/generate-due-date';
 
 
 @Injectable()
 export class InvoiceService {
-constructor(
-  @InjectRepository(Invoice)
-  private readonly invoiceRepository: Repository<Invoice>,
+  constructor(
+    @InjectRepository(Invoice)
+    private readonly invoiceRepository: Repository<Invoice>,
 
-  @InjectRepository(TypeInvoiceDocument)
-  private readonly typeInvoiceDocumentRepository: Repository<TypeInvoiceDocument>,
+    @InjectRepository(TypeInvoiceDocument)
+    private readonly typeInvoiceDocumentRepository: Repository<TypeInvoiceDocument>,
 
-  @InjectRepository(AcademicYear)
-  private readonly academicYearRepository: Repository<AcademicYear>,
+    @InjectRepository(AcademicYear)
+    private readonly academicYearRepository: Repository<AcademicYear>,
 
-  private readonly hashService: InvoiceNumberingAndHashService,
-) {}
+    private readonly hashService: InvoiceNumberingAndHashService,
+  ) { }
   /**
    * Cria e salva uma nova fatura no banco de dados, incluindo a geração de hash e sequenciamento.
    * @param createInvoiceDto Dados da nova fatura.
    * @returns A fatura criada.
    */
-  async create(createInvoiceDto: CreateInvoiceDto): Promise<Invoice> {
-// 1. Obter Tipo de Documento e Ano Letivo (Geralmente por ID)
+  async create(createInvoiceDto: CreateInvoiceDto, referenceParams?: string,
+    dueDateParams?: string): Promise<Invoice> {
+    // 🔹 Se não vier "Referencia", gera automaticamente
+    const referencia: string =
+      referenceParams || (await genearateKeyNumber(9));
+
+    // 🔹 Se não vier "dataVencimento", gera automaticamente
+    const dueDate: string =
+      dueDateParams || (await generateDueDate(10));
+    // 1. Obter Tipo de Documento e Ano Letivo (Geralmente por ID)
     const tipoDocumentoId = createInvoiceDto.tipo_documento_factura_id || 2;
-    
+
     // ⚠️ Busque o Tipo de Documento (ou injete um serviço que o faça)
-     const document = await this.typeInvoiceDocumentRepository.findOne({ where: { id: tipoDocumentoId } });
+    const document = await this.typeInvoiceDocumentRepository.findOne({ where: { id: tipoDocumentoId } });
     if (!document) { throw new NotFoundException('Tipo de documento inválido.'); }
     const tipoDocumentoSigla = document.sigla;
-     const academicyear = await this.academicYearRepository.findOne({ where: { estado: 'Activo'} });
-     if (!academicyear) { throw new NotFoundException('Ano letivo Não definido no sistema .'); }
-    const anoLetivoDesignacao = academicyear.Designacao; 
+    const academicyear = await this.academicYearRepository.findOne({ where: { estado: 'Activo' } });
+    if (!academicyear) { throw new NotFoundException('Ano letivo Não definido no sistema .'); }
+    const anoLetivoDesignacao = academicyear.Designacao;
     // O ID do Polo/Condomínio vem do DTO
     const poloId = createInvoiceDto.polo_id || 1;
     const anoLetivoId = academicyear.Codigo;
-   
+
     // 2. CHAMAR O SERVIÇO UTILIÁRIO
     const hashData = await this.hashService.generateInvoiceHashData(
       createInvoiceDto.TotalPreco,
@@ -57,28 +67,28 @@ constructor(
       tipoDocumentoSigla,
       anoLetivoDesignacao
     );
-  
+
     // 4. PREPARAÇÃO DA ENTIDADE ANTES DE SALVAR
     const invoiceToCreate = this.invoiceRepository.create({
-        ...createInvoiceDto, 
-        poloId:poloId,
-        numSequenciaFactura: hashData.numSequenciaFactura,
-        NextFactura: hashData.numeracaoFactura ,
-        next: hashData.numeracaoFactura,
-        Referencia: hashData.referencia, 
-        hashValor: hashData.hashValor,
-        textoHash: hashData.plaintext,
-        dataVencimento: hashData.dataVencimento,
-        tipoDocumentoFacturaId: tipoDocumentoId,
-        anoLectivo: anoLetivoId,
-        
+      ...createInvoiceDto,
+      poloId: poloId,
+      numSequenciaFactura: hashData.numSequenciaFactura,
+      NextFactura: hashData.numeracaoFactura,
+      next: hashData.numeracaoFactura,
+      Referencia: referencia,
+      hashValor: hashData.hashValor,
+      textoHash: hashData.plaintext,
+      dataVencimento: dueDate,
+      tipoDocumentoFacturaId: tipoDocumentoId,
+      anoLectivo: anoLetivoId,
+
     });
-    
+
     return this.invoiceRepository.save(invoiceToCreate);
   }
-  
+
   // ... (RESTANTE DOS MÉTODOS MANTIDOS) ...
-  
+
   /**
      * Retorna todas as faturas com paginação.
      * @param paginationQuery O DTO com os parâmetros de paginação (page e limit).
@@ -112,9 +122,9 @@ constructor(
   }
 
 
-async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<Invoice>> {
+  async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<Invoice>> {
     const { limit = 10, page = 1, codigoMatricula } = filterQuery;
-    
+
     // 🛑 VERIFICAÇÃO DE SEGURANÇA CONTRA NaN
     if (isNaN(codigoMatricula)) {
       throw new BadRequestException('O código de matrícula fornecido é inválido.');
@@ -126,7 +136,7 @@ async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<Pag
     // TypeORM's findAndCount: [results, totalCount]
     const [invoices, total] = await this.invoiceRepository.findAndCount({
       where: {
-         CodigoMatricula: codigoMatricula // 🛑 CLÁUSULA WHERE COMENTADA
+        CodigoMatricula: codigoMatricula // 🛑 CLÁUSULA WHERE COMENTADA
       },
       take: limit,
       skip: skip,
@@ -151,7 +161,7 @@ async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<Pag
    */
   async findByPreEnrollmentCode(filterQuery: InvoiceFilterPreEnrollmentDto): Promise<PagedResult<Invoice>> {
     const { limit = 10, page = 1, codigoPreinscricao } = filterQuery;
-    
+
     // 🛑 VERIFICAÇÃO DE SEGURANÇA CONTRA NaN (importar BadRequestException no topo)
     if (isNaN(codigoPreinscricao)) {
       throw new BadRequestException('O código de pré-inscrição fornecido é inválido.');
@@ -163,11 +173,11 @@ async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<Pag
     // TypeORM's findAndCount: [results, totalCount]
     const [invoices, total] = await this.invoiceRepository.findAndCount({
       where: {
-        codigoPreinscricao: codigoPreinscricao 
+        codigoPreinscricao: codigoPreinscricao
       },
-      take: limit, 
-      skip: skip, 
-      order: { Codigo: 'DESC' }, 
+      take: limit,
+      skip: skip,
+      order: { Codigo: 'DESC' },
     });
 
     const totalPages = Math.ceil(total / limit);

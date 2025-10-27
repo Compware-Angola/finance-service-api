@@ -166,7 +166,7 @@ export class CreateInvoiceDto {
   
   /**
    * Ano Letivo relacionado.
-   */
+ 
   @ApiProperty({ 
     description: 'Ano Letivo relacionado.', 
     type: Number, 
@@ -177,7 +177,7 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsInt()
   ano_lectivo?: number = 1;
-  
+    */
   /**
    * Canal de comunicação (3 é o padrão).
    */

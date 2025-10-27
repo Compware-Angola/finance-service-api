@@ -222,6 +222,20 @@ export class InvoiceService {
     return this.findOne(Codigo); // Retorna a fatura atualizada
   }
 
+ async updateStatusByReference(reference: string, status: number): Promise<Invoice> {
+    const invoice = await this.invoiceRepository.findOne({ where: { Referencia: reference } });
+    if (!invoice) {
+      throw new NotFoundException(`Fatura com referência ${reference} não encontrada.`);
+    }
+
+    invoice.estado = status;
+    return this.invoiceRepository.save(invoice);
+  }
+
+  async findByReference(reference: string): Promise<Invoice | null> {
+    return this.invoiceRepository.findOne({ where: { Referencia: reference } });
+  }
+
   /*
   async remove(Codigo: number): Promise<{ deleted: boolean; message?: string }> {
     const result = await this.invoiceRepository.delete(Codigo);

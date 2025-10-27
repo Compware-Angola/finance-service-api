@@ -5,12 +5,22 @@ import { generateReferenceNumber } from '../util/generate-refence-number'
 import { AppyPayUtil } from '../util/appypay/appy-pay-util'
 import { InvoiceService } from '../invoice/invoice.service'
 import { CreateInvoiceDto } from '../invoice/dto/create-invoice.dto'
+import { AppyPayWebhookDto } from '../webhook/dto/appypay-webhook.dto'
+import { InjectRepository } from '@nestjs/typeorm'
+import { PaymentReferences } from './entities/payment-reference.entity'
+import { Repository } from 'typeorm'
+import { PaymentReferenceStatus, RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
 
 @Injectable()
 export class PaymentReferencesService {
   private readonly appyPayUtil: AppyPayUtil
+  
 
-  constructor(private readonly invoiceService: InvoiceService) {
+  constructor(
+       @InjectRepository (PaymentReferences)
+      private readonly paymentReferencesRepository: Repository<PaymentReferences>,
+    private readonly invoiceService: InvoiceService) {
+    
     this.appyPayUtil = new AppyPayUtil()
   }
 
@@ -75,7 +85,14 @@ export class PaymentReferencesService {
       nextInvoice:invoice.NextFactura,
     };
   }
-
+  async registerPaymentReference(appyPayWebhookDto: RegisterPaymentReferenceDto) {
+    // PAGAR REFERÊNCIA NO SISTEMA
+  
+    const paymentReference = this.paymentReferencesRepository.create({
+     ...appyPayWebhookDto
+    });
+    return this.paymentReferencesRepository.save(paymentReference);
+  }
 
   /**
    * 🧩 Monta o payload final para criação da referência AppyPay

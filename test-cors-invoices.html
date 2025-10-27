@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teste de CORS - /api/invoices</title>
+</head>
+<body>
+  <h1>🧾 Teste de CORS - Rota /api/invoices</h1>
+  <p>Clique no botão abaixo para testar a rota:</p>
+
+  <button id="btnTest">Testar API</button>
+
+  <pre id="output" style="background:#222; color:#0f0; padding:10px; margin-top:20px; border-radius:8px; min-height:100px;"></pre>
+
+  <script>
+    const output = document.getElementById("output");
+
+    document.getElementById("btnTest").addEventListener("click", async () => {
+      output.textContent = "🔄 Enviando requisição...\n";
+
+      try {
+        const response = await fetch("http://192.168.30.45:3002/api/invoices?page=1&limit=10", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = text;
+        }
+
+        output.textContent += `✅ Status: ${response.status}\n\nResposta:\n` + JSON.stringify(data, null, 2);
+      } catch (error) {
+        output.textContent += "❌ Erro ao acessar API:\n" + error.message;
+        console.error(error);
+      }
+    });
+  </script>
+</body>
+</html>

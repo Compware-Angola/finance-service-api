@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { InvoiceModule } from './module/invoice/invoice.module';
 import { PaymentReferencesModule } from './module/payment-references/payment-references.module';
+import { WebhookModule } from './module/webhook/webhook.module';
+
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { PaymentReferencesModule } from './module/payment-references/payment-ref
     }),
     InvoiceModule,
     PaymentReferencesModule,
+    WebhookModule,
  
   ],
 

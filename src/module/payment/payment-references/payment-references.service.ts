@@ -1,16 +1,16 @@
 import { BadGatewayException, Injectable } from '@nestjs/common'
 import { CreatePaymentReferenceDto } from './dto/create-payment-reference.dto'
-import { generateDueDate } from '../util/generate-due-date'
-import { generateReferenceNumber } from '../util/generate-refence-number'
-import { AppyPayUtil } from '../util/appypay/appy-pay-util'
-import { InvoiceService } from '../invoice/invoice.service'
-import { CreateInvoiceDto } from '../invoice/dto/create-invoice.dto'
-import { AppyPayWebhookDto } from '../webhook/dto/appypay-webhook.dto'
+import { generateDueDate } from '../../util/generate-due-date'
+import { generateReferenceNumber } from '../../util/generate-refence-number'
+import { AppyPayUtil } from '../../util/appypay/appy-pay-util'
+import { InvoiceService } from '../../invoice/invoice.service'
+import { CreateInvoiceDto } from '../../invoice/dto/create-invoice.dto'
+import { AppyPayWebhookDto } from '../../webhook/dto/appypay-webhook.dto'
 import { InjectRepository } from '@nestjs/typeorm'
 import { PaymentReferences } from './entities/payment-reference.entity'
 import { Repository } from 'typeorm'
 import { PaymentReferenceStatus, RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
-import { InvoiceItem } from '../invoice/entities/InvoiceIten.entity'
+import { InvoiceItem } from '../../invoice/entities/InvoiceIten.entity'
 
 @Injectable()
 export class PaymentReferencesService {

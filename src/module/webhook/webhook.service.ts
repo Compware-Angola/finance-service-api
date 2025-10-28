@@ -1,8 +1,8 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InvoiceService } from '../invoice/invoice.service';
 import { AppyPayWebhookDto } from './dto/appypay-webhook.dto';
-import { PaymentReferencesService } from '../payment-references/payment-references.service';
-import { PaymentReferenceStatus, RegisterPaymentReferenceDto } from '../payment-references/dto/register-payment-reference.dto';
+import { PaymentReferencesService } from '../payment/payment-references/payment-references.service';
+import { PaymentReferenceStatus, RegisterPaymentReferenceDto } from '../payment/payment-references/dto/register-payment-reference.dto';
 
 @Injectable()
 export class WebhookService {

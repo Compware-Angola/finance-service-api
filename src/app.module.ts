@@ -2,8 +2,9 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { InvoiceModule } from './module/invoice/invoice.module';
-import { PaymentReferencesModule } from './module/payment-references/payment-references.module';
+import { PaymentReferencesModule } from './module/payment/payment-references/payment-references.module';
 import { WebhookModule } from './module/webhook/webhook.module';
+import { PaymentModule } from './module/payment/payment.module';
 
 
 @Module({
@@ -40,6 +41,7 @@ import { WebhookModule } from './module/webhook/webhook.module';
     InvoiceModule,
     PaymentReferencesModule,
     WebhookModule,
+    PaymentModule,
  
   ],
 

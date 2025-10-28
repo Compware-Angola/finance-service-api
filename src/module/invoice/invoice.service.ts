@@ -154,148 +154,122 @@ export class InvoiceService {
   // Define uma função auxiliar (pode ser em um utils.ts ou logo acima/abaixo)
 
 
-  async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
-    const { limit = 10, page = 1, codigoMatricula } = filterQuery;
+async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
+  const { limit = 10, page = 1, codigoMatricula } = filterQuery;
 
-    if (isNaN(codigoMatricula)) {
-      throw new BadRequestException('O código de matrícula fornecido é inválido.');
-    }
-
-    const skip = (page - 1) * limit;
-
-    // -----------------------------------------------------------
-    // 1. CÁLCULO DO TOTAL DE FATURAS DISTINTAS (Mantido)
-    // -----------------------------------------------------------
-    const totalQuery = this.invoiceRepository.createQueryBuilder('f')
-      .where('f.CodigoMatricula = :codigoMatricula', { codigoMatricula })
-      .select('COUNT(f.Codigo)', 'total'); // Não precisa de DISTINCT aqui, pois f.Codigo já é único
-
-    const totalResult = await totalQuery.getRawOne();
-    const total = parseInt(totalResult?.total || 0, 10);
-    const totalPages = Math.ceil(total / limit);
-
-    // Se não houver faturas, retorna vazio
-    if (total === 0) {
-      return { data: [], total, page, limit, totalPages };
-    }
-
-    // -----------------------------------------------------------
-    // 2. OBTENÇÃO DOS IDs DE FATURA PAGINADOS
-    // -----------------------------------------------------------
-    // Seleciona apenas os IDs de fatura (f.Codigo) para a página atual
-    const paginatedIdsQuery = this.invoiceRepository.createQueryBuilder('f')
-      .select('f.Codigo', 'CodigoFactura')
-      .where('f.CodigoMatricula = :codigoMatricula', { codigoMatricula })
-      .orderBy('f.Codigo', 'DESC')
-      .limit(limit)
-      .offset(skip);
-
-    const paginatedIds = await paginatedIdsQuery.getRawMany();
-    const invoiceCodes = paginatedIds.map(row => row.CodigoFactura);
-
-    // -----------------------------------------------------------
-    // 3. OBTENÇÃO DOS DETALHES COMPLETOS (TODOS OS ITENS) PARA ESSES IDs
-    // -----------------------------------------------------------
-    const detailsQuery = this.invoiceRepository.createQueryBuilder('f')
-      // JOINS (os mesmos)
-      .innerJoin('factura_items', 'fi', 'fi.CodigoFactura = f.Codigo')
-      .innerJoin('tb_tipo_servicos', 'ts', 'fi.CodigoProduto = ts.Codigo')
-      .innerJoin('mes_temp', 'mt', 'fi.mes_temp_id = mt.id')
-      .innerJoin('tb_matriculas', 'm', 'f.CodigoMatricula = m.Codigo')
-      .innerJoin('tb_admissao', 'a', 'm.Codigo_Aluno = a.codigo')
-      .innerJoin('tb_preinscricao', 'p', 'a.pre_incricao = p.Codigo')
-
-
-      .select([
-        // === CAMPOS DA FATURA (f) ===
-        'f.Codigo AS f_Codigo',
-        'f.DataFactura AS f_DataFactura',
-        'f.TotalPreco AS f_TotalPreco',
-        'f.CodigoMatricula AS f_CodigoMatricula',
-        'f.Referencia AS f_Referencia',
-        'f.Desconto AS f_Desconto',
-        'f.Troco AS f_Troco',
-        'f.totalIVA AS f_totalIVA',
-        'f.TotalMulta AS f_TotalMulta',
-        'f.total_incidencia AS f_total_incidencia',
-        'f.total_retencao AS f_total_retencao',
-        'f.ValorAPagar AS f_ValorAPagar',
-        'f.ValorEntregue AS f_ValorEntregue',
-        'f.ValorAPagarExtenso AS f_ValorAPagarExtenso',
-        'f.Descricao AS f_Descricao',
-        'f.ValorEntregueMltCX AS f_ValorEntregueMltCX',
-        'f.codigo_descricao AS f_codigo_descricao',
-        'f.NextFactura AS f_NextFactura',
-        'f.next AS f_next',
-        'f.texto_hash AS f_texto_hash',
-        'f.dataVencimento AS f_dataVencimento',
-        'f.polo_id AS f_polo_id',
-        'f.obs AS f_obs',
-        'f.hashValor AS f_hashValor',
-        'f.contaCorrente AS f_contaCorrente',
-        'f.faturaReference AS f_faturaReference',
-        'f.canal AS f_canal',
-        'f.ano_lectivo AS f_ano_lectivo',
-        'f.estado AS f_estado',
-        'f.corrente AS f_corrente',
-        'f.codigo_preinscricao AS f_codigo_preinscricao',
-        'f.numSequenciaFactura AS f_numSequenciaFactura',
-        'f.tipo_documento_factura_id AS f_tipo_documento_factura_id',
-
-        // === CAMPOS DO ALUNO (p) ===
-        'p.Nome_Completo AS NomeCompletoAluno',
-        'p.Bilhete_Identidade AS BI_Aluno',
-        'p.Email AS EmailAluno',
-        'p.Contactos_Telefonicos',
-        'p.Data_Nascimento',
-
-        // === CAMPOS DO ITEM DA FATURA (fi) ===
-        'fi.codigo AS fi_codigo',
-        'fi.CodigoProduto AS fi_CodigoProduto',
-        'fi.CodigoFactura AS fi_CodigoFactura',
-        'fi.Quantidade AS fi_Quantidade',
-        'fi.Total AS fi_Total',
-        'fi.OBS AS fi_OBS',
-        'fi.taxa_iva AS fi_taxa_iva',
-        'fi.valor_iva AS fi_valor_iva',
-        'fi.preco AS fi_preco',
-        'fi.retencao AS fi_retencao',
-        'fi.incidencia AS fi_incidencia',
-        'fi.valor_desconto AS fi_valor_desconto',
-        'fi.descontoProduto AS fi_descontoProduto',
-        'fi.Mes AS fi_Mes',
-        'fi.Multa AS fi_Multa',
-        'fi.mes_temp_id AS fi_mes_temp_id',
-        'fi.codigo_anoLectivo AS fi_codigo_anoLectivo',
-        'fi.estado AS fi_estado',
-        'fi.valor_pago AS fi_valor_pago',
-        'fi.valor_a_transportar AS fi_valor_a_transportar',
-        // === CAMPOS DO SERVIÇO/PRODUTO (ts) ===
-        'ts.Descricao AS ts_Descricao',
-        // === CAMPOS DO MÊS (mt) ===
-        'mt.designacao AS MesDesignacao',
-      ])
-      // NOVO FILTRO: Apenas os IDs paginados
-      .where('f.Codigo IN (:...invoiceCodes)', { invoiceCodes })
-
-      .orderBy('f.Codigo', 'DESC')
-      .addOrderBy('fi.codigo', 'ASC');
-
-    const rawResults = await detailsQuery.getRawMany();
-
-    // -----------------------------------------------------------
-    // 4. AGRUPAMENTO FINAL (Agora só com os 10 resultados necessários)
-    // -----------------------------------------------------------
-    const paginatedInvoices = groupInvoices(rawResults);
-
-    return {
-      data: paginatedInvoices, // Conterá as 10 faturas agrupadas
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+  if (isNaN(codigoMatricula)) {
+    throw new BadRequestException('O código de matrícula fornecido é inválido.');
   }
+
+  const skip = (page - 1) * limit;
+
+  // 1️⃣ TOTAL DE FATURAS
+  const totalResult = await this.invoiceRepository.query(
+    `SELECT COUNT(*) AS total FROM factura WHERE CodigoMatricula = ?`,
+    [codigoMatricula],
+  );
+  const total = Number(totalResult[0]?.total || 0);
+  const totalPages = Math.ceil(total / limit);
+
+  if (total === 0) {
+    return { data: [], total, page, limit, totalPages };
+  }
+
+  // 2️⃣ CONSULTA PRINCIPAL COM PAGINAÇÃO COMPATÍVEL
+  const rawResults = await this.invoiceRepository.query(
+    `
+    SELECT 
+      f.Codigo AS f_Codigo,
+      f.DataFactura AS f_DataFactura,
+      f.TotalPreco AS f_TotalPreco,
+      f.CodigoMatricula AS f_CodigoMatricula,
+      f.Referencia AS f_Referencia,
+      f.Desconto AS f_Desconto,
+      f.Troco AS f_Troco,
+      f.totalIVA AS f_totalIVA,
+      f.TotalMulta AS f_TotalMulta,
+      f.total_incidencia AS f_total_incidencia,
+      f.total_retencao AS f_total_retencao,
+      f.ValorAPagar AS f_ValorAPagar,
+      f.ValorEntregue AS f_ValorEntregue,
+      f.ValorAPagarExtenso AS f_ValorAPagarExtenso,
+      f.Descricao AS f_Descricao,
+      f.ValorEntregueMltCX AS f_ValorEntregueMltCX,
+      f.codigo_descricao AS f_codigo_descricao,
+      f.NextFactura AS f_NextFactura,
+      f.next AS f_next,
+      f.texto_hash AS f_texto_hash,
+      f.dataVencimento AS f_dataVencimento,
+      f.polo_id AS f_polo_id,
+      f.obs AS f_obs,
+      f.hashValor AS f_hashValor,
+      f.contaCorrente AS f_contaCorrente,
+      f.faturaReference AS f_faturaReference,
+      f.canal AS f_canal,
+      f.ano_lectivo AS f_ano_lectivo,
+      f.estado AS f_estado,
+      f.corrente AS f_corrente,
+      f.codigo_preinscricao AS f_codigo_preinscricao,
+      f.numSequenciaFactura AS f_numSequenciaFactura,
+      f.tipo_documento_factura_id AS f_tipo_documento_factura_id,
+      p.Nome_Completo AS NomeCompletoAluno,
+      p.Bilhete_Identidade AS BI_Aluno,
+      p.Email AS EmailAluno,
+      p.Contactos_Telefonicos,
+      p.Data_Nascimento,
+      fi.codigo AS fi_codigo,
+      fi.CodigoProduto AS fi_CodigoProduto,
+      fi.CodigoFactura AS fi_CodigoFactura,
+      fi.Quantidade AS fi_Quantidade,
+      fi.Total AS fi_Total,
+      fi.OBS AS fi_OBS,
+      fi.taxa_iva AS fi_taxa_iva,
+      fi.valor_iva AS fi_valor_iva,
+      fi.preco AS fi_preco,
+      fi.retencao AS fi_retencao,
+      fi.incidencia AS fi_incidencia,
+      fi.valor_desconto AS fi_valor_desconto,
+      fi.descontoProduto AS fi_descontoProduto,
+      fi.Mes AS fi_Mes,
+      fi.Multa AS fi_Multa,
+      fi.mes_temp_id AS fi_mes_temp_id,
+      fi.codigo_anoLectivo AS fi_codigo_anoLectivo,
+      fi.estado AS fi_estado,
+      fi.valor_pago AS fi_valor_pago,
+      fi.valor_a_transportar AS fi_valor_a_transportar,
+      ts.Descricao AS ts_Descricao,
+      mt.designacao AS MesDesignacao
+    FROM (
+      SELECT Codigo
+      FROM factura
+      WHERE CodigoMatricula = ?
+      ORDER BY Codigo DESC
+      LIMIT ? OFFSET ?
+    ) AS sub
+    INNER JOIN factura f ON f.Codigo = sub.Codigo
+    LEFT JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
+    LEFT JOIN tb_tipo_servicos ts ON fi.CodigoProduto = ts.Codigo
+    LEFT JOIN mes_temp mt ON fi.mes_temp_id = mt.id
+    INNER JOIN tb_matriculas m ON f.CodigoMatricula = m.Codigo
+    INNER JOIN tb_admissao a ON m.Codigo_Aluno = a.codigo
+    INNER JOIN tb_preinscricao p ON a.pre_incricao = p.Codigo
+    ORDER BY f.Codigo DESC, fi.codigo ASC
+    `,
+    [codigoMatricula, limit, skip],
+  );
+
+  // 3️⃣ AGRUPAR RESULTADOS
+  const paginatedInvoices = groupInvoices(rawResults);
+
+  return {
+    data: paginatedInvoices,
+    total,
+    page,
+    limit,
+    totalPages,
+  };
+}
+
 
   /**
    * Retorna uma única fatura pelo seu código (chave primária).
@@ -359,7 +333,7 @@ function groupInvoices(rawData: any[]): any[] {
 
   for (const row of rawData) {
     // Usamos o alias explícito que adicionamos no SELECT
-   const invoiceId = row.fi_CodigoFactura || row.f_Codigo || row.CodigoFactura;
+    const invoiceId = row.fi_CodigoFactura || row.f_Codigo || row.CodigoFactura;
 
     if (!groupedData.has(invoiceId)) {
       // Cria o objeto da fatura, mapeando todas as colunas de f.*

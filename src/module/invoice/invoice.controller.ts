@@ -59,25 +59,13 @@ export class InvoiceController {
   }
 
   // ------------------------------------
-  // 7. FIND BY PRÉ-MATRICULA (GET /invoices/by-pre-matricula)
-  // ------------------------------------
-  @Get('by-pre-matricula')
-  @ApiOperation({ summary: 'Retorna faturas por Código de Pré-Inscrição, com paginação' })
-  @ApiResponse({ status: 200, description: 'Lista de faturas filtrada.' })
-  async findByPreMatricula(
-    @Query() filterQuery: InvoiceFilterPreEnrollmentDto
-  ): Promise<PagedResult<Invoice>> {
-    return this.invoiceService.findByPreEnrollmentCode(filterQuery);
-  }
-
-  // ------------------------------------
   // 3. FIND ONE (GET :id) - CORRIGIDO O NaN
   // ------------------------------------
   @Get(':id')
   @ApiOperation({ summary: 'Busca uma fatura pelo Código' })
   @ApiParam({ name: 'id', description: 'O Código (ID) da fatura', type: Number })
   @ApiResponse({ status: 200, description: 'Fatura encontrada.', type: Invoice })
-  @ApiResponse({ status: 400, description: 'ID da fatura inválido.' }) // Adicionado 400
+  @ApiResponse({ status: 400, description: 'ID da fatura inválido.' })
   @ApiResponse({ status: 404, description: 'Fatura não encontrada.' })
   async findOne(@Param('id', ParseIntPipe) Codigo: number): Promise<Invoice> {
     return this.invoiceService.findOne(Codigo);
@@ -96,7 +84,6 @@ export class InvoiceController {
   async update(@Param('id', ParseIntPipe) Codigo: number, @Body() updateInvoiceDto: UpdateInvoiceDto): Promise<Invoice> {
     return this.invoiceService.update(Codigo, updateInvoiceDto);
   }
-
   ------------------------------------
   // 5. REMOVE (DELETE :id) - CORRIGIDO O NaN
   // ------------------------------------

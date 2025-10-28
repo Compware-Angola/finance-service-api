@@ -7,10 +7,11 @@ import { InvoiceNumberingAndHashService } from './invoice-numbering-hash.service
 import { CompanyKey } from 'src/common/config/security/key-company';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
 import { AcademicYear } from './entities/academic.year.entity';
+import { InvoiceItem } from './entities/InvoiceIten.entity';
 
 @Module({
   imports: [
-   TypeOrmModule.forFeature([Invoice, TypeInvoiceDocument, AcademicYear]),
+   TypeOrmModule.forFeature([Invoice, TypeInvoiceDocument, AcademicYear,InvoiceItem]),
   ],
   controllers: [InvoiceController],
   providers: [

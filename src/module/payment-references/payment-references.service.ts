@@ -10,21 +10,28 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { PaymentReferences } from './entities/payment-reference.entity'
 import { Repository } from 'typeorm'
 import { PaymentReferenceStatus, RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
+import { InvoiceItem } from '../invoice/entities/InvoiceIten.entity'
 
 @Injectable()
 export class PaymentReferencesService {
   private readonly appyPayUtil: AppyPayUtil
-  
+
 
   constructor(
-       @InjectRepository (PaymentReferences)
-      private readonly paymentReferencesRepository: Repository<PaymentReferences>,
+    @InjectRepository(PaymentReferences)
+    private readonly paymentReferencesRepository: Repository<PaymentReferences>,
+
+    @InjectRepository(InvoiceItem)
+    private readonly invoiceItemRepository: Repository<InvoiceItem>,
     private readonly invoiceService: InvoiceService) {
-    
+
     this.appyPayUtil = new AppyPayUtil()
   }
 
   async create(createPaymentReferenceDto: CreatePaymentReferenceDto) {
+
+    const { itens, ...payments } = createPaymentReferenceDto;
+
     // 🕒 Gera dueDate e referenceNumber em paralelo (melhor desempenho)
     const [dueDate, referenceNumber] = await Promise.all([
       generateDueDate(3),
@@ -33,7 +40,7 @@ export class PaymentReferencesService {
 
     // 📦 Monta payload para AppyPay
     const payload = this.buildAppyPayPayload(
-      createPaymentReferenceDto,
+      payments,
       dueDate,
       referenceNumber,
     );
@@ -54,15 +61,16 @@ export class PaymentReferencesService {
     const createInvoiceDto: CreateInvoiceDto = {
       DataFactura: new Date().toISOString(),
       polo_id: 1,
-      TotalPreco: createPaymentReferenceDto.amount,
-      Descricao: createPaymentReferenceDto.description,
+      TotalPreco: payments.amount,
+      Descricao: payments.description,
       tipo_documento_factura_id: 2,
       Desconto: 0,
       totalIVA: 0,
       TotalMulta: 0,
       canal: 3,
-      CodigoMatricula: createPaymentReferenceDto.enrollment?.CodigoMatricula,
-      codigo_preinscricao: createPaymentReferenceDto.enrollment?.codigo_preinscricao,
+      CodigoMatricula: payments.enrollment?.CodigoMatricula,
+      codigo_preinscricao: payments.enrollment?.codigo_preinscricao,
+
     };
 
     // 🧠 Cria fatura e armazena no banco
@@ -73,6 +81,36 @@ export class PaymentReferencesService {
         dueDate,
       ),
     ]);
+ 
+    
+    if (itens && itens.length > 0) {
+      const invoiceItems = this.invoiceItemRepository.create(
+        itens.map(item => ({
+          codigoProduto: item.CodigoProduto,
+          codigoFactura: invoice.Codigo,
+          quantidade: item.Quantidade,
+          total: item.Total,
+          obs: item.obs,
+          taxaIva: item.taxaIva,
+          valorIva: item.valorIva,
+          preco: item.preco,
+          retencao: item.retencao,
+          incidencia: item.incidencia,
+          valorDesconto: item.valorDesconto,
+          descontoProduto: item.descontoProduto,
+          mes: item.mes,
+          multa: item.multa,
+          mesTempId: item.mesTempId,
+          codigoAnoLectivo: invoice.anoLectivo,
+          estado: item.estado,
+          valorPago: item.valorPago,
+          valorATransportar: item.valorATransportar,
+        }))
+      );
+
+      await this.invoiceItemRepository.save(invoiceItems);
+    }
+
 
     // ✅ Retorno final
     const entity = status.reference.entity;
@@ -81,15 +119,15 @@ export class PaymentReferencesService {
       referenceNumber,
       dueDate,
       entity,
-      invoiceNumber:invoice.numSequenciaFactura,
-      nextInvoice:invoice.NextFactura,
+      invoiceNumber: invoice.numSequenciaFactura,
+      nextInvoice: invoice.NextFactura,
     };
   }
   async registerPaymentReference(appyPayWebhookDto: RegisterPaymentReferenceDto) {
     // PAGAR REFERÊNCIA NO SISTEMA
-  
+
     const paymentReference = this.paymentReferencesRepository.create({
-     ...appyPayWebhookDto
+      ...appyPayWebhookDto
     });
     return this.paymentReferencesRepository.save(paymentReference);
   }

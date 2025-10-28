@@ -1,19 +1,19 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { Invoice } from './entities/invoice.entity';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
-import { InvoiceFilterPreEnrollmentDto } from './dto/invoice-filter-preenrollment.dto';
+
 import { InvoiceNumberingAndHashService } from './invoice-numbering-hash.service';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
 import { AcademicYear } from './entities/academic.year.entity';
 import { genearateKeyNumber } from '../util/generate-key-number';
 import { generateDueDate } from '../util/generate-due-date';
+import { InvoiceItem } from './entities/InvoiceIten.entity';
 
 
 @Injectable()
@@ -24,10 +24,13 @@ export class InvoiceService {
 
     @InjectRepository(TypeInvoiceDocument)
     private readonly typeInvoiceDocumentRepository: Repository<TypeInvoiceDocument>,
-
     @InjectRepository(AcademicYear)
+
+
     private readonly academicYearRepository: Repository<AcademicYear>,
 
+    @InjectRepository(InvoiceItem)
+    private readonly invoiceItemRepository: Repository<InvoiceItem>,
     private readonly hashService: InvoiceNumberingAndHashService,
   ) { }
   /**
@@ -37,6 +40,7 @@ export class InvoiceService {
    */
   async create(createInvoiceDto: CreateInvoiceDto, referenceParams?: string,
     dueDateParams?: string): Promise<Invoice> {
+    const { itens, ...invoiceData } = createInvoiceDto;
     // 🔹 Se não vier "Referencia", gera automaticamente
     const referencia: string =
       referenceParams || (await genearateKeyNumber(9));
@@ -67,10 +71,9 @@ export class InvoiceService {
       tipoDocumentoSigla,
       anoLetivoDesignacao
     );
-
     // 4. PREPARAÇÃO DA ENTIDADE ANTES DE SALVAR
     const invoiceToCreate = this.invoiceRepository.create({
-      ...createInvoiceDto,
+      ...invoiceData,
       poloId: poloId,
       numSequenciaFactura: hashData.numSequenciaFactura,
       NextFactura: hashData.numeracaoFactura,
@@ -83,10 +86,38 @@ export class InvoiceService {
       anoLectivo: anoLetivoId,
 
     });
+    const savedInvoice = await this.invoiceRepository.save(invoiceToCreate);
 
-    return this.invoiceRepository.save(invoiceToCreate);
+    if (itens && itens.length > 0) {
+      const invoiceItems = this.invoiceItemRepository.create(
+        itens.map(item => ({
+          codigoProduto: item.CodigoProduto,
+          codigoFactura: savedInvoice.Codigo,
+          quantidade: item.Quantidade,
+          total: item.Total,
+          obs: item.obs,
+          taxaIva: item.taxaIva,
+          valorIva: item.valorIva,
+          preco: item.preco,
+          retencao: item.retencao,
+          incidencia: item.incidencia,
+          valorDesconto: item.valorDesconto,
+          descontoProduto: item.descontoProduto,
+          mes: item.mes,
+          multa: item.multa,
+          mesTempId: item.mesTempId,
+          codigoAnoLectivo: savedInvoice.anoLectivo,
+          estado: item.estado,
+          valorPago: item.valorPago,
+          valorATransportar: item.valorATransportar,
+        }))
+      );
+
+      await this.invoiceItemRepository.save(invoiceItems);
+    }
+
+    return savedInvoice;
   }
-
   // ... (RESTANTE DOS MÉTODOS MANTIDOS) ...
 
   /**
@@ -120,70 +151,145 @@ export class InvoiceService {
   async findAllTypeInvoiceDocument(): Promise<TypeInvoiceDocument[]> {
     return this.typeInvoiceDocumentRepository.find();
   }
+  // Define uma função auxiliar (pode ser em um utils.ts ou logo acima/abaixo)
 
 
-  async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<Invoice>> {
+  async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
     const { limit = 10, page = 1, codigoMatricula } = filterQuery;
 
-    // 🛑 VERIFICAÇÃO DE SEGURANÇA CONTRA NaN
     if (isNaN(codigoMatricula)) {
       throw new BadRequestException('O código de matrícula fornecido é inválido.');
     }
 
-    // Calcula o 'offset' (quantos itens pular)
     const skip = (page - 1) * limit;
 
-    // TypeORM's findAndCount: [results, totalCount]
-    const [invoices, total] = await this.invoiceRepository.findAndCount({
-      where: {
-        CodigoMatricula: codigoMatricula // 🛑 CLÁUSULA WHERE COMENTADA
-      },
-      take: limit,
-      skip: skip,
-      order: { Codigo: 'DESC' },
-    });
+    // -----------------------------------------------------------
+    // 1. CÁLCULO DO TOTAL DE FATURAS DISTINTAS (Mantido)
+    // -----------------------------------------------------------
+    const totalQuery = this.invoiceRepository.createQueryBuilder('f')
+      .where('f.CodigoMatricula = :codigoMatricula', { codigoMatricula })
+      .select('COUNT(f.Codigo)', 'total'); // Não precisa de DISTINCT aqui, pois f.Codigo já é único
 
+    const totalResult = await totalQuery.getRawOne();
+    const total = parseInt(totalResult?.total || 0, 10);
     const totalPages = Math.ceil(total / limit);
 
-    return {
-      data: invoices,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
-  }
-
-  /**
-   * Retorna todas as faturas de um código de pré-inscrição específico, com paginação.
-   * @param filterQuery O DTO com os parâmetros de paginação e o codigoPreinscricao.
-   * @returns Um objeto contendo a lista de faturas, total e informações de paginação.
-   */
-  async findByPreEnrollmentCode(filterQuery: InvoiceFilterPreEnrollmentDto): Promise<PagedResult<Invoice>> {
-    const { limit = 10, page = 1, codigoPreinscricao } = filterQuery;
-
-    // 🛑 VERIFICAÇÃO DE SEGURANÇA CONTRA NaN (importar BadRequestException no topo)
-    if (isNaN(codigoPreinscricao)) {
-      throw new BadRequestException('O código de pré-inscrição fornecido é inválido.');
+    // Se não houver faturas, retorna vazio
+    if (total === 0) {
+      return { data: [], total, page, limit, totalPages };
     }
 
-    // Calcula o 'offset' (quantos itens pular)
-    const skip = (page - 1) * limit;
+    // -----------------------------------------------------------
+    // 2. OBTENÇÃO DOS IDs DE FATURA PAGINADOS
+    // -----------------------------------------------------------
+    // Seleciona apenas os IDs de fatura (f.Codigo) para a página atual
+    const paginatedIdsQuery = this.invoiceRepository.createQueryBuilder('f')
+      .select('f.Codigo', 'CodigoFactura')
+      .where('f.CodigoMatricula = :codigoMatricula', { codigoMatricula })
+      .orderBy('f.Codigo', 'DESC')
+      .limit(limit)
+      .offset(skip);
 
-    // TypeORM's findAndCount: [results, totalCount]
-    const [invoices, total] = await this.invoiceRepository.findAndCount({
-      where: {
-        codigoPreinscricao: codigoPreinscricao
-      },
-      take: limit,
-      skip: skip,
-      order: { Codigo: 'DESC' },
-    });
+    const paginatedIds = await paginatedIdsQuery.getRawMany();
+    const invoiceCodes = paginatedIds.map(row => row.CodigoFactura);
 
-    const totalPages = Math.ceil(total / limit);
+    // -----------------------------------------------------------
+    // 3. OBTENÇÃO DOS DETALHES COMPLETOS (TODOS OS ITENS) PARA ESSES IDs
+    // -----------------------------------------------------------
+    const detailsQuery = this.invoiceRepository.createQueryBuilder('f')
+      // JOINS (os mesmos)
+      .innerJoin('factura_items', 'fi', 'fi.CodigoFactura = f.Codigo')
+      .innerJoin('tb_tipo_servicos', 'ts', 'fi.CodigoProduto = ts.Codigo')
+      .innerJoin('mes_temp', 'mt', 'fi.mes_temp_id = mt.id')
+      .innerJoin('tb_matriculas', 'm', 'f.CodigoMatricula = m.Codigo')
+      .innerJoin('tb_admissao', 'a', 'm.Codigo_Aluno = a.codigo')
+      .innerJoin('tb_preinscricao', 'p', 'a.pre_incricao = p.Codigo')
+
+
+      .select([
+        // === CAMPOS DA FATURA (f) ===
+        'f.Codigo AS f_Codigo',
+        'f.DataFactura AS f_DataFactura',
+        'f.TotalPreco AS f_TotalPreco',
+        'f.CodigoMatricula AS f_CodigoMatricula',
+        'f.Referencia AS f_Referencia',
+        'f.Desconto AS f_Desconto',
+        'f.Troco AS f_Troco',
+        'f.totalIVA AS f_totalIVA',
+        'f.TotalMulta AS f_TotalMulta',
+        'f.total_incidencia AS f_total_incidencia',
+        'f.total_retencao AS f_total_retencao',
+        'f.ValorAPagar AS f_ValorAPagar',
+        'f.ValorEntregue AS f_ValorEntregue',
+        'f.ValorAPagarExtenso AS f_ValorAPagarExtenso',
+        'f.Descricao AS f_Descricao',
+        'f.ValorEntregueMltCX AS f_ValorEntregueMltCX',
+        'f.codigo_descricao AS f_codigo_descricao',
+        'f.NextFactura AS f_NextFactura',
+        'f.next AS f_next',
+        'f.texto_hash AS f_texto_hash',
+        'f.dataVencimento AS f_dataVencimento',
+        'f.polo_id AS f_polo_id',
+        'f.obs AS f_obs',
+        'f.hashValor AS f_hashValor',
+        'f.contaCorrente AS f_contaCorrente',
+        'f.faturaReference AS f_faturaReference',
+        'f.canal AS f_canal',
+        'f.ano_lectivo AS f_ano_lectivo',
+        'f.estado AS f_estado',
+        'f.corrente AS f_corrente',
+        'f.codigo_preinscricao AS f_codigo_preinscricao',
+        'f.numSequenciaFactura AS f_numSequenciaFactura',
+        'f.tipo_documento_factura_id AS f_tipo_documento_factura_id',
+
+        // === CAMPOS DO ALUNO (p) ===
+        'p.Nome_Completo AS NomeCompletoAluno',
+        'p.Bilhete_Identidade AS BI_Aluno',
+        'p.Email AS EmailAluno',
+        'p.Contactos_Telefonicos',
+        'p.Data_Nascimento',
+
+        // === CAMPOS DO ITEM DA FATURA (fi) ===
+        'fi.codigo AS fi_codigo',
+        'fi.CodigoProduto AS fi_CodigoProduto',
+        'fi.CodigoFactura AS fi_CodigoFactura',
+        'fi.Quantidade AS fi_Quantidade',
+        'fi.Total AS fi_Total',
+        'fi.OBS AS fi_OBS',
+        'fi.taxa_iva AS fi_taxa_iva',
+        'fi.valor_iva AS fi_valor_iva',
+        'fi.preco AS fi_preco',
+        'fi.retencao AS fi_retencao',
+        'fi.incidencia AS fi_incidencia',
+        'fi.valor_desconto AS fi_valor_desconto',
+        'fi.descontoProduto AS fi_descontoProduto',
+        'fi.Mes AS fi_Mes',
+        'fi.Multa AS fi_Multa',
+        'fi.mes_temp_id AS fi_mes_temp_id',
+        'fi.codigo_anoLectivo AS fi_codigo_anoLectivo',
+        'fi.estado AS fi_estado',
+        'fi.valor_pago AS fi_valor_pago',
+        'fi.valor_a_transportar AS fi_valor_a_transportar',
+        // === CAMPOS DO SERVIÇO/PRODUTO (ts) ===
+        'ts.Descricao AS ts_Descricao',
+        // === CAMPOS DO MÊS (mt) ===
+        'mt.designacao AS MesDesignacao',
+      ])
+      // NOVO FILTRO: Apenas os IDs paginados
+      .where('f.Codigo IN (:...invoiceCodes)', { invoiceCodes })
+
+      .orderBy('f.Codigo', 'DESC')
+      .addOrderBy('fi.codigo', 'ASC');
+
+    const rawResults = await detailsQuery.getRawMany();
+
+    // -----------------------------------------------------------
+    // 4. AGRUPAMENTO FINAL (Agora só com os 10 resultados necessários)
+    // -----------------------------------------------------------
+    const paginatedInvoices = groupInvoices(rawResults);
 
     return {
-      data: invoices,
+      data: paginatedInvoices, // Conterá as 10 faturas agrupadas
       total,
       page,
       limit,
@@ -222,7 +328,7 @@ export class InvoiceService {
     return this.findOne(Codigo); // Retorna a fatura atualizada
   }
 
- async updateStatusByReference(reference: string, status: number): Promise<Invoice> {
+  async updateStatusByReference(reference: string, status: number): Promise<Invoice> {
     const invoice = await this.invoiceRepository.findOne({ where: { Referencia: reference } });
     if (!invoice) {
       throw new NotFoundException(`Fatura com referência ${reference} não encontrada.`);
@@ -247,4 +353,91 @@ export class InvoiceService {
     return { deleted: true };
   }
      */
+}
+function groupInvoices(rawData: any[]): any[] {
+  const groupedData = new Map<number | string, any>();
+
+  for (const row of rawData) {
+    // Usamos o alias explícito que adicionamos no SELECT
+   const invoiceId = row.fi_CodigoFactura || row.f_Codigo || row.CodigoFactura;
+
+    if (!groupedData.has(invoiceId)) {
+      // Cria o objeto da fatura, mapeando todas as colunas de f.*
+      const invoice = {
+        // DADOS DA FATURA (f.*, mapeados com prefixo 'f_')
+        CodigoFactura: row.Cod_factura, // <== Chave de agrupamento
+        Codigo: row.f_Codigo, // O código original (se CodigoFactura for diferente)
+        DataFactura: row.f_DataFactura,
+        TotalPreco: row.f_TotalPreco,
+        CodigoMatricula: row.f_CodigoMatricula,
+        Referencia: row.f_Referencia,
+        Desconto: row.f_Desconto,
+        Troco: row.f_Troco,
+        totalIVA: row.f_totalIVA,
+        TotalMulta: row.f_TotalMulta,
+        total_incidencia: row.f_total_incidencia,
+        total_retencao: row.f_total_retencao,
+        ValorAPagar: row.f_ValorAPagar,
+        ValorEntregue: row.f_ValorEntregue,
+        ValorAPagarExtenso: row.f_ValorAPagarExtenso,
+        Descricao: row.f_Descricao,
+        ValorEntregueMltCX: row.f_ValorEntregueMltCX,
+        codigo_descricao: row.f_codigo_descricao,
+        NextFactura: row.f_NextFactura,
+        next: row.f_next,
+        texto_hash: row.f_texto_hash,
+        dataVencimento: row.f_dataVencimento,
+        polo_id: row.f_polo_id,
+        obs: row.f_obs,
+        hashValor: row.f_hashValor,
+        contaCorrente: row.f_contaCorrente,
+        faturaReference: row.f_faturaReference,
+        canal: row.f_canal,
+        ano_lectivo: row.f_ano_lectivo,
+        estado: row.f_estado,
+        corrente: row.f_corrente,
+        codigo_preinscricao: row.f_codigo_preinscricao,
+        numSequenciaFactura: row.f_numSequenciaFactura,
+        tipo_documento_factura_id: row.f_tipo_documento_factura_id,
+
+        // DADOS DO ALUNO (aliased no SELECT, sem prefixo 'f_')
+        NomeCompletoAluno: row.NomeCompletoAluno,
+        BI_Aluno: row.BI_Aluno,
+        EmailAluno: row.EmailAluno,
+        Contactos_Telefonicos: row.Contactos_Telefonicos,
+        Data_Nascimento: row.Data_Nascimento,
+
+        itens: [] // Inicializa a lista de itens
+      };
+      groupedData.set(invoiceId, invoice);
+    }
+
+    // Adiciona o item à fatura correspondente
+    groupedData.get(invoiceId).itens.push({
+      codigo: row.fi_codigo,
+      CodigoProduto: row.fi_CodigoProduto,
+      CodigoFactura: row.fi_CodigoFactura,
+      Quantidade: row.fi_Quantidade,
+      Total: row.fi_Total,
+      OBS: row.fi_OBS,
+      taxa_iva: row.fi_taxa_iva,
+      valor_iva: row.fi_valor_iva,
+      preco: row.fi_preco,
+      retencao: row.fi_retencao,
+      incidencia: row.fi_incidencia,
+      valor_desconto: row.fi_valor_desconto,
+      descontoProduto: row.fi_descontoProduto,
+      Mes: row.fi_Mes,
+      Multa: row.fi_Multa,
+      mes_temp_id: row.fi_mes_temp_id,
+      codigo_anoLectivo: row.fi_codigo_anoLectivo,
+      estado: row.fi_estado,
+      valor_pago: row.fi_valor_pago,
+      valor_a_transportar: row.fi_valor_a_transportar,
+      NomeServico: row.ts_Descricao,
+      MesDesignacao: row.MesDesignacao,
+    });
+
+  }
+  return Array.from(groupedData.values());
 }

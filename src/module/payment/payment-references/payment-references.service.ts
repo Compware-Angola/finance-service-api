@@ -257,6 +257,54 @@ export class PaymentReferencesService {
     };
   }
 
+  async  renewPaymentReference(invoiceId: number) {
+
+    const invoice = await this.invoiceService.findOne(invoiceId);
+    if (!invoice) {
+      throw new NotFoundException('Fatura não encontrada.');
+    }
+      // 🕒 Gera dueDate e referenceNumber em paralelo (melhor desempenho)
+    const [dueDate, referenceNumber] = await Promise.all([
+      generateDueDate(3),
+      generateReferenceNumber(),
+    ]);
+
+    // 📦 Monta payload para AppyPay
+     const payload = this.buildAppyPayPayload(
+      {
+        amount: invoice.TotalPreco,
+        currency: 'AOA',
+        description: invoice.Descricao ||'Renovação de referência de pagamento',
+      
+      },
+      dueDate,
+      referenceNumber,
+    );
+
+    // 🚀 Cria a referência no AppyPay
+    const appyResponse = await this.appyPayUtil.createPaymentReference(payload);
+
+    const status = appyResponse?.responseStatus;
+
+    if (!status?.successful || !status?.reference?.referenceNumber) {
+      console.error('❌ Falha ao gerar referência no AppyPay:', appyResponse);
+      throw new BadGatewayException(
+        'Falha ao gerar referência de pagamento. A fatura não será criada.'
+      );
+    }
+
+    const updatedInvoice = await this.invoiceService.updateReferenceNumber(
+      invoiceId,
+      referenceNumber,
+      dueDate,
+    );
+    return updatedInvoice;
+
+
+    // RENOVAR REFERÊNCIA NO SISTEMA
+
+  }
+
 
   /**
    * 🧩 Monta o payload final para criação da referência AppyPay

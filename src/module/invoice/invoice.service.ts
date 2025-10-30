@@ -154,30 +154,30 @@ export class InvoiceService {
   // Define uma função auxiliar (pode ser em um utils.ts ou logo acima/abaixo)
 
 
-async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
-  const { limit = 10, page = 1, codigoMatricula } = filterQuery;
+  async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
+    const { limit = 10, page = 1, codigoMatricula } = filterQuery;
 
-  if (isNaN(codigoMatricula)) {
-    throw new BadRequestException('O código de matrícula fornecido é inválido.');
-  }
+    if (isNaN(codigoMatricula)) {
+      throw new BadRequestException('O código de matrícula fornecido é inválido.');
+    }
 
-  const skip = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-  // 1️⃣ TOTAL DE FATURAS
-  const totalResult = await this.invoiceRepository.query(
-    `SELECT COUNT(*) AS total FROM factura WHERE CodigoMatricula = ?`,
-    [codigoMatricula],
-  );
-  const total = Number(totalResult[0]?.total || 0);
-  const totalPages = Math.ceil(total / limit);
+    // 1️⃣ TOTAL DE FATURAS
+    const totalResult = await this.invoiceRepository.query(
+      `SELECT COUNT(*) AS total FROM factura WHERE CodigoMatricula = ?`,
+      [codigoMatricula],
+    );
+    const total = Number(totalResult[0]?.total || 0);
+    const totalPages = Math.ceil(total / limit);
 
-  if (total === 0) {
-    return { data: [], total, page, limit, totalPages };
-  }
+    if (total === 0) {
+      return { data: [], total, page, limit, totalPages };
+    }
 
-  // 2️⃣ CONSULTA PRINCIPAL COM PAGINAÇÃO COMPATÍVEL
-  const rawResults = await this.invoiceRepository.query(
-    `
+    // 2️⃣ CONSULTA PRINCIPAL COM PAGINAÇÃO COMPATÍVEL
+    const rawResults = await this.invoiceRepository.query(
+      `
     SELECT 
       f.Codigo AS f_Codigo,
       f.DataFactura AS f_DataFactura,
@@ -255,20 +255,20 @@ async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<Pag
     INNER JOIN tb_preinscricao p ON a.pre_incricao = p.Codigo
     ORDER BY f.Codigo DESC, fi.codigo ASC
     `,
-    [codigoMatricula, limit, skip],
-  );
+      [codigoMatricula, limit, skip],
+    );
 
-  // 3️⃣ AGRUPAR RESULTADOS
-  const paginatedInvoices = groupInvoices(rawResults);
+    // 3️⃣ AGRUPAR RESULTADOS
+    const paginatedInvoices = groupInvoices(rawResults);
 
-  return {
-    data: paginatedInvoices,
-    total,
-    page,
-    limit,
-    totalPages,
-  };
-}
+    return {
+      data: paginatedInvoices,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
 
 
   /**
@@ -311,7 +311,18 @@ async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<Pag
     invoice.estado = status;
     return this.invoiceRepository.save(invoice);
   }
+  async updateReferenceNumber(invoiceId: number,
+    referenceNumber: string,
+    dueDate: any,): Promise<Invoice> {
+    const invoice = await this.invoiceRepository.findOne({ where: { Codigo: invoiceId } });
+    if (!invoice) {
+      throw new NotFoundException(`Fatura com ID ${invoiceId} não encontrada.`);
+    }
 
+    invoice.Referencia = referenceNumber;
+    invoice.dataVencimento = dueDate;
+    return this.invoiceRepository.save(invoice);
+  }
   async findByReference(reference: string): Promise<Invoice | null> {
     return this.invoiceRepository.findOne({ where: { Referencia: reference } });
   }

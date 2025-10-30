@@ -1,7 +1,11 @@
 import { 
   Controller, 
   Post, 
-  Body,  
+  Body,
+  Put,
+  Param,
+  ParseIntPipe,
+  Patch,  
 } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger'
 import { PaymentReferencesService } from './payment-references.service'
@@ -34,5 +38,15 @@ export class PaymentReferencesController {
   createAllMensalidades(@Body() createPaymentReferenceDto: CreatePaymentReferenceDto) {
     return this.paymentReferencesService.createMonthlyPaymentReferences(createPaymentReferenceDto)
   }
+
+  @Patch("/renew/reference/:invoiceId")
+  @ApiOperation({ summary: 'Renovar uma referência de pagamento' })
+  @ApiResponse({ status: 201, description: 'Referência renovada com sucesso.' })
+  @ApiResponse({ status: 400, description: 'Dados inválidos.' })
+  renewReference(@Param('invoiceId', ParseIntPipe) invoiceId: number) {
+    return this.paymentReferencesService.renewPaymentReference(invoiceId)
+  }
+
+
 
 }

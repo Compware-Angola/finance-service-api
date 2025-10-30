@@ -26,4 +26,13 @@ export class PaymentReferencesController {
     return this.paymentReferencesService.create(createPaymentReferenceDto)
   }
 
+
+  @Post("/all/mensalidades")
+  @ApiOperation({ summary: 'Criar referências de pagamento para todas as mensalidades pendentes' })
+  @ApiResponse({ status: 201, description: 'Referências criadas com sucesso.' })
+  @ApiResponse({ status: 400, description: 'Dados inválidos.' })
+  createAllMensalidades(@Body() createPaymentReferenceDto: CreatePaymentReferenceDto) {
+    return this.paymentReferencesService.createMonthlyPaymentReferences(createPaymentReferenceDto)
+  }
+
 }

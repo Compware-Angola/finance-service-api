@@ -73,6 +73,8 @@ export class AppyPayUtil {
 
       return response.data
     } catch (error: any) {
+      console.log(error);
+      
       throw new BadGatewayException(`Falha ao criar referência de pagamento: ${error.message}`)
     }
   }

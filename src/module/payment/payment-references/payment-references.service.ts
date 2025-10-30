@@ -1,4 +1,4 @@
-import { BadGatewayException, Injectable } from '@nestjs/common'
+import { BadGatewayException, Injectable, NotFoundException } from '@nestjs/common'
 import { CreatePaymentReferenceDto } from './dto/create-payment-reference.dto'
 import { generateDueDate } from '../../util/generate-due-date'
 import { generateReferenceNumber } from '../../util/generate-refence-number'
@@ -11,6 +11,8 @@ import { PaymentReferences } from './entities/payment-reference.entity'
 import { Repository } from 'typeorm'
 import { PaymentReferenceStatus, RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
 import { InvoiceItem } from '../../invoice/entities/InvoiceIten.entity'
+import { MesTemp } from './entities/mes-temp.entity'
+import { AcademicYear } from 'src/module/invoice/entities/academic.year.entity'
 
 @Injectable()
 export class PaymentReferencesService {
@@ -18,11 +20,16 @@ export class PaymentReferencesService {
 
 
   constructor(
+    @InjectRepository(MesTemp)
+    private readonly mesTempRepository: Repository<MesTemp>,
     @InjectRepository(PaymentReferences)
     private readonly paymentReferencesRepository: Repository<PaymentReferences>,
-
     @InjectRepository(InvoiceItem)
     private readonly invoiceItemRepository: Repository<InvoiceItem>,
+
+    @InjectRepository(AcademicYear)
+
+    private readonly academicYearRepository: Repository<AcademicYear>,
     private readonly invoiceService: InvoiceService) {
 
     this.appyPayUtil = new AppyPayUtil()
@@ -81,8 +88,8 @@ export class PaymentReferencesService {
         dueDate,
       ),
     ]);
- 
-    
+
+
     if (itens && itens.length > 0) {
       const invoiceItems = this.invoiceItemRepository.create(
         itens.map(item => ({
@@ -131,6 +138,125 @@ export class PaymentReferencesService {
     });
     return this.paymentReferencesRepository.save(paymentReference);
   }
+
+  async createMonthlyPaymentReferences(
+    createPaymentReferenceDto: CreatePaymentReferenceDto
+  ) {
+    const { itens, ...payments } = createPaymentReferenceDto;
+
+    const academicYear = await this.academicYearRepository.findOne({
+      where: { estado: 'Activo' },
+    });
+    if (!academicYear) {
+      throw new NotFoundException('Ano letivo não definido no sistema.');
+    }
+
+    // Buscar meses ativos do ano letivo
+    const mesTemps = await this.mesTempRepository.find({
+      where: {
+        ano_lectivo: academicYear.Codigo,
+        activo: 1,
+      },
+    });
+
+    if (!mesTemps.length) {
+      throw new NotFoundException(
+        'Nenhum mês ativo encontrado para o ano letivo atual.'
+      );
+    }
+
+    if (!itens || !itens.length) return;
+
+    const [item] = itens;
+
+    /**
+     * Processa todos os meses em paralelo — MAIOR ganho de performance.
+     */
+    await Promise.all(
+      mesTemps.map(async (mes) => {
+        let date_inicial = new Date();
+
+
+        if (new Date(mes.data_final)> new Date()) {
+        
+          date_inicial = new Date(mes.data_final);
+          date_inicial.setDate(date_inicial.getDate() + 1);
+        
+          
+        }
+        const [dueDate, referenceNumber] = await Promise.all([
+          generateDueDate(15, new Date(date_inicial)),
+          generateReferenceNumber(),
+        ]);
+
+        const payload = this.buildAppyPayPayload(
+          payments,
+          dueDate,
+          referenceNumber,
+        );
+
+        const appyResponse = await this.appyPayUtil.createPaymentReference(payload);
+        const status = appyResponse?.responseStatus;
+
+        if (!status?.successful || !status?.reference?.referenceNumber) {
+          throw new BadGatewayException(
+            'Falha ao gerar referência de pagamento. A fatura não será criada.'
+          );
+        }
+
+        const createInvoiceDto: CreateInvoiceDto = {
+          DataFactura: new Date().toISOString(),
+          polo_id: 1,
+          TotalPreco: payments.amount,
+          Descricao: payments.description,
+          tipo_documento_factura_id: 2,
+          Desconto: 0,
+          totalIVA: 0,
+          TotalMulta: 0,
+          canal: 3,
+        
+          CodigoMatricula: payments.enrollment?.CodigoMatricula,
+          codigo_preinscricao: payments.enrollment?.codigo_preinscricao,
+        };
+
+        const invoice = await this.invoiceService.create(
+          createInvoiceDto,
+          referenceNumber,
+          dueDate,
+        );
+
+        const invoiceItemData = {
+          codigoProduto: item.CodigoProduto,
+          codigoFactura: invoice.Codigo,
+          quantidade: item.Quantidade,
+          total: item.Total,
+          obs: "Mensalidade de " + mes.designacao,
+          taxaIva: item.taxaIva,
+          valorIva: item.valorIva,
+          preco:  payments.amount,
+          retencao: item.retencao,
+          incidencia: item.incidencia,
+          valorDesconto: item.valorDesconto,
+          descontoProduto: item.descontoProduto,
+          mes: mes.designacao,         
+          multa: item.multa,
+          mesTempId: mes.id,
+          codigoAnoLectivo: invoice.anoLectivo,
+          estado: item.estado,
+          valorPago: item.valorPago,
+          valorATransportar: item.valorATransportar,
+        };
+
+        const invoiceItem = this.invoiceItemRepository.create(invoiceItemData);
+        await this.invoiceItemRepository.save(invoiceItem);
+      })
+    );
+
+    return {
+      message: 'Referências AppyPay e faturas criadas com sucesso ✅',
+    };
+  }
+
 
   /**
    * 🧩 Monta o payload final para criação da referência AppyPay

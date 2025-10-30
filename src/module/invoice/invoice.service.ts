@@ -313,7 +313,7 @@ export class InvoiceService {
   }
   async updateReferenceNumber(invoiceId: number,
     referenceNumber: string,
-    dueDate: any,): Promise<Invoice> {
+    dueDate: any,newAmount:number): Promise<Invoice> {
     const invoice = await this.invoiceRepository.findOne({ where: { Codigo: invoiceId } });
     if (!invoice) {
       throw new NotFoundException(`Fatura com ID ${invoiceId} não encontrada.`);
@@ -321,6 +321,7 @@ export class InvoiceService {
 
     invoice.Referencia = referenceNumber;
     invoice.dataVencimento = dueDate;
+    invoice.TotalPreco = newAmount;
     return this.invoiceRepository.save(invoice);
   }
   async findByReference(reference: string): Promise<Invoice | null> {

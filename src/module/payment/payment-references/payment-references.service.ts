@@ -257,7 +257,7 @@ export class PaymentReferencesService {
     };
   }
 
-  async  renewPaymentReference(invoiceId: number) {
+  async  renewPaymentReference(invoiceId: number, newAmount?: number) {
 
     const invoice = await this.invoiceService.findOne(invoiceId);
     if (!invoice) {
@@ -272,7 +272,7 @@ export class PaymentReferencesService {
     // 📦 Monta payload para AppyPay
      const payload = this.buildAppyPayPayload(
       {
-        amount: invoice.TotalPreco,
+        amount:  newAmount ||   invoice.TotalPreco,
         currency: 'AOA',
         description: invoice.Descricao ||'Renovação de referência de pagamento',
       
@@ -297,6 +297,7 @@ export class PaymentReferencesService {
       invoiceId,
       referenceNumber,
       dueDate,
+      newAmount || invoice.TotalPreco,
     );
     return updatedInvoice;
 

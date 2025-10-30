@@ -10,6 +10,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger'
 import { PaymentReferencesService } from './payment-references.service'
 import { CreatePaymentReferenceDto } from './dto/create-payment-reference.dto'
+import { RenewReferenceDto } from './dto/renew-refence.dto'
 
 @ApiTags('REFERÊNCIAS DE PAGAMENTO')
 @Controller('/payment-references')
@@ -39,14 +40,15 @@ export class PaymentReferencesController {
     return this.paymentReferencesService.createMonthlyPaymentReferences(createPaymentReferenceDto)
   }
 
-  @Patch("/renew/reference/:invoiceId")
-  @ApiOperation({ summary: 'Renovar uma referência de pagamento' })
-  @ApiResponse({ status: 201, description: 'Referência renovada com sucesso.' })
-  @ApiResponse({ status: 400, description: 'Dados inválidos.' })
-  renewReference(@Param('invoiceId', ParseIntPipe) invoiceId: number) {
-    return this.paymentReferencesService.renewPaymentReference(invoiceId)
-  }
-
-
+@Patch("/renew/reference/:invoiceId")
+@ApiOperation({ summary: 'Renovar uma referência de pagamento' })
+@ApiResponse({ status: 201, description: 'Referência renovada com sucesso.' })
+@ApiResponse({ status: 400, description: 'Dados inválidos.' })
+renewReference(
+  @Param('invoiceId', ParseIntPipe) invoiceId: number,
+  @Body() dto: RenewReferenceDto,
+) {
+  return this.paymentReferencesService.renewPaymentReference(invoiceId, dto.newAmount);
+}
 
 }

@@ -44,11 +44,20 @@ export class PaymentReferencesController {
 @ApiOperation({ summary: 'Renovar uma referência de pagamento' })
 @ApiResponse({ status: 201, description: 'Referência renovada com sucesso.' })
 @ApiResponse({ status: 400, description: 'Dados inválidos.' })
+@ApiBody({
+  required: false, // <= Diz ao Swagger que o body é opcional
+  schema: {
+    type: 'object',
+    properties: {
+      newAmount: { type: 'number', example: 12500 },
+    },
+  },
+})
 renewReference(
   @Param('invoiceId', ParseIntPipe) invoiceId: number,
   @Body() dto: RenewReferenceDto,
 ) {
-  return this.paymentReferencesService.renewPaymentReference(invoiceId, dto.newAmount);
+  return this.paymentReferencesService.renewPaymentReference(invoiceId, dto?.newAmount);
 }
 
 }

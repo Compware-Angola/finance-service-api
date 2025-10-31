@@ -28,7 +28,7 @@ export class PaymentReferencesController {
   @ApiResponse({ status: 201, description: 'Referência criada com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
   create(@Body() createPaymentReferenceDto: CreatePaymentReferenceDto) {
-    return this.paymentReferencesService.create(createPaymentReferenceDto)
+    return this.paymentReferencesService.queueCreatePaymentReferences(createPaymentReferenceDto)
   }
 
 
@@ -37,7 +37,7 @@ export class PaymentReferencesController {
   @ApiResponse({ status: 201, description: 'Referências criadas com sucesso.' })
   @ApiResponse({ status: 400, description: 'Dados inválidos.' })
   createAllMensalidades(@Body() createPaymentReferenceDto: CreatePaymentReferenceDto) {
-    return this.paymentReferencesService.createMonthlyPaymentReferences(createPaymentReferenceDto)
+    return this.paymentReferencesService.queuecreateMonthlyPaymentReferences(createPaymentReferenceDto)
   }
 
 @Patch("/renew/reference/:invoiceId")
@@ -45,7 +45,7 @@ export class PaymentReferencesController {
 @ApiResponse({ status: 201, description: 'Referência renovada com sucesso.' })
 @ApiResponse({ status: 400, description: 'Dados inválidos.' })
 @ApiBody({
-  required: false, // <= Diz ao Swagger que o body é opcional
+  required: false, 
   schema: {
     type: 'object',
     properties: {
@@ -57,7 +57,10 @@ renewReference(
   @Param('invoiceId', ParseIntPipe) invoiceId: number,
   @Body() dto: RenewReferenceDto,
 ) {
-  return this.paymentReferencesService.renewPaymentReference(invoiceId, dto?.newAmount);
+  return this.paymentReferencesService.queueUpdatePaymentReferences(invoiceId, dto?.newAmount);
 }
+
+
+
 
 }

@@ -9,10 +9,12 @@ import { AppyPayWebhookDto } from '../../webhook/dto/appypay-webhook.dto'
 import { InjectRepository } from '@nestjs/typeorm'
 import { PaymentReferences } from './entities/payment-reference.entity'
 import { Repository } from 'typeorm'
-import { PaymentReferenceStatus, RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
+import {  RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
 import { InvoiceItem } from '../../invoice/entities/InvoiceIten.entity'
 import { MesTemp } from './entities/mes-temp.entity'
 import { AcademicYear } from 'src/module/invoice/entities/academic.year.entity'
+import { InjectQueue } from '@nestjs/bullmq'
+import { Queue } from 'bullmq'
 
 @Injectable()
 export class PaymentReferencesService {
@@ -20,6 +22,10 @@ export class PaymentReferencesService {
 
 
   constructor(
+    @InjectQueue('payment_reference_service')
+    private readonly paymentReferenceQueue: Queue,
+
+    // UPDATED INJECTION
     @InjectRepository(MesTemp)
     private readonly mesTempRepository: Repository<MesTemp>,
     @InjectRepository(PaymentReferences)
@@ -177,12 +183,12 @@ export class PaymentReferencesService {
         let date_inicial = new Date();
 
 
-        if (new Date(mes.data_final)> new Date()) {
-        
+        if (new Date(mes.data_final) > new Date()) {
+
           date_inicial = new Date(mes.data_final);
           date_inicial.setDate(date_inicial.getDate() + 1);
-        
-          
+
+
         }
         const [dueDate, referenceNumber] = await Promise.all([
           generateDueDate(15, new Date(date_inicial)),
@@ -214,7 +220,7 @@ export class PaymentReferencesService {
           totalIVA: 0,
           TotalMulta: 0,
           canal: 3,
-        
+
           CodigoMatricula: payments.enrollment?.CodigoMatricula,
           codigo_preinscricao: payments.enrollment?.codigo_preinscricao,
         };
@@ -233,12 +239,12 @@ export class PaymentReferencesService {
           obs: "Mensalidade de " + mes.designacao,
           taxaIva: item.taxaIva,
           valorIva: item.valorIva,
-          preco:  payments.amount,
+          preco: payments.amount,
           retencao: item.retencao,
           incidencia: item.incidencia,
           valorDesconto: item.valorDesconto,
           descontoProduto: item.descontoProduto,
-          mes: mes.designacao,         
+          mes: mes.designacao,
           multa: item.multa,
           mesTempId: mes.id,
           codigoAnoLectivo: invoice.anoLectivo,
@@ -257,25 +263,27 @@ export class PaymentReferencesService {
     };
   }
 
-  async  renewPaymentReference(invoiceId: number, newAmount?: number) {
+  async renewPaymentReference(invoiceId: number, newAmount?: number) {
+
+
 
     const invoice = await this.invoiceService.findOne(invoiceId);
     if (!invoice) {
       throw new NotFoundException('Fatura não encontrada.');
     }
-      // 🕒 Gera dueDate e referenceNumber em paralelo (melhor desempenho)
+    // 🕒 Gera dueDate e referenceNumber em paralelo (melhor desempenho)
     const [dueDate, referenceNumber] = await Promise.all([
       generateDueDate(3),
       generateReferenceNumber(),
     ]);
 
     // 📦 Monta payload para AppyPay
-     const payload = this.buildAppyPayPayload(
+    const payload = this.buildAppyPayPayload(
       {
-        amount:  newAmount ||   invoice.TotalPreco,
+        amount: newAmount || invoice.TotalPreco,
         currency: 'AOA',
-        description: invoice.Descricao ||'Renovação de referência de pagamento',
-      
+        description: invoice.Descricao || 'Renovação de referência de pagamento',
+
       },
       dueDate,
       referenceNumber,
@@ -304,6 +312,62 @@ export class PaymentReferencesService {
 
     // RENOVAR REFERÊNCIA NO SISTEMA
 
+  }
+
+
+
+  // ------------------------ NEWS ------------------------
+
+  async queueCreatePaymentReferences(
+    createPaymentReferenceDto: CreatePaymentReferenceDto
+  ) {
+    const job = await this.paymentReferenceQueue.add('createPaymentReferencesJob', {
+      createPaymentReferenceDto,
+    });
+    return {
+      message: 'Processamento iniciado: criando fatura do serviço...',
+      taskId: job.id,
+    };
+  }
+  async queueUpdatePaymentReferences(
+    invoiceId: number,
+    newAmount?: number
+  ) {
+    const job = await this.paymentReferenceQueue.add('updatePaymentReferencesJob', {
+      invoiceId,
+      newAmount,
+    });
+    return {
+      message: 'Processamento iniciado: renovando referência de pagamento...',
+      taskId: job.id,
+    };
+  }
+
+  async queuecreateMonthlyPaymentReferences(
+    createPaymentReferenceDto: CreatePaymentReferenceDto
+  ) {
+    const job = await this.paymentReferenceQueue.add('createMonthlyPaymentReferencesJob', {
+      createPaymentReferenceDto,
+    });
+    return {
+      message: 'Processamento iniciado: criando faturas de mensalidades...',
+      taskId: job.id,
+    };
+  }
+
+
+  async getJobStatus(taskId: string) {
+    const job = await this.paymentReferenceQueue.getJob(taskId);
+    if (!job) {
+      throw new NotFoundException('Tarefa não encontrada.');
+    }
+    const state = await job.getState();
+    return {
+      taskId: job.id,
+      state,
+      progress: job.progress,
+      result: job.returnvalue,
+    };
   }
 
 

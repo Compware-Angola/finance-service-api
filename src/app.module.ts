@@ -5,6 +5,7 @@ import { InvoiceModule } from './module/invoice/invoice.module';
 import { PaymentReferencesModule } from './module/payment/payment-references/payment-references.module';
 import { WebhookModule } from './module/webhook/webhook.module';
 import { PaymentModule } from './module/payment/payment.module';
+import { BullModule } from '@nestjs/bullmq';
 
 
 @Module({
@@ -30,21 +31,27 @@ import { PaymentModule } from './module/payment/payment.module';
 
           extra: isSSL
             ? {
-                ssl: {
-                  rejectUnauthorized: true,
-                },
-              }
+              ssl: {
+                rejectUnauthorized: true,
+              },
+            }
             : {},
         };
+      },
+    }),
+    BullModule.forRoot({
+      connection: {
+        host: '192.168.30.45',
+        port: 6379,
       },
     }),
     InvoiceModule,
     PaymentReferencesModule,
     WebhookModule,
     PaymentModule,
- 
+
   ],
 
 
 })
-export class AppModule {}
+export class AppModule { }

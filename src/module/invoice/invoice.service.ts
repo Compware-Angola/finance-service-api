@@ -14,11 +14,16 @@ import { AcademicYear } from './entities/academic.year.entity';
 import { genearateKeyNumber } from '../util/generate-key-number';
 import { generateDueDate } from '../util/generate-due-date';
 import { InvoiceItem } from './entities/InvoiceIten.entity';
+import { Queue } from 'bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
 
 
 @Injectable()
 export class InvoiceService {
   constructor(
+    @InjectQueue('invoice_service')
+        private readonly invoiceQueue: Queue,
+    
     @InjectRepository(Invoice)
     private readonly invoiceRepository: Repository<Invoice>,
 
@@ -74,6 +79,7 @@ export class InvoiceService {
     // 4. PREPARAÇÃO DA ENTIDADE ANTES DE SALVAR
     const invoiceToCreate = this.invoiceRepository.create({
       ...invoiceData,
+      DataFactura: new Date(),
       poloId: poloId,
       numSequenciaFactura: hashData.numSequenciaFactura,
       NextFactura: hashData.numeracaoFactura,
@@ -118,7 +124,6 @@ export class InvoiceService {
 
     return savedInvoice;
   }
-  // ... (RESTANTE DOS MÉTODOS MANTIDOS) ...
 
   /**
      * Retorna todas as faturas com paginação.
@@ -151,7 +156,6 @@ export class InvoiceService {
   async findAllTypeInvoiceDocument(): Promise<TypeInvoiceDocument[]> {
     return this.typeInvoiceDocumentRepository.find();
   }
-  // Define uma função auxiliar (pode ser em um utils.ts ou logo acima/abaixo)
 
 
   async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
@@ -328,17 +332,16 @@ export class InvoiceService {
     return this.invoiceRepository.findOne({ where: { Referencia: reference } });
   }
 
-  /*
-  async remove(Codigo: number): Promise<{ deleted: boolean; message?: string }> {
-    const result = await this.invoiceRepository.delete(Codigo);
 
-    if (result.affected === 0) {
-      throw new NotFoundException(`Fatura com Código ${Codigo} não encontrada.`);
-    }
-
-    return { deleted: true };
+  async  queueCreateInvoice(createInvoiceDto: CreateInvoiceDto, referenceParams?: string,
+    dueDateParams?: string): Promise<void> {
+    await this.invoiceQueue.add('createInvoiceJob', {
+      createInvoiceDto,
+      referenceParams,
+      dueDateParams
+    });
   }
-     */
+
 }
 function groupInvoices(rawData: any[]): any[] {
   const groupedData = new Map<number | string, any>();

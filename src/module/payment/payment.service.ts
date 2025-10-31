@@ -1,84 +1,110 @@
 import { Injectable } from '@nestjs/common';
-import { CreatePaymentDto } from './dto/create-payment.dto';
-import { UpdatePaymentDto } from './dto/update-payment.dto';
-import { Payment } from './entities/payment.entity';
+// ... outros imports ...
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
+import { Payment } from './entities/payment.entity';
 
+// Importe a interface detalhada
+import { DetailedPaymentInvoiceItemResult } from './dto/payment-invoice-item-result.interface'; 
 @Injectable()
 export class PaymentService {
-    constructor(
-    @InjectRepository(Payment)
-    private readonly paymentRepository: Repository<Payment>,
+ constructor(
+        @InjectRepository(Payment)
+        private readonly paymentRepository: Repository<Payment>,
     ) {
- 
+        // ...
     }
-  create(createPaymentDto: CreatePaymentDto): Promise<Payment> {
-    const payment = this.paymentRepository.create(createPaymentDto);
-    return this.paymentRepository.save(payment);
-  }
 
-  findAll(): Promise<Payment[]> {
-    return this.paymentRepository.find();
-  }
-
-  findOne(id: number): Promise<Payment | null> {
-    return this.paymentRepository.findOneBy({ Codigo: id });
-  }
-
-  async update(id: number, updatePaymentDto: UpdatePaymentDto): Promise<Payment> {
-    await this.paymentRepository.update(id, updatePaymentDto);
-    return this.findOne(id) as Promise<Payment>;
-  }
-
-  async remove(id: number): Promise<void> {
-    await this.paymentRepository.delete(id);
-  }
-
-  /**
-     * Lista pagamentos paginados e filtrados por Ano Lectivo e Código de Pré-Inscrição.
+    /**
+     * Busca Pagamentos, Faturas e seus Itens em formato "flat" (plano) com paginação,
+     * incluindo a descrição do serviço, filtrando pelo Ano Lectivo e Código de Pré-Inscrição.
      *
-     * @param anoLectivo O código (ID) do ano lectivo.
-     * @param codigoPreInscricao O código (ID) da pré-inscrição do aluno.
-     * @param paginationQuery O DTO com os parâmetros de limite e página.
-     * @returns Uma Promise que resolve para um PagedResult de entidades Payment.
+     * @param anoLectivo O ID do ano lectivo.
+     * @param codigoPreInscricao O código da pré-inscrição.
+     * @param paginationQuery O DTO de paginação (limit e page).
+     * @returns Uma Promise que resolve para um PagedResult contendo os resultados planos.
      */
-    async findByAcademicYearAndPreRegistationCode(
+    async findInvoicesAndItemsDetailedFlat(
         anoLectivo: number,
         codigoPreInscricao: number,
         paginationQuery: PaginationQueryDto,
-    ): Promise<PagedResult<Payment>> {
+    ): Promise<PagedResult<any>> { // Usando 'any' ou a interface DetailedPaymentInvoiceItemResult
         
         const { limit = 10, page = 1 } = paginationQuery;
-
-        // 1. Calcular o OFFSET
         const skip = (page - 1) * limit;
 
-        // 2. Executar a consulta com Filtros e Paginação
-        const [payments, total] = await this.paymentRepository.findAndCount({
-            where: {
-                AnoLectivo: anoLectivo,
-                Codigo_PreInscricao: codigoPreInscricao,
-            },
-            
-            // TypeORM Paginação
-            take: limit, // LIMIT
-            skip: skip,  // OFFSET
-            
-            // Ordenação (Boa Prática)
-            order: { Codigo: 'DESC' }, 
-            
-            // Opcional: Adicione relações se precisar de dados relacionados
-            // relations: ['algumaRelacao'],
-        });
+        const aliasPayment = 'p';
+        const aliasFactura = 'f';
+        const aliasItem = 'fi';
+        const aliasProduto = 'tp'; // Alias para tb_tipo_servicos
 
-    
+        // 1. Criar o QueryBuilder base
+        const baseQuery = this.paymentRepository.createQueryBuilder(aliasPayment)
+            .innerJoin('factura', aliasFactura, `${aliasPayment}.codigo_factura = ${aliasFactura}.Codigo`)
+            .innerJoin('factura_items', aliasItem, `${aliasFactura}.Codigo = ${aliasItem}.CodigoFactura`)
+            .innerJoin('tb_tipo_servicos', aliasProduto, `${aliasItem}.CodigoProduto = ${aliasProduto}.Codigo`)
+            .where(`${aliasPayment}.AnoLectivo = :anoLectivo`, { anoLectivo })
+            .andWhere(`${aliasPayment}.Codigo_PreInscricao = :codigoPreInscricao`, { codigoPreInscricao });
+            
+
+        // --- 2. Obter a contagem total de linhas ---
+        // Usamos o QueryBuilder base para contar todas as linhas que satisfazem os JOINs e WHEREs.
+        const total = await baseQuery.getCount();
+        
+        // --- 3. Obter os resultados paginados e formatados ---
+        const results = await baseQuery
+            .select([
+                // DADOS DO PAGAMENTO (tb_pagamentos)
+                `${aliasPayment}.Codigo AS CodigoPagamento`,
+                `${aliasPayment}.Data AS DataPagamento`,
+                `${aliasPayment}.N_Operacao_Bancaria`,
+                `${aliasPayment}.valor_depositado`,
+                `${aliasPayment}.status_pagamento`,
+                `${aliasPayment}.created_at AS DataRegistoPagamento`,
+                `${aliasPayment}.statusMovimento`,
+                `${aliasPayment}.ContaMovimentada`,
+                `${aliasPayment}.forma_pagamento`,
+
+                // DADOS DA FATURA (factura)
+                `${aliasFactura}.Codigo AS CodigoFactura`,
+                `${aliasFactura}.Descricao AS Descricao_factura`,
+                `${aliasFactura}.DataFactura`,
+                `${aliasFactura}.Referencia`,
+                `${aliasFactura}.estado AS EstadoFactura`,
+                `${aliasFactura}.ValorAPagar`,
+                `${aliasFactura}.TotalPreco AS TotalBrutoFactura`,
+                `${aliasFactura}.TotalMulta AS TotalMultaFactura`,
+                
+                // DADOS DOS ITENS (factura_items)
+                `${aliasItem}.codigo AS CodigoItem`,
+                `${aliasItem}.CodigoProduto`,
+                `${aliasItem}.OBS AS ObservacaoItem`,
+                `${aliasItem}.Quantidade`,
+                `${aliasItem}.preco AS PrecoUnitario`,
+                `${aliasItem}.Total AS TotalItem`,
+                `${aliasItem}.Mes AS MesReferencia`,
+                `${aliasItem}.Multa AS MultaItem`,
+                `${aliasItem}.valor_pago`,
+                `${aliasItem}.taxa_iva`,
+                
+                // DADOS DO PRODUTO (tb_tipo_servicos)
+                `${aliasProduto}.Descricao AS Descricao_produto`, 
+            ])
+            .offset(skip)
+            .limit(limit)
+            .orderBy(`${aliasPayment}.DataRegisto`, 'DESC')
+            .addOrderBy(`${aliasFactura}.DataFactura`, 'DESC')
+            .addOrderBy(`${aliasItem}.codigo`, 'ASC')
+            // O método correto para resultados 'raw' com seleção customizada
+            .getRawMany<DetailedPaymentInvoiceItemResult>(); 
+
+        // 4. Calcular e retornar a paginação
         const totalPages = Math.ceil(total / limit);
 
         return {
-            data: payments,
+            data: results,
             total,
             page,
             limit,

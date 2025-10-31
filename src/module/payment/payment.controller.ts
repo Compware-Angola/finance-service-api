@@ -20,7 +20,7 @@ export class PaymentController {
     @Param('preInscritionCode', ParseIntPipe) preInscritionCode: number,
     @Query() paginationQuery: PaginationQueryDto,
   ): Promise<PagedResult<Payment>> {
-    return this.paymentService.findByAcademicYearAndPreRegistationCode(
+    return this.paymentService.findInvoicesAndItemsDetailedFlat(
       academicYear,
       preInscritionCode,
       paginationQuery,

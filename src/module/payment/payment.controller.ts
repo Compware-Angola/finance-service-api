@@ -1,34 +1,29 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Query, Param, ParseIntPipe } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
-import { CreatePaymentDto } from './dto/create-payment.dto';
-import { UpdatePaymentDto } from './dto/update-payment.dto';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
+import { Payment } from './entities/payment.entity';
+import { PagedResult } from 'src/common/dto/pagination-result.dto';
 
+@ApiTags('payment') 
 @Controller('payment')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
-  @Post()
-  create(@Body() createPaymentDto: CreatePaymentDto) {
-    return this.paymentService.create(createPaymentDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.paymentService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.paymentService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePaymentDto: UpdatePaymentDto) {
-    return this.paymentService.update(+id, updatePaymentDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.paymentService.remove(+id);
+  @Get('get/:academicYear/:preInscritionCode')
+  @ApiOperation({ 
+    summary: 'Lista pagamentos por Ano Lectivo e Código de Pré-Inscrição, com paginação.' 
+  })
+  @ApiResponse({ status: 200, description: 'Lista de pagamentos filtrada e paginada.' })
+  async findByAnoLectivoAndPreInscricao(
+    @Param('academicYear', ParseIntPipe) academicYear: number,
+    @Param('preInscritionCode', ParseIntPipe) preInscritionCode: number,
+    @Query() paginationQuery: PaginationQueryDto,
+  ): Promise<PagedResult<Payment>> {
+    return this.paymentService.findByAcademicYearAndPreRegistationCode(
+      academicYear,
+      preInscritionCode,
+      paginationQuery,
+    );
   }
 }

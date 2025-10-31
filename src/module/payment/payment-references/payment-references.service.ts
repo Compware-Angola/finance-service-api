@@ -353,7 +353,7 @@ export class PaymentReferencesService {
       message: 'Processamento iniciado: criando faturas de mensalidades...',
       taskId: job.id,
     };
-  }
+}
 
 
   async getJobStatus(taskId: string) {

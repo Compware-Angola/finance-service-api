@@ -22,8 +22,8 @@ export class InvoiceController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Cria uma nova fatura' })
-  @ApiResponse({ status: 201, description: 'Fatura criada com sucesso.', type: Invoice })
-  async create(@Body() createInvoiceDto: CreateInvoiceDto): Promise<void> {
+  @ApiResponse({ status: 201, description: 'Fatura criada com sucesso.' })
+  async create(@Body() createInvoiceDto: CreateInvoiceDto){
     return this.invoiceService.queueCreateInvoice(createInvoiceDto);
   }
 

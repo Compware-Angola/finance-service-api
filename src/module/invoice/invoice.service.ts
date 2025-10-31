@@ -22,8 +22,8 @@ import { InjectQueue } from '@nestjs/bullmq';
 export class InvoiceService {
   constructor(
     @InjectQueue('invoice_service')
-        private readonly invoiceQueue: Queue,
-    
+    private readonly invoiceQueue: Queue,
+
     @InjectRepository(Invoice)
     private readonly invoiceRepository: Repository<Invoice>,
 
@@ -317,7 +317,7 @@ export class InvoiceService {
   }
   async updateReferenceNumber(invoiceId: number,
     referenceNumber: string,
-    dueDate: any,newAmount:number): Promise<Invoice> {
+    dueDate: any, newAmount: number): Promise<Invoice> {
     const invoice = await this.invoiceRepository.findOne({ where: { Codigo: invoiceId } });
     if (!invoice) {
       throw new NotFoundException(`Fatura com ID ${invoiceId} não encontrada.`);
@@ -332,14 +332,17 @@ export class InvoiceService {
     return this.invoiceRepository.findOne({ where: { Referencia: reference } });
   }
 
-
-  async  queueCreateInvoice(createInvoiceDto: CreateInvoiceDto, referenceParams?: string,
-    dueDateParams?: string): Promise<void> {
-    await this.invoiceQueue.add('createInvoiceJob', {
+  async queueCreateInvoice(createInvoiceDto: CreateInvoiceDto, referenceParams?: string,
+    dueDateParams?: string): Promise<{ message: string; taskId: string | undefined }> {
+    const job = await this.invoiceQueue.add('createInvoiceJob', {
       createInvoiceDto,
       referenceParams,
       dueDateParams
     });
+    return {
+      message: 'Processamento iniciado: criando faturas ...',
+      taskId: job.id,
+    };
   }
 
 }

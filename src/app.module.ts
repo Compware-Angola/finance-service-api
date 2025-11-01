@@ -6,7 +6,8 @@ import { PaymentReferencesModule } from './module/payment/payment-references/pay
 import { WebhookModule } from './module/webhook/webhook.module';
 import { PaymentModule } from './module/payment/payment.module';
 import { BullModule } from '@nestjs/bullmq';
-import { DebtNegotiationModule } from './debt_negotiation/debt_negotiation.module';
+import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
+import { AdvancePaymentsModule } from './module/advance_payments/advance_payments.module';
 
 
 @Module({
@@ -55,6 +56,7 @@ import { DebtNegotiationModule } from './debt_negotiation/debt_negotiation.modul
     WebhookModule,
     PaymentModule,
     DebtNegotiationModule,
+    AdvancePaymentsModule,
 
   ],
 

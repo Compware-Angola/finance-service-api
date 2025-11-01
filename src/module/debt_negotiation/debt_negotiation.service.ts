@@ -46,7 +46,7 @@ export interface DividaDto {
 }
 
 @Injectable()
-export class DividasService {
+export class DebtNegotiationService {
   constructor(
     @InjectRepository(TbPreinscricao) private preinscricaoRepo: Repository<TbPreinscricao>,
     @InjectRepository(TbPagamento) private pagamentoRepo: Repository<TbPagamento>,

@@ -1,0 +1,147 @@
+// src/services/propina-aluno.service.ts
+import { Injectable } from '@nestjs/common';
+import { DataSource, Repository } from 'typeorm';
+
+interface PropinaResult {
+  Descricao: string;
+  Preco: number;
+  TipoServico: string;
+  Codigo: number;
+  taxa?: number;
+}
+
+@Injectable()
+export class PropinaAlunoService {
+  private cache = new Map<string, PropinaResult | null>();
+
+  constructor(
+  
+     private dataSource: DataSource,
+  ) {}
+
+  async propinaAluno(
+    codigo_inscricao: number,
+    aluno_cacuaco: number,
+    ano_lectivo: number,
+    matricula:number,
+    user:any
+  ): Promise<PropinaResult | null> {
+    const cacheKey = `${codigo_inscricao}-${aluno_cacuaco}-${ano_lectivo}`;
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey)!;
+    }
+
+    // 2. Define ano letivo com base no tipo de candidatura
+    const anoLectivoId = await this.getAnoLectivoByCandidatura(user, ano_lectivo);
+
+    // 3. Busca curso da pré-inscrição
+    const curso = await this.getCursoByPreinscricao(codigo_inscricao);
+    if (!curso) return null;
+
+    // 4. Verifica exceção de pagamento
+    const temExcecao = await this.checkExcecao(matricula);
+    let propina: PropinaResult | null = null;
+
+    if (temExcecao && temExcecao.data_fim >= new Date().toISOString().split('T')[0]) {
+      const cursoExcecao = await this.getCursoById(temExcecao.codigo_curso_pagamento);
+      if (cursoExcecao) {
+        propina = await this.getPropinaByCurso(
+          cursoExcecao.curso,
+          aluno_cacuaco,
+          anoLectivoId,
+        );
+      }
+    } else {
+      propina = await this.getPropinaByCurso(curso.curso, aluno_cacuaco, anoLectivoId);
+    }
+
+    this.cache.set(cacheKey, propina);
+    return propina;
+  }
+
+  private async getAnoLectivoByCandidatura(user: any, ano_lectivo: number): Promise<number> {
+    if (user.codigo_tipo_candidatura === 1) return ano_lectivo;
+    if (user.codigo_tipo_candidatura === 2) {
+      const mestrado = await this.cicloMestrado();
+      return mestrado?.Codigo ?? ano_lectivo;
+    }
+    const doutoramento = await this.cicloDoutoramento();
+    return doutoramento?.Codigo ?? ano_lectivo;
+  }
+
+  private async getCursoByPreinscricao(codigo_inscricao: number) {
+    const result = await this.dataSource.query(`
+      SELECT c.Designacao AS curso, c.Codigo AS codigo_curso
+      FROM tb_cursos c
+      INNER JOIN tb_preinscricao p ON c.Codigo = p.Curso_Candidatura
+      WHERE p.Codigo = ?
+      LIMIT 1
+    `, [codigo_inscricao]);
+    return result[0] || null;
+  }
+
+  private async getCursoById(codigo_curso: number) {
+    const result = await this.dataSource.query(`
+      SELECT Designacao AS curso FROM tb_cursos WHERE Codigo = ? LIMIT 1
+    `, [codigo_curso]);
+    return result[0] || null;
+  }
+
+  private async getPropinaByCurso(
+    nomeCurso: string,
+    cacuaco: number,
+    ano_lectivo: number,
+  ): Promise<PropinaResult | null> {
+    const result = await this.dataSource.query(`
+      SELECT 
+        ts.Descricao,
+        ts.Preco,
+        ts.TipoServico,
+        ts.Codigo,
+        tt.taxa
+      FROM tb_tipo_servicos ts
+      LEFT JOIN tipo_taxas tt ON tt.id = ts.taxa_iva_id
+      WHERE ts.Descricao LIKE ?
+        AND ts.cacuaco = ?
+        AND ts.codigo_ano_lectivo = ?
+      LIMIT 1
+    `, [`propina ${nomeCurso}%`, cacuaco, ano_lectivo]);
+
+    return result[0] || null;
+  }
+
+  private async checkExcecao(matricula: number) {
+    const result = await this.dataSource.query(`
+      SELECT codigo_curso_pagamento, data_fim
+      FROM curso_pagamento_excepcao
+      WHERE codigo_matricula = ?
+      LIMIT 1
+    `, [matricula]);
+    return result[0] || null;
+  }
+
+   /**
+   * Retorna o ciclo de Mestrado
+   */
+async cicloMestrado(){
+  const result = await this.dataSource.query(`
+    SELECT Codigo, Designacao
+    FROM tb_ano_lectivo
+    WHERE Designacao = 'Ciclo Mestrado'
+    LIMIT 1
+  `);
+  return result[0] || null;
+}
+
+async cicloDoutoramento(){
+  const result = await this.dataSource.query(`
+    SELECT Codigo, Designacao
+    FROM tb_ano_lectivo
+    WHERE Designacao = 'Ciclo Doutoramento'
+    LIMIT 1
+  `);
+  return result[0] || null;
+}
+
+
+}

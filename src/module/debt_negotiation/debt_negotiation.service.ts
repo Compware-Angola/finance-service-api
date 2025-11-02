@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, Not, Raw } from 'typeorm';
+import { Repository, In, Not, Raw, DataSource } from 'typeorm';
 import { TbPreinscricao } from './entities/tb-preinscricao.entity';
 import { InscricaoAvaliacao } from './entities/inscricao-avaliacao.entity';
 import { MesTemp } from './entities/mes-temp.entity';
@@ -20,13 +20,13 @@ import { Payment } from '../payment/entities/payment.entity';
 import { Invoice } from '../invoice/entities/invoice.entity';
 import { InvoiceItem } from '../invoice/entities/InvoiceIten.entity';
 import { AcademicYear } from '../invoice/entities/academic.year.entity';
-
-// === NOVAS ENTIDADES FALTANDO ===
-
-import { Parametro } from './entities/parametro.entity'; // Ajuste
+import { Parametro } from './entities/parametro.entity';
 import { MesCalendario } from './entities/mes-calendario.entity';
 import { Empresa } from './entities/empresa.entity';
 import { AnoLectivoUtil } from '../util/current-academic-year';
+import { MesesPagarService } from './meses-pagar.service';
+import { PropinaAlunoService } from './propina-aluno.service';
+import { sumValues } from '../util/currency.util';
 
 export interface DividaDto {
   codGradeCurricular: string | null;
@@ -53,9 +53,11 @@ export interface DividaDto {
 
 @Injectable()
 export class DebtNegotiationService {
-private anoAtualPrincipal: number;
+  private anoAtualPrincipal: number;
   constructor(
     private readonly anoLectivoUtil: AnoLectivoUtil,
+    private readonly mesesPagarService: MesesPagarService,
+    private readonly propinaAlunoService: PropinaAlunoService,
     @InjectRepository(TbPreinscricao) private preinscricaoRepo: Repository<TbPreinscricao>,
     @InjectRepository(Payment) private pagamentoRepo: Repository<Payment>,
     @InjectRepository(TbPagamentosi) private pagamentosiRepo: Repository<TbPagamentosi>,
@@ -78,11 +80,12 @@ private anoAtualPrincipal: number;
 
     // === NOVAS DEPENDÊNCIAS INJETADAS ===
 
+    private dataSource: DataSource,
     @InjectRepository(MesCalendario) private mesCalendarioRepo: Repository<MesCalendario>,
     @InjectRepository(Parametro) private parametroRepo: Repository<Parametro>,
     @InjectRepository(Empresa) private empresaRepo: Repository<Empresa>,
 
-  ) {this.initAnoAtual(); }
+  ) { this.initAnoAtual(); }
   private async initAnoAtual() {
     this.anoAtualPrincipal = await this.anoLectivoUtil.getAnoAtualId();
   }
@@ -90,6 +93,7 @@ private anoAtualPrincipal: number;
 
   // === 1. pagouOutubro ===
   async pagouOutubro(codigo_inscricao: number): Promise<any> {
+
     const result = await this.pagamentoRepo.query(`
     SELECT pi.mes_temp_id
     FROM tb_pagamentos p
@@ -116,6 +120,7 @@ private anoAtualPrincipal: number;
     const confirmacao = await this.confirmacao(codigo_matricula);
     const pagamentoOutubro = await this.pagouOutubro(aluno.codigo_inscricao);
 
+
     const cond1 = confirmacao?.ultimoAnoInscritoId === 1 && pagamentoOutubro;
     const cond2 = confirmacao?.ultimoAnoInscritoId !== 1 && !(parseInt(confirmacao?.ultimoAnoInscritoDesig) <= 2019);
 
@@ -133,6 +138,7 @@ private anoAtualPrincipal: number;
     AND f.estado NOT IN (1, 3)
     AND m.Codigo = ?
 `, [confirmacao?.ultimoAnoInscritoId, codigo_matricula]);
+
 
     const array = faturasPagas.map(f => f.ia_codigo_factura);
 
@@ -176,6 +182,8 @@ private anoAtualPrincipal: number;
       confirmacao?.ultimoAnoInscritoId,
       ...array
     ]);
+
+
     for (const value of outrosServicos) {
       const tipo_avaliacao = await this.avaliacaoRepo
         .createQueryBuilder('ia')
@@ -234,14 +242,14 @@ private anoAtualPrincipal: number;
     if (!confirmacao) return [];
 
     const mesesPagos = await this.mesesPagosPorAnoPropina(confirmacao?.ano_lectivo_id, aluno.codigo_inscricao);
-    const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao?.ano_lectivo_id, mesesPagos.map(m => m.codigo_mes));
-    const propina = await this.propinaAluno(aluno.codigo_inscricao, aluno.AlunoCacuaco, confirmacao?.ano_lectivo_id);
+    const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao?.ano_lectivo_id, mesesPagos, aluno, codigo_matricula);
+    const propina = await this.propinaAlunoService.propinaAluno(aluno.codigo_inscricao, aluno.AlunoCacuaco, confirmacao?.ano_lectivo_id, codigo_matricula, aluno);
     if (!propina) return [];
 
     const bolseiro1 = await this.BolsaPorSemestre1(codigo_matricula, confirmacao?.ano_lectivo_id, 1);
     const bolseiro2 = await this.BolsaPorSemestre2(codigo_matricula, confirmacao?.ano_lectivo_id, 2);
 
-    const taxaMultaMeses = await this.mesesPagarPropina(new Date().toISOString().split('T')[0], 1, 0, confirmacao?.ano_lectivo_id);
+    const taxaMultaMeses = await this.mesesPagarService.mesesPagar(new Date().toISOString().split('T')[0], 1, 0, confirmacao?.ano_lectivo_id, pre_inscricaoId, null, codigo_matricula);
     const desconto_finalista = await this.pegar_finalista(confirmacao?.ano_lectivo_id, codigo_matricula, pre_inscricaoId);
 
     // Semestre 1
@@ -250,7 +258,7 @@ private anoAtualPrincipal: number;
       for (const mes of mesesNaoPagos) {
         for (const mes_semestre of mes_temp) {
           if (mes.id === mes_semestre.id && mes.data_final < new Date().toISOString().split('T')[0]) {
-            const mesNPago = taxaMultaMeses.find(m => m.codigo === mes.id);
+            const mesNPago: any = taxaMultaMeses.find(m => m.codigo === mes.id);
             const taxa_multa = mesNPago?.taxa > 0 ? mesNPago.taxa : 0;
 
             let taxa_desconto = 0;
@@ -297,7 +305,7 @@ private anoAtualPrincipal: number;
               taxa_multa,
               taxa_desconto,
               bolsa,
-              codigo_propina: propina.Codigo,
+              codigo_propina: propina.Codigo as any,
               codigo_anoLectivo: confirmacao?.ano_lectivo_id,
               desconto,
               incidencia: propina.Preco - desconto,
@@ -358,12 +366,12 @@ private anoAtualPrincipal: number;
               servico: propina.Descricao,
               mes_propina: mesNPago.mes,
               mes_temp_id: mesNPago.codigo,
-              n_prestacao: mesNPago.prestacao,
+              n_prestacao: mesNPago.prestacao as any,
               ano_lectivo: confirmacao?.ano_lectivo_designacao,
               taxa_multa: mesNPago.taxa,
               taxa_desconto,
               bolsa,
-              codigo_propina: propina.Codigo,
+              codigo_propina: propina.Codigo as any,
               codigo_anoLectivo: confirmacao?.ano_lectivo_id,
               desconto,
               incidencia: propina.Preco - desconto,
@@ -390,22 +398,6 @@ private anoAtualPrincipal: number;
     return result.map(r => r.codigo);
   }
 
-  // === 5. getPrestacoesPorAnoLectivo2 ===
-  async getPrestacoesPorAnoLectivo2(ano_lectivo: number, mesesPagos: number[] = []): Promise<any[]> {
-    const result = await this.mesTempRepo
-      .createQueryBuilder('mt')
-      .select([
-        'mt.id as id',
-        'mt.designacao as mes',
-        'mt.semestre as semestre',
-        'mt.semestre_posgraduacao as semestre_posgraduacao',
-        'mt.prestacao as prestacao'
-      ])
-      .where('mt.activo = 1')
-      .andWhere('mt.id NOT IN (:...mesesPagos)', { mesesPagos: mesesPagos.length ? mesesPagos : [0] })
-      .getRawMany();
-    return result;
-  }
 
   // === 6. mesesPagarPropina ===
   async mesesPagarPropina(data: string, tipo: number, mes: number, ano_lectivo: number): Promise<any[]> {
@@ -427,12 +419,11 @@ private anoAtualPrincipal: number;
     let codigo_inscricao = codigo_matricula;
     let user: TbPreinscricao | null = null;
 
-    // Simulação de auth e sessão (ajuste com serviço real se necessário)
-    const sessao = null; // Substituir por serviço real de sessão
 
     user = await this.preinscricaoRepo.findOne({ where: { Codigo: preinscricaoId } });
 
-    if (!user || user.codigo_tipo_candidatura !== 1) {
+
+    if (!user || user?.codigo_tipo_candidatura !== 1) {
       return this.handlePosGraduacao(user, codigo_matricula);
     }
 
@@ -459,9 +450,11 @@ private anoAtualPrincipal: number;
 
     if (!matricula1) return [];
 
-    codigo_inscricao = matricula1.codigo_inscricao;
+    codigo_inscricao = matricula1[0].codigo_inscricao;
 
-    const curso = await this.cursoRepo.query(`
+
+
+    const cursoResult = await this.cursoRepo.query(`
   SELECT 
     c.Designacao AS curso,
     c.Codigo AS codigo_curso
@@ -471,11 +464,11 @@ private anoAtualPrincipal: number;
   LIMIT 1
 `, [codigo_inscricao]);
 
-    const cursoResult = curso[0] || null;
+    const curso = cursoResult[0] || null;
 
     const anoCorrente = this.anoAtualPrincipal;
     const anoAtual = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
-    const maiorAno = await this.inscricaoAnteriorRepo.query(`
+    const maiorAnoResult = await this.inscricaoAnteriorRepo.query(`
   SELECT 
     al.Designacao AS ano_designacao,
     al.Codigo AS maior
@@ -485,9 +478,10 @@ private anoAtualPrincipal: number;
     AND ia.status = 1
   ORDER BY al.ordem DESC, al.Designacao DESC
   LIMIT 1
-`, [matricula1.Codigo]);
+`, [matricula1[0].codigo]);
 
-    const maiorAnoResult = maiorAno[0] || null;
+    const maiorAno = maiorAnoResult[0] || null;
+
 
     const inscricaoAnosAnteriores = await this.inscricaoAnteriorRepo.query(`
   SELECT 
@@ -497,12 +491,13 @@ private anoAtualPrincipal: number;
   INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
   WHERE ia.codigo_matricula = ?
   ORDER BY ia.codigo_ano_lectivo ASC
-`, [matricula1.Codigo]);
+`, [matricula1[0].Codigo]);
+
 
     const collection: any[] = [];
 
     const diplomado = await this.matriculaRepo.findOne({
-      where: { Codigo: matricula1.Codigo, estado_matricula: 'diplomado' }
+      where: { Codigo: matricula1[0].Codigo, estado_matricula: 'diplomado' }
     });
 
     let bolseiroGlobal: TbBolseiroSiiuma | null = null;
@@ -516,15 +511,18 @@ private anoAtualPrincipal: number;
     }
 
     // === DÍVIDAS ANTIGAS (2020+) ===
+
+
     for (const ano of inscricaoAnosAnteriores) {
       const bolseiro = await this.bolseiroRepo.findOne({
-        where: { codigo_matricula: matricula1.Codigo, ano: ano.ano_designacao }
+        where: { codigo_matricula: matricula1[0].Codigo, ano: ano.ano_designacao }
       });
 
       const mesesPagos = await this.mesesPagosPorAnoPropina(ano.ano_lectivo, codigo_inscricao);
       const mesesIds = mesesPagos.map(m => m.codigo_mes);
 
-      const propina = await this.propinaAluno(codigo_inscricao, matricula1.aluno_cacuaco, ano.ano_lectivo);
+      const propina = await this.propinaAlunoService.propinaAluno(codigo_inscricao, matricula1[0].aluno_cacuaco, ano.ano_lectivo, matricula1[0].Codigo, user);
+
       if (!propina || ano.ano_lectivo === anoCorrente || !inscricaoAnosAnteriores.length) continue;
 
       if (bolseiro && bolseiro.desconto === 100) continue;
@@ -573,9 +571,9 @@ private anoAtualPrincipal: number;
           const valorComDesconto = mes.valor - desconto;
           mes.multa = valorComDesconto * 0.1;
           total = valorComDesconto + mes.multa;
-        } else if (matricula1.desconto > 0) {
-          taxa_desconto = matricula1.desconto;
-          desconto = mes.valor * (matricula1.desconto / 100);
+        } else if (matricula1[0].desconto > 0) {
+          taxa_desconto = matricula1[0].desconto;
+          desconto = mes.valor * (matricula1[0].desconto / 100);
           const valorComDesconto = mes.valor - desconto;
           mes.multa = valorComDesconto * 0.1;
           total = valorComDesconto + mes.multa;
@@ -610,7 +608,7 @@ private anoAtualPrincipal: number;
 
     // === DÍVIDAS NOVAS ===
     const dividas: any[] = [];
-    const aluno = { codigo_inscricao, AlunoCacuaco: matricula1.aluno_cacuaco, desconto: matricula1.desconto, codigo_tipo_candidatura: 1 };
+    const aluno = { codigo_inscricao, AlunoCacuaco: matricula1[0].aluno_cacuaco, desconto: matricula1[0].desconto, codigo_tipo_candidatura: 1 };
     const confirmacaoExiste = await this.confirmacao(codigo_matricula);
     const pagamentoOutubro = await this.pagouOutubro(codigo_inscricao);
 
@@ -625,11 +623,13 @@ private anoAtualPrincipal: number;
   ORDER BY al.ordem ASC
 `, [codigo_matricula]);
 
+
     if (!diplomado) {
       for (const value of anosInscritos) {
+
         if (value.Codigo_Ano_lectivo === anoCorrente) continue;
 
-        const confirmacao = await this.confirmacaoRepo.query(`
+        const confirmacaoResult = await this.confirmacaoRepo.query(`
   SELECT 
     al.Codigo AS ultimoAnoInscritoId,
     al.Designacao AS ultimoAnoInscritoDesig
@@ -642,29 +642,37 @@ private anoAtualPrincipal: number;
   LIMIT 1
 `, [codigo_matricula, value.Codigo_Ano_lectivo]);
 
-        const confirmacaoResult = confirmacao[0] || null;
+        const confirmacao = confirmacaoResult[0] || null;
 
         const cond1 = confirmacao && confirmacao?.ultimoAnoInscritoId === 1 && pagamentoOutubro;
         const cond2 = confirmacao && confirmacao?.ultimoAnoInscritoId !== 1 && !(parseInt(confirmacao?.ultimoAnoInscritoDesig) <= 2019);
 
+
         if (!cond1 && !cond2) continue;
 
         const mesesPagos = await this.mesesPagosPorAnoPropina(confirmacao?.ultimoAnoInscritoId, codigo_inscricao);
-        const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao?.ultimoAnoInscritoId, mesesPagos.map(m => m.codigo_mes));
-        const propina = await this.propinaAluno(codigo_inscricao, aluno.AlunoCacuaco, confirmacao?.ultimoAnoInscritoId);
+
+        const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao?.ultimoAnoInscritoId, mesesPagos, user, codigo_matricula);
+
+
+        const propina = await this.propinaAlunoService.propinaAluno(codigo_inscricao, aluno.AlunoCacuaco, confirmacao?.ultimoAnoInscritoId, codigo_matricula, user);
+
+
+
 
         if (!propina) continue;
 
-        const taxaMultaMeses = await this.mesesPagarPropina(new Date().toISOString().split('T')[0], 1, 0, confirmacao?.ultimoAnoInscritoId);
+        const taxaMultaMeses = await this.mesesPagarService.mesesPagar(new Date().toISOString().split('T')[0], 1, 0, confirmacao?.ultimoAnoInscritoId, preinscricaoId, user, codigo_matricula); // onde tem null tem que ser o user
 
         for (const mes of mesesNaoPagos) {
           const mesNPago = taxaMultaMeses.find(m => m.codigo === mes.id);
+
           if (!mesNPago) continue;
 
           let desconto = 0, total = 0, multa = 0, taxa_desconto = 0, bolsa = '';
           const valorComDesconto = propina.Preco - desconto;
 
-          if (aluno.codigo_tipo_candidatura !== 1) {
+          if (aluno?.codigo_tipo_candidatura !== 1) {
             multa = 0;
             total = propina.Preco - desconto;
           } else {
@@ -703,9 +711,9 @@ private anoAtualPrincipal: number;
 
   // === 8. handlePosGraduacao ===
   private async handlePosGraduacao(user: any, codigo_matricula: number): Promise<any[]> {
-    if (!user || user.codigo_tipo_candidatura === 1) return [];
+    if (!user || user?.codigo_tipo_candidatura === 1) return [];
 
-    const ciclo = user.codigo_tipo_candidatura === 2
+    const ciclo = user?.codigo_tipo_candidatura === 2
       ? this.anoAtualPrincipal // cicloMestrado
       : this.anoAtualPrincipal; // cicloDoutoramento
 
@@ -742,7 +750,7 @@ private anoAtualPrincipal: number;
     const anoActual = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
     if (!anoActual) return [];
 
-    const meses = user.codigo_tipo_candidatura === 2
+    const meses = user?.codigo_tipo_candidatura === 2
       ? await this.mesTempRepo.find({ where: { activo_posgraduacao: 1 }, take: 24 })
       : await this.mesTempRepo.find({ where: { activo_posgraduacao: 1 } });
 
@@ -804,7 +812,7 @@ private anoAtualPrincipal: number;
     FROM factura f
     INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
     INNER JOIN tb_pagamentos p ON p.codigo_factura = f.Codigo
-   -- INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
+     INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
     INNER JOIN tb_ano_lectivo al ON al.Codigo = p.AnoLectivo
     INNER JOIN tb_tipo_servicos ts ON ts.Codigo = pi.codigo_produto
     WHERE f.CodigoMatricula = ?
@@ -819,7 +827,7 @@ private anoAtualPrincipal: number;
     const result = await this.pagamentoRepo.query(`
     SELECT DISTINCT pi.mes_temp_id AS codigo_mes
     FROM tb_pagamentos p
-   -- INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
+    INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
     INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
     INNER JOIN tb_tipo_servicos ts ON ts.Codigo = pi.codigo_produto
     INNER JOIN tb_ano_lectivo al ON al.Codigo = p.AnoLectivo
@@ -847,6 +855,11 @@ private anoAtualPrincipal: number;
     const pagamentoOutubro = await this.pagouOutubro(aluno.codigo_inscricao);
     const dividasNovaVersao = await this.dividasNovaVersao(numero_matricula, aluno.codigo_inscricao);
     const outrosServicos = await this.dividaOutrosServicos(numero_matricula);
+    //console.log("Aluno",aluno);
+    //console.log("Pagou Outuvro",pagamentoOutubro);
+    //console.log("DIVIDAS NOVA VERSAO",dividasNovaVersao);
+    console.log("OUTROS SERVICOS", outrosServicos);
+
 
     if (tipo === 2) {
       let total = dividasNovaVersao.length;
@@ -864,9 +877,12 @@ private anoAtualPrincipal: number;
   }
 
   // === 13. index ===
-  async getDebt(enrrolmentId: number, codigo_inscricao: number, tipo: 1 | 2 = 1) {
+  async getDebt(enrrolmentId: number, codigo_inscricao: number, tipo: number) {
 
     let dividas = await this.DividasTodosAnos(enrrolmentId, 1) as DividaDto[];
+
+
+
 
     if (tipo === 2) {
       const propinaCorrente = await this.dividasPropinaAnoCorrente(enrrolmentId, codigo_inscricao);
@@ -887,6 +903,9 @@ private anoAtualPrincipal: number;
     const saldo_reset = (await this.preinscricaoRepo.findOne({ where: { Codigo: codigo_inscricao } }))?.saldo_reset || 0;
     const dividas_recurso = await this.dividaOutrosServicos(enrrolmentId);
 
+    console.log(dividas_recurso);
+    
+
     return {
       empresa: await this.empresaRepo.findOne({ where: { nif: "5000977381" } }),
       anoAtual: anoCorrente,
@@ -896,11 +915,11 @@ private anoAtualPrincipal: number;
       totalIVA,
       percentagem_retencao,
       totalDivida: totalDividaFinal,
-      total_incidencia: mesesDividas.reduce((s, d) => s + d.valor, 0) - mesesDividas.reduce((s, d) => s + d.desconto, 0),
+      total_incidencia: mesesDividas.reduce((s, d) => s + (d.valor - d.desconto), 0),
       total_retencao,
       size: mesesDividas.length,
       desconto: mesesDividas.reduce((s, d) => s + d.desconto, 0),
-      precoTotal: mesesDividas.reduce((s, d) => s + d.valor, 0),
+      precoTotal: sumValues(mesesDividas, 'valor'),
       bolsa: mesesDividas[0]?.bolsa || null,
       saldo_reset,
       somaValorDividaRecurso: 0,
@@ -1015,37 +1034,100 @@ private anoAtualPrincipal: number;
     ano_lectivo_id: number,
     codigo_inscricao: number
   ) {
+      // Validar Bem onde fica os pagamentos ou no factura_itens ou pagamentosi
+
     const result = await this.pagamentosiRepo.query(`
-    SELECT DISTINCT pi.mes_id AS codigo_mes
+    SELECT DISTINCT pi.mes_temp_id AS codigo_mes
     FROM tb_pagamentosi pi
     INNER JOIN tb_pagamentos p ON p.Codigo = pi.codigo_pagamento
+    INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
+    INNER JOIN factura f ON f.Codigo = p.codigo_factura
+    INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
     WHERE p.Codigo_PreInscricao = ?
       AND p.AnoLectivo = ?
       AND p.estado = 1
   `, [codigo_inscricao, ano_lectivo_id]);
 
+
+
     return result.map(row => row.codigo_mes).filter(Boolean);
   }
-  private async getPrestacoesPorAnoLectivo(
-    ano_lectivo_id: number,
-    mesesPagos: number[]
-  ): Promise<any[]> {
-    const placeholders = mesesPagos.length ? mesesPagos.map(() => '?').join(', ') : '0';
 
-    const result = await this.mesTempRepo.query(`
-    SELECT 
-      mt.id,
-      mt.designacao,
-      mt.prestacao,
-      mt.data_final
-    FROM mes_temp mt
-    WHERE mt.activo = 1
-      AND mt.id NOT IN (${placeholders})
-  `, mesesPagos.length ? mesesPagos : []);
+
+  async getPrestacoesPorAnoLectivo(
+    codigo_anoLectivo: number,
+    arrayMesesPagos: number[] = [],
+    user: any,
+    matricula: number,
+  ): Promise<any> {
+
+    const anoLectivoId = await this.getAnoLectivoByCandidatura(user, codigo_anoLectivo);
+    const isencaoIds = await this.getIsencaoIds(matricula, anoLectivoId);
+
+
+
+    return this.getPrestacoes(
+      anoLectivoId,
+      user.codigo_tipo_candidatura,
+      isencaoIds,
+      arrayMesesPagos,
+    );
+  }
+  // === Métodos auxiliares com SQL puro ===
+
+
+
+
+  private async getAnoLectivoByCandidatura(user: any, ano_lectivo: number): Promise<number> {
+    if (user.codigo_tipo_candidatura === 1) return ano_lectivo;
+    if (user.codigo_tipo_candidatura === 2) {
+      const mestrado = await this.mesesPagarService.cicloMestrado();
+      return mestrado?.Codigo ?? ano_lectivo;
+    }
+    const doutoramento = await this.mesesPagarService.cicloDoutoramento();
+    return doutoramento?.Codigo ?? ano_lectivo;
+  }
+
+  private async getIsencaoIds(matricula: number, anoLectivoId: number): Promise<number[]> {
+    const result = await this.dataSource.query(`
+    SELECT mes_temp_id
+    FROM tb_isencoes
+    WHERE mes_temp_id IS NOT NULL
+      AND codigo_matricula = ?
+      AND estado_isensao = 'Activo'
+      AND codigo_anoLectivo = ?
+  `, [matricula, anoLectivoId]);
+
+    return result.map((row: any) => row.mes_temp_id);
+  }
+
+  private async getPrestacoes(
+    anoLectivoId: number,
+    tipoCandidatura: number,
+    isencaoIds: number[],
+    mesesPagos: number[],
+  ): Promise<any> {
+    const activoField = tipoCandidatura === 1 ? 'activo' : 'activo_posgraduacao';
+
+    const placeholdersIsencao = isencaoIds.length ? isencaoIds.map(() => '?').join(', ') : 'NULL';
+    const placeholdersPagos = mesesPagos.length ? mesesPagos.map(() => '?').join(', ') : 'NULL';
+
+    const query = `
+      SELECT id, designacao, data_limite, data_final, prestacao
+      FROM mes_temp
+      WHERE ano_lectivo = ?
+        AND ${activoField} = 1
+        ${isencaoIds.length ? `AND id NOT IN (${placeholdersIsencao})` : ''}
+        ${mesesPagos.length ? `AND id NOT IN (${placeholdersPagos})` : ''}
+      ORDER BY id ASC
+    `;
+
+    const params = [anoLectivoId, ...isencaoIds, ...mesesPagos].filter(Boolean);
+    const result = await this.mesTempRepo.query(query, params);
 
     return result;
   }
-
+  /*
   private async propinaAluno(
     codigo_inscricao: number,
     alunoCacuaco: number,
@@ -1068,7 +1150,7 @@ private anoAtualPrincipal: number;
 
     return result[0] || null;
   }
-
+*/
   /**
    * Verifica se o aluno é finalista com base no ano letivo e matrícula
    * Retorna o número de cadeiras restantes (ou 0 se finalista)

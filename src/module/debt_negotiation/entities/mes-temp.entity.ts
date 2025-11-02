@@ -22,4 +22,11 @@ export class MesTemp {
 
   @Column()
   prestacao: string;
+  @Column()
+  data_limite: string;
+
+  @Column()
+  ano_lectivo: number;
+  @Column()
+  isencao: number;
 }

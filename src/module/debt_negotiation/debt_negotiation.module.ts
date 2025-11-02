@@ -24,6 +24,8 @@ import { TbDisciplina } from './entities/tb-disciplina.entity';
 import { TbGradeCurricular } from './entities/tb-grade-curricular.entity';
 import { TbInscricaoAnoAnterior } from './entities/tb-inscricao-ano-anterior.entity';
 import { TipoTaxa } from './entities/tipo-taxa.entity';
+import { Empresa } from './entities/empresa.entity';
+import { AnoLectivoUtil } from '../util/current-academic-year';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Payment, TbPreinscricao,
@@ -35,9 +37,10 @@ import { TipoTaxa } from './entities/tipo-taxa.entity';
     TbDisciplina,
     MesCalendario,
     Parametro,
+    Empresa
   ]),],
   controllers: [DebtNegotiationController],
-  providers: [DebtNegotiationService],
+  providers: [DebtNegotiationService,AnoLectivoUtil],
 })
 export class DebtNegotiationModule { }
 

@@ -25,6 +25,8 @@ import { AcademicYear } from '../invoice/entities/academic.year.entity';
 
 import { Parametro } from './entities/parametro.entity'; // Ajuste
 import { MesCalendario } from './entities/mes-calendario.entity';
+import { Empresa } from './entities/empresa.entity';
+import { AnoLectivoUtil } from '../util/current-academic-year';
 
 export interface DividaDto {
   codGradeCurricular: string | null;
@@ -51,10 +53,9 @@ export interface DividaDto {
 
 @Injectable()
 export class DebtNegotiationService {
-  // === ANO ATUAL PRINCIPAL (exemplo: injetado via config ou serviço) ===
-  private readonly anoAtualPrincipal = 15; // Ajuste conforme necessário ou injete via config
-
+private anoAtualPrincipal: number;
   constructor(
+    private readonly anoLectivoUtil: AnoLectivoUtil,
     @InjectRepository(TbPreinscricao) private preinscricaoRepo: Repository<TbPreinscricao>,
     @InjectRepository(Payment) private pagamentoRepo: Repository<Payment>,
     @InjectRepository(TbPagamentosi) private pagamentosiRepo: Repository<TbPagamentosi>,
@@ -79,8 +80,13 @@ export class DebtNegotiationService {
 
     @InjectRepository(MesCalendario) private mesCalendarioRepo: Repository<MesCalendario>,
     @InjectRepository(Parametro) private parametroRepo: Repository<Parametro>,
+    @InjectRepository(Empresa) private empresaRepo: Repository<Empresa>,
 
-  ) { }
+  ) {this.initAnoAtual(); }
+  private async initAnoAtual() {
+    this.anoAtualPrincipal = await this.anoLectivoUtil.getAnoAtualId();
+  }
+
 
   // === 1. pagouOutubro ===
   async pagouOutubro(codigo_inscricao: number): Promise<any> {
@@ -882,7 +888,7 @@ export class DebtNegotiationService {
     const dividas_recurso = await this.dividaOutrosServicos(enrrolmentId);
 
     return {
-      empresa: "",//await this.empresaRepo.findOne(),
+      empresa: await this.empresaRepo.findOne({ where: { nif: "5000977381" } }),
       anoAtual: anoCorrente,
       anoCorrente: anoCorrenteObj,
       meses,

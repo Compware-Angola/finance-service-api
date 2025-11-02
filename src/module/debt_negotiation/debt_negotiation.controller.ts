@@ -7,6 +7,6 @@ export class DebtNegotiationController {
 
   @Get()
   getDebt() {
-    return this.debtNegotiationService.getDebt();
+    return this.debtNegotiationService.getDebt(123, 456,1);
   }
 }

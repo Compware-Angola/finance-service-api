@@ -24,6 +24,4 @@ export class InscricaoAvaliacao {
   @Column()
   estado: string;
 
-  @ManyToOne(() => Factura, f => f.avaliacoes)
-  factura: Factura;
 }

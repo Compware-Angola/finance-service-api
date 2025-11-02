@@ -338,6 +338,11 @@ export class InvoiceService {
       createInvoiceDto,
       referenceParams,
       dueDateParams
+    },{
+      attempts: 5,
+      backoff: { type: 'fixed', delay: 10000 },
+      removeOnComplete: true,
+      removeOnFail: false,
     });
     return {
       message: 'Processamento iniciado: criando faturas ...',

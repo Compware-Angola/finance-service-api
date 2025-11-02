@@ -1,3 +1,5 @@
+
+/*
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
@@ -7,7 +9,7 @@ import { createHash } from 'crypto';
 import { RSA } from 'rsa-compat'; // npm install rsa-compat
 
 @Injectable()
-export class NegociacaoService {
+export class CreateDebtNegotiationService {
   private readonly anoAtualPrincipal = 1; // Substituir por serviço real
 
   constructor(
@@ -269,12 +271,12 @@ export class NegociacaoService {
     await queryRunner.manager.save(negociacao);
   }
 
-  private async getAlunoLogado(user: any): Promise<any> {
+  private async getAlunoLogado(candidato_id: number): Promise<any> {
     return this.matriculaRepo
       .createQueryBuilder('m')
       .innerJoin('m.admissao', 'a')
       .innerJoin('a.preinscricao', 'p')
-      .where('p.Codigo = :codigo', { codigo: user.candidato_id })
+      .where('p.Codigo = :codigo', { codigo:candidato_id })
       .select([
         'm.Codigo as matricula',
         'm.Codigo_Curso as curso_matricula',
@@ -285,3 +287,5 @@ export class NegociacaoService {
       .getRawOne();
   }
 }
+
+*/

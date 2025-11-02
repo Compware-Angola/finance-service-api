@@ -2,13 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not, Raw } from 'typeorm';
 import { TbPreinscricao } from './entities/tb-preinscricao.entity';
-import { FacturaItem } from './entities/factura-item.entity';
-import { Factura } from './entities/factura.entity';
 import { InscricaoAvaliacao } from './entities/inscricao-avaliacao.entity';
 import { MesTemp } from './entities/mes-temp.entity';
 import { MotivoIsencaoIva } from './entities/motivo-isencao-iva.entity';
 import { TbAdmissao } from './entities/tb-admissao.entity';
-import { TbAnoLectivo } from './entities/tb-ano-lectivo.entity';
 import { TbBolseiroSiiuma } from './entities/tb-bolseiro-siiuma.entity';
 import { TbConfirmacao } from './entities/tb-confirmacao.entity';
 import { TbCurso } from './entities/tb-curso.entity';
@@ -16,11 +13,18 @@ import { TbDisciplina } from './entities/tb-disciplina.entity';
 import { TbGradeCurricular } from './entities/tb-grade-curricular.entity';
 import { TbInscricaoAnoAnterior } from './entities/tb-inscricao-ano-anterior.entity';
 import { TbMatricula } from './entities/tb-matricula.entity';
-import { TbPagamento } from './entities/tb-pagamento.entity';
 import { TbPagamentosi } from './entities/tb-pagamentosi.entity';
 import { TbTipoServico } from './entities/tb-tipo-servico.entity';
 import { TipoTaxa } from './entities/tipo-taxa.entity';
+import { Payment } from '../payment/entities/payment.entity';
+import { Invoice } from '../invoice/entities/invoice.entity';
+import { InvoiceItem } from '../invoice/entities/InvoiceIten.entity';
+import { AcademicYear } from '../invoice/entities/academic.year.entity';
 
+// === NOVAS ENTIDADES FALTANDO ===
+
+import { Parametro } from './entities/parametro.entity'; // Ajuste
+import { MesCalendario } from './entities/mes-calendario.entity';
 
 export interface DividaDto {
   codGradeCurricular: string | null;
@@ -41,23 +45,26 @@ export interface DividaDto {
   desconto: number;
   incidencia: number;
   valor_iva: number;
-  taxa_iva: number;
+  tipo_taxas: number;
   taxa_descricao: string | null;
 }
 
 @Injectable()
 export class DebtNegotiationService {
+  // === ANO ATUAL PRINCIPAL (exemplo: injetado via config ou serviço) ===
+  private readonly anoAtualPrincipal = 15; // Ajuste conforme necessário ou injete via config
+
   constructor(
     @InjectRepository(TbPreinscricao) private preinscricaoRepo: Repository<TbPreinscricao>,
-    @InjectRepository(TbPagamento) private pagamentoRepo: Repository<TbPagamento>,
+    @InjectRepository(Payment) private pagamentoRepo: Repository<Payment>,
     @InjectRepository(TbPagamentosi) private pagamentosiRepo: Repository<TbPagamentosi>,
-    @InjectRepository(Factura) private facturaRepo: Repository<Factura>,
-    @InjectRepository(FacturaItem) private facturaItemRepo: Repository<FacturaItem>,
+    @InjectRepository(Invoice) private facturaRepo: Repository<Invoice>,
+    @InjectRepository(InvoiceItem) private facturaItemRepo: Repository<InvoiceItem>,
     @InjectRepository(TbTipoServico) private tipoServicoRepo: Repository<TbTipoServico>,
     @InjectRepository(TbMatricula) private matriculaRepo: Repository<TbMatricula>,
     @InjectRepository(TbAdmissao) private admissaoRepo: Repository<TbAdmissao>,
     @InjectRepository(TbCurso) private cursoRepo: Repository<TbCurso>,
-    @InjectRepository(TbAnoLectivo) private anoLectivoRepo: Repository<TbAnoLectivo>,
+    @InjectRepository(AcademicYear) private anoLectivoRepo: Repository<AcademicYear>,
     @InjectRepository(TbInscricaoAnoAnterior) private inscricaoAnteriorRepo: Repository<TbInscricaoAnoAnterior>,
     @InjectRepository(TbConfirmacao) private confirmacaoRepo: Repository<TbConfirmacao>,
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
@@ -67,27 +74,35 @@ export class DebtNegotiationService {
     @InjectRepository(TbDisciplina) private disciplinaRepo: Repository<TbDisciplina>,
     @InjectRepository(TipoTaxa) private tipoTaxaRepo: Repository<TipoTaxa>,
     @InjectRepository(MotivoIsencaoIva) private motivoIvaRepo: Repository<MotivoIsencaoIva>,
-  ) {}
+
+    // === NOVAS DEPENDÊNCIAS INJETADAS ===
+
+    @InjectRepository(MesCalendario) private mesCalendarioRepo: Repository<MesCalendario>,
+    @InjectRepository(Parametro) private parametroRepo: Repository<Parametro>,
+
+  ) { }
 
   // === 1. pagouOutubro ===
   async pagouOutubro(codigo_inscricao: number): Promise<any> {
-    return this.pagamentoRepo
-      .createQueryBuilder('p')
-      .innerJoin('p.itens', 'pi')
-      .innerJoin('p.preinscricao', 'pre')
-      .innerJoin('p.factura', 'f')
-      .innerJoin('f.items', 'fi')
-      .innerJoin('fi.produto', 'ts')
-      .where('pre.Codigo = :codigo', { codigo: codigo_inscricao })
-      .andWhere('p.AnoLectivo = 1')
-      .andWhere('pi.mes_temp_id = 5')
-      .andWhere('f.estado != 3')
-      .andWhere('ts.TipoServico = :tipo', { tipo: 'Mensal' })
-      .andWhere('p.estado = 1')
-      .select('pi.mes_temp_id')
-      .getRawOne();
-  }
+    const result = await this.pagamentoRepo.query(`
+    SELECT pi.mes_temp_id
+    FROM tb_pagamentos p
+    INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
+    INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
+    INNER JOIN factura f ON f.Codigo = p.codigo_factura
+    INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
+    INNER JOIN tb_tipo_servicos ts ON ts.Codigo = fi.CodigoProduto
+    WHERE pre.Codigo = ?
+      AND p.AnoLectivo = 1
+      AND pi.mes_temp_id = 5
+      AND f.estado != 3
+      AND ts.TipoServico = 'Mensal'
+      AND p.estado = 1
+    LIMIT 1
+  `, [codigo_inscricao]);
 
+    return result[0] || null;
+  }
   // === 2. dividaOutrosServicos ===
   async dividaOutrosServicos(codigo_matricula: number): Promise<DividaDto[]> {
     const dividas: DividaDto[] = [];
@@ -96,63 +111,65 @@ export class DebtNegotiationService {
     const pagamentoOutubro = await this.pagouOutubro(aluno.codigo_inscricao);
 
     const cond1 = confirmacao?.ultimoAnoInscritoId === 1 && pagamentoOutubro;
-    const cond2 = confirmacao?.ultimoAnoInscritoId !== 1 && !(parseInt(confirmacao.ultimoAnoInscritoDesig) <= 2019);
+    const cond2 = confirmacao?.ultimoAnoInscritoId !== 1 && !(parseInt(confirmacao?.ultimoAnoInscritoDesig) <= 2019);
 
     if (!cond1 && !cond2) return [];
 
     // Faturas pagas
-    const faturasPagas = await this.facturaRepo
-      .createQueryBuilder('f')
-      .innerJoin('f.matricula', 'm')
-      .innerJoin('f.avaliacoes', 'ia')
-      .innerJoin('f.pagamentos', 'p')
-      .where('ia.codigo_ano_lectivo = :ano', { ano: confirmacao.ultimoAnoInscritoId })
-      .andWhere('f.corrente = 1')
-      .andWhere('f.estado NOT IN (1, 3)')
-      .andWhere('m.Codigo = :matricula', { matricula: codigo_matricula })
-      .select('ia.codigo_factura')
-      .distinct(true)
-      .getRawMany();
+    const faturasPagas = await this.facturaRepo.query(`
+  SELECT DISTINCT ia.codigo_factura
+  FROM factura f
+  INNER JOIN tb_matriculas m ON m.Codigo = f.CodigoMatricula
+  INNER JOIN inscricao_avaliacoes ia ON ia.codigo_factura = f.Codigo
+  INNER JOIN tb_pagamentos p ON p.codigo_factura = f.Codigo
+  WHERE ia.codigo_ano_lectivo = ?
+    AND f.corrente = 1
+    AND f.estado NOT IN (1, 3)
+    AND m.Codigo = ?
+`, [confirmacao?.ultimoAnoInscritoId, codigo_matricula]);
 
     const array = faturasPagas.map(f => f.ia_codigo_factura);
 
     // Outros serviços
-    const outrosServicos = await this.avaliacaoRepo
-      .createQueryBuilder('ia')
-      .innerJoin('ia.factura', 'f')
-      .innerJoin('f.items', 'fi')
-      .innerJoin('f.anoLectivo', 'al')
-      .innerJoin('fi.produto', 'ts')
-      .leftJoin('ts.taxaIva', 'tt')
-      .leftJoin('ts.motivoIsencaoIva', 'mi')
-      .leftJoin('ts.gradeCurricular', 'gc')
-      .leftJoin('gc.disciplina', 'd')
-      .where('ia.codigo_matricula = :matricula', { matricula: codigo_matricula })
-      .andWhere('ia.codigo_ano_lectivo = :ano', { ano: confirmacao.ultimoAnoInscritoId })
-      .andWhere('ia.estado != :anulado', { anulado: 'anulado' })
-      .andWhere('f.estado NOT IN (1, 3)')
-      .andWhere('f.corrente = 1')
-      .andWhere('f.Codigo NOT IN (:...array)', { array })
-      .select([
-        'f.Codigo',
-        'f.ValorAPagar as apagar',
-        'gc.Codigo as codGradeCurricular',
-        'fi.preco as valor',
-        'fi.Multa as multa',
-        'fi.descontoProduto as descontoProduto',
-        'fi.Total as total',
-        'd.Designacao as servico',
-        'al.Codigo as cod_ano_lectivo',
-        'al.Designacao as ano_lectivo',
-        'ts.Codigo as cod_servico',
-        'fi.incidencia as incidencia',
-        'fi.valor_iva as valor_iva',
-        'fi.taxa_iva as taxa_iva',
-        'tt.descricao as taxa_descricao',
-      ])
-      .distinctOn(['gc.Codigo'])
-      .getRawMany();
-
+    const outrosServicos = await this.avaliacaoRepo.query(`
+  SELECT 
+    f.Codigo,
+    ANY_VALUE(f.ValorAPagar)           AS apagar,
+    gc.Codigo                          AS codGradeCurricular,
+    ANY_VALUE(fi.preco)                AS valor,
+    ANY_VALUE(fi.Multa)                AS multa,
+    ANY_VALUE(fi.descontoProduto)      AS descontoProduto,
+    ANY_VALUE(fi.Total)                AS total,
+    ANY_VALUE(d.Designacao)            AS servico,
+    ANY_VALUE(al.Codigo)               AS cod_ano_lectivo,
+    ANY_VALUE(al.Designacao)           AS ano_lectivo,
+    ANY_VALUE(ts.Codigo)               AS cod_servico,
+    ANY_VALUE(fi.incidencia)           AS incidencia,
+    ANY_VALUE(fi.valor_iva)            AS valor_iva,
+    ANY_VALUE(fi.taxa_iva)             AS taxa_iva,
+    ANY_VALUE(tt.descricao)            AS taxa_descricao
+  FROM inscricao_avaliacoes ia
+  INNER JOIN factura f               ON f.Codigo = ia.codigo_factura
+  INNER JOIN factura_items fi        ON fi.CodigoFactura = f.Codigo
+  INNER JOIN tb_ano_lectivo al       ON al.Codigo = f.ano_lectivo
+  INNER JOIN tb_tipo_servicos ts     ON ts.Codigo = fi.CodigoProduto
+  LEFT JOIN tipo_taxas tt            ON tt.id = ts.taxa_iva_id
+  LEFT JOIN tb_motivo_isencao mi     ON mi.Codigo = ts.motivo_isencao_iva_codigo
+  LEFT JOIN tb_grade_curricular gc   ON gc.Codigo = ts.codigo_grade_currilular
+  LEFT JOIN tb_disciplinas d         ON d.Codigo = gc.codigo_disciplina
+  WHERE ia.codigo_matricula = ?
+    AND ia.codigo_ano_lectivo = ?
+    AND ia.estado != 'anulado'
+    AND f.estado NOT IN (1, 3)
+    AND f.corrente = 1
+    AND f.Codigo NOT IN (${array.length ? array.map(() => '?').join(', ') : '0'})
+  GROUP BY gc.Codigo, f.Codigo
+  ORDER BY gc.Codigo
+`, [
+      codigo_matricula,
+      confirmacao?.ultimoAnoInscritoId,
+      ...array
+    ]);
     for (const value of outrosServicos) {
       const tipo_avaliacao = await this.avaliacaoRepo
         .createQueryBuilder('ia')
@@ -180,15 +197,15 @@ export class DebtNegotiationService {
           mes_temp_id: null,
           n_prestacao: '',
           ano_lectivo: value.ano_lectivo,
-          taxa_multa: '',
-          taxa_desconto: '',
+          taxa_multa: 0,
+          taxa_desconto: 0,
           bolsa: '',
           codigo_propina: value.cod_servico,
           codigo_anoLectivo: value.cod_ano_lectivo,
           desconto: value.descontoProduto,
           incidencia: value.incidencia,
           valor_iva: value.valor_iva,
-          taxa_iva: value.taxa_iva,
+          tipo_taxas: value.tipo_taxas,
           taxa_descricao: value.taxa_descricao,
         });
       }
@@ -198,7 +215,8 @@ export class DebtNegotiationService {
   }
 
   // === 3. dividasPropinaAnoCorrente ===
-  async dividasPropinaAnoCorrente(codigo_matricula: number): Promise<DividaDto[]> {
+  async dividasPropinaAnoCorrente(codigo_matricula: number, pre_inscricaoId: number): Promise<DividaDto[]> {
+
     const dividas: DividaDto[] = [];
     const aluno = await this.getAlunoPorMatricula(codigo_matricula);
     const diplomado = await this.matriculaRepo.findOne({
@@ -209,16 +227,16 @@ export class DebtNegotiationService {
     const confirmacao = await this.confirmacaoAnoCorrente(codigo_matricula);
     if (!confirmacao) return [];
 
-    const mesesPagos = await this.mesesPagosPorAnoPropina(confirmacao.ano_lectivo_id, aluno.codigo_inscricao);
-    const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao.ano_lectivo_id, mesesPagos.map(m => m.codigo_mes));
-    const propina = await this.propinaAluno(aluno.codigo_inscricao, aluno.AlunoCacuaco, confirmacao.ano_lectivo_id);
+    const mesesPagos = await this.mesesPagosPorAnoPropina(confirmacao?.ano_lectivo_id, aluno.codigo_inscricao);
+    const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao?.ano_lectivo_id, mesesPagos.map(m => m.codigo_mes));
+    const propina = await this.propinaAluno(aluno.codigo_inscricao, aluno.AlunoCacuaco, confirmacao?.ano_lectivo_id);
     if (!propina) return [];
 
-    const bolseiro1 = await this.bolsaService.BolsaPorSemestre1(codigo_matricula, confirmacao.ano_lectivo_id, 1);
-    const bolseiro2 = await this.bolsaService.BolsaPorSemestre2(codigo_matricula, confirmacao.ano_lectivo_id, 2);
+    const bolseiro1 = await this.BolsaPorSemestre1(codigo_matricula, confirmacao?.ano_lectivo_id, 1);
+    const bolseiro2 = await this.BolsaPorSemestre2(codigo_matricula, confirmacao?.ano_lectivo_id, 2);
 
-    const taxaMultaMeses = await this.mesesPagarPropina.mesesPagar(new Date().toISOString().split('T')[0], 1, 0, confirmacao.ano_lectivo_id);
-    const desconto_finalista = await this.pegar_finalista(confirmacao.ano_lectivo_id, codigo_matricula);
+    const taxaMultaMeses = await this.mesesPagarPropina(new Date().toISOString().split('T')[0], 1, 0, confirmacao?.ano_lectivo_id);
+    const desconto_finalista = await this.pegar_finalista(confirmacao?.ano_lectivo_id, codigo_matricula, pre_inscricaoId);
 
     // Semestre 1
     if (propina && (!bolseiro1 || (bolseiro1.desconto > 0 && bolseiro1.desconto < 100))) {
@@ -269,16 +287,16 @@ export class DebtNegotiationService {
               mes_propina: mes.designacao,
               mes_temp_id: mes.id,
               n_prestacao: mes.prestacao,
-              ano_lectivo: confirmacao.ano_lectivo_designacao,
+              ano_lectivo: confirmacao?.ano_lectivo_designacao,
               taxa_multa,
               taxa_desconto,
               bolsa,
               codigo_propina: propina.Codigo,
-              codigo_anoLectivo: confirmacao.ano_lectivo_id,
+              codigo_anoLectivo: confirmacao?.ano_lectivo_id,
               desconto,
               incidencia: propina.Preco - desconto,
               valor_iva: 0,
-              taxa_iva: 0,
+              tipo_taxas: 0,
               taxa_descricao: null,
             });
           }
@@ -335,16 +353,16 @@ export class DebtNegotiationService {
               mes_propina: mesNPago.mes,
               mes_temp_id: mesNPago.codigo,
               n_prestacao: mesNPago.prestacao,
-              ano_lectivo: confirmacao.ano_lectivo_designacao,
+              ano_lectivo: confirmacao?.ano_lectivo_designacao,
               taxa_multa: mesNPago.taxa,
               taxa_desconto,
               bolsa,
               codigo_propina: propina.Codigo,
-              codigo_anoLectivo: confirmacao.ano_lectivo_id,
+              codigo_anoLectivo: confirmacao?.ano_lectivo_id,
               desconto,
               incidencia: propina.Preco - desconto,
               valor_iva: 0,
-              taxa_iva: 0,
+              tipo_taxas: 0,
               taxa_descricao: null,
             });
           }
@@ -355,7 +373,7 @@ export class DebtNegotiationService {
     return dividas;
   }
 
-
+  // === 4. getPrestacoesAnosAnterioresPorAnoLectivo ===
   async getPrestacoesAnosAnterioresPorAnoLectivo(ano_lectivo: number): Promise<number[]> {
     const result = await this.mesTempRepo
       .createQueryBuilder('mt')
@@ -366,6 +384,7 @@ export class DebtNegotiationService {
     return result.map(r => r.codigo);
   }
 
+  // === 5. getPrestacoesPorAnoLectivo2 ===
   async getPrestacoesPorAnoLectivo2(ano_lectivo: number, mesesPagos: number[] = []): Promise<any[]> {
     const result = await this.mesTempRepo
       .createQueryBuilder('mt')
@@ -382,12 +401,7 @@ export class DebtNegotiationService {
     return result;
   }
 
-
-
-
-
-
-
+  // === 6. mesesPagarPropina ===
   async mesesPagarPropina(data: string, tipo: number, mes: number, ano_lectivo: number): Promise<any[]> {
     // Simulação: retorna todos os meses com taxa
     return this.mesTempRepo
@@ -402,68 +416,82 @@ export class DebtNegotiationService {
       .getRawMany();
   }
 
-
-  async dividasNovaVersao(codigo_matricula: number): Promise<any[]> {
+  // === 7. dividasNovaVersao ===
+  async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promise<any[]> {
     let codigo_inscricao = codigo_matricula;
-    let user = null;
+    let user: TbPreinscricao | null = null;
 
-    // Simulação de auth e sessão
-    const sessao = null; // Substituir por serviço real
-    if (sessao) {
-      user = await this.preinscricaoRepo.findOne({ where: { Codigo: sessao.candidato_id } });
-    } else {
-      user = await this.preinscricaoRepo.findOne({ where: { Bilhete_Identidade: 'numero_docuemnto' } });
-    }
+    // Simulação de auth e sessão (ajuste com serviço real se necessário)
+    const sessao = null; // Substituir por serviço real de sessão
+
+    user = await this.preinscricaoRepo.findOne({ where: { Codigo: preinscricaoId } });
 
     if (!user || user.codigo_tipo_candidatura !== 1) {
       return this.handlePosGraduacao(user, codigo_matricula);
     }
 
-    const matricula1 = await this.matriculaRepo
-      .createQueryBuilder('m')
-      .innerJoinAndSelect('m.admissao', 'a')
-      .innerJoinAndSelect('a.preinscricao', 'pre')
-      .select([
-        'm.Codigo', 'm.Codigo_Aluno', 'm.estado_matricula',
-        'pre.Codigo as codigo_inscricao', 'pre.AlunoCacuaco as aluno_cacuaco',
-        'pre.desconto as desconto', 'pre.codigo_tipo_candidatura'
-      ])
-      .where('pre.Codigo = :codigo', { codigo: sessao?.candidato_id ?? user.Codigo })
-      .orWhere('m.Codigo = :matricula', { matricula: codigo_matricula })
-      .getRawOne();
+    const matricula1 = await this.matriculaRepo.query(`
+  SELECT 
+    m.Codigo,
+    m.Codigo_Aluno,
+    m.estado_matricula,
+    pre.Codigo AS codigo_inscricao,
+    pre.AlunoCacuaco AS aluno_cacuaco,
+    pre.desconto,
+    pre.codigo_tipo_candidatura
+  FROM 
+    tb_matriculas m
+  INNER JOIN 
+    tb_admissao a ON a.codigo = m.Codigo_Aluno
+  INNER JOIN 
+    tb_preinscricao pre ON pre.Codigo = a.pre_incricao
+  WHERE 
+    pre.Codigo = ? 
+    OR m.Codigo = ?
+  LIMIT 1
+`, [preinscricaoId, codigo_matricula]);
 
     if (!matricula1) return [];
 
     codigo_inscricao = matricula1.codigo_inscricao;
 
-    const curso = await this.cursoRepo
-      .createQueryBuilder('c')
-      .innerJoin('c.preinscricao', 'pre')
-      .where('pre.Codigo = :codigo', { codigo: codigo_inscricao })
-      .select(['c.Designacao as curso', 'c.Codigo as codigo_curso'])
-      .getRawOne();
+    const curso = await this.cursoRepo.query(`
+  SELECT 
+    c.Designacao AS curso,
+    c.Codigo AS codigo_curso
+  FROM tb_cursos c
+  INNER JOIN tb_preinscricao pre ON pre.Curso_Candidatura = c.Codigo
+  WHERE pre.Codigo = ?
+  LIMIT 1
+`, [codigo_inscricao]);
+
+    const cursoResult = curso[0] || null;
 
     const anoCorrente = this.anoAtualPrincipal;
     const anoAtual = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
+    const maiorAno = await this.inscricaoAnteriorRepo.query(`
+  SELECT 
+    al.Designacao AS ano_designacao,
+    al.Codigo AS maior
+  FROM tb_inscricoes_ano_anterior ia
+  INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
+  WHERE ia.codigo_matricula = ?
+    AND ia.status = 1
+  ORDER BY al.ordem DESC, al.Designacao DESC
+  LIMIT 1
+`, [matricula1.Codigo]);
 
-    const maiorAno = await this.inscricaoAnteriorRepo
-      .createQueryBuilder('ia')
-      .innerJoin('ia.matricula', 'm')
-      .innerJoin('ia.anoLectivo', 'al')
-      .select('MAX(al.Designacao)', 'ano_designacao')
-      .addSelect('ANY_VALUE(al.Codigo)', 'maior')
-      .where('ia.codigo_matricula = :matricula', { matricula: matricula1.Codigo })
-      .andWhere('ia.status = 1')
-      .getRawOne();
+    const maiorAnoResult = maiorAno[0] || null;
 
-    const inscricaoAnosAnteriores = await this.inscricaoAnteriorRepo
-      .createQueryBuilder('ia')
-      .innerJoin('ia.matricula', 'm')
-      .innerJoin('ia.anoLectivo', 'al')
-      .select('al.Designacao as ano_designacao', 'ia.codigo_ano_lectivo as ano_lectivo')
-      .where('ia.codigo_matricula = :matricula', { matricula: matricula1.Codigo })
-      .orderBy('ia.codigo_ano_lectivo', 'ASC')
-      .getRawMany();
+    const inscricaoAnosAnteriores = await this.inscricaoAnteriorRepo.query(`
+  SELECT 
+    al.Designacao AS ano_designacao,
+    ia.codigo_ano_lectivo AS ano_lectivo
+  FROM tb_inscricoes_ano_anterior ia
+  INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
+  WHERE ia.codigo_matricula = ?
+  ORDER BY ia.codigo_ano_lectivo ASC
+`, [matricula1.Codigo]);
 
     const collection: any[] = [];
 
@@ -471,9 +499,11 @@ export class DebtNegotiationService {
       where: { Codigo: matricula1.Codigo, estado_matricula: 'diplomado' }
     });
 
-    let bolseiroGlobal = null;
+    let bolseiroGlobal: TbBolseiroSiiuma | null = null;
     if (maiorAno?.maior) {
       const anoLectivoBolsa = await this.anoLectivoRepo.findOne({ where: { Codigo: maiorAno.maior } });
+      if (!anoLectivoBolsa) return [];
+
       bolseiroGlobal = await this.bolseiroRepo.findOne({
         where: { codigo_matricula: matricula1.Codigo, ano: anoLectivoBolsa.Designacao }
       });
@@ -496,29 +526,33 @@ export class DebtNegotiationService {
 
       const mesesIsentos = await this.getPrestacoesAnosAnterioresPorAnoLectivo(ano.ano_lectivo);
 
-      const mesesNaoPagos = await this.tipoServicoRepo
-        .createQueryBuilder('ts')
-        .innerJoin('propina_por_curso', 'ppc', 'ppc.codigo_servico = ts.Codigo')
-        .innerJoin('meses', 'm', 'm.codigo = ppc.mes_id')
-        .innerJoin('tb_ano_lectivo', 'al', 'al.Codigo = ts.codigo_ano_lectivo')
-        .select([
-          'ts.Descricao as servico',
-          'm.mes as mes_propina',
-          'm.codigo as codigo_mes',
-          'al.Designacao as ano',
-          'al.Codigo as codigo_anoLectivo',
-          'ppc.codigo_servico as codigo_propina',
-          '(ts.Preco * 1.1) as total',
-          'ts.Preco as valor',
-          '(ts.Preco * 0.1) as multa'
-        ])
-        .where('ts.Codigo = :codigo', { codigo: propina.Codigo })
-        .andWhere('ts.cacuaco = :cacuaco', { cacuaco: matricula1.aluno_cacuaco })
-        .andWhere('ts.codigo_ano_lectivo = :ano', { ano: ano.ano_lectivo })
-        .andWhere('ppc.mes_id NOT IN (:...mesesPagos)', { mesesPagos: mesesIds.length ? mesesIds : [0] })
-        .andWhere('ppc.mes_id NOT IN (:...mesesIsentos)', { mesesIsentos })
-        .distinct()
-        .getRawMany();
+      const mesesNaoPagos = await this.tipoServicoRepo.query(`
+  SELECT DISTINCT
+    ts.Descricao AS servico,
+    m.mes AS mes_propina,
+    m.codigo AS codigo_mes,
+    al.Designacao AS ano,
+    al.Codigo AS codigo_anoLectivo,
+    ppc.codigo_servico AS codigo_propina,
+    (ts.Preco * 1.1) AS total,
+    ts.Preco AS valor,
+    (ts.Preco * 0.1) AS multa
+  FROM tb_tipo_servicos ts
+  INNER JOIN propina_por_curso ppc ON ppc.codigo_servico = ts.Codigo
+  INNER JOIN meses m ON m.codigo = ppc.mes_id
+  INNER JOIN tb_ano_lectivo al ON al.Codigo = ts.codigo_ano_lectivo
+  WHERE ts.Codigo = ?
+    AND ts.cacuaco = ?
+    AND ts.codigo_ano_lectivo = ?
+    AND ppc.mes_id NOT IN (${mesesIds.length ? mesesIds.map(() => '?').join(', ') : '0'})
+    AND ppc.mes_id NOT IN (${mesesIsentos.length ? mesesIsentos.map(() => '?').join(', ') : '0'})
+`, [
+        propina.Codigo,
+        matricula1.aluno_cacuaco,
+        ano.ano_lectivo,
+        ...mesesIds,
+        ...mesesIsentos
+      ]);
 
       for (const mes of mesesNaoPagos) {
         let desconto = 0;
@@ -541,7 +575,7 @@ export class DebtNegotiationService {
           total = valorComDesconto + mes.multa;
         }
 
-        const desconto_finalista = await this.pegar_finalista(mes.codigo_anoLectivo, codigo_matricula);
+        const desconto_finalista = await this.pegar_finalista(mes.codigo_anoLectivo, codigo_matricula, codigo_inscricao);
 
         collection.push({
           codGradeCurricular: '',
@@ -562,7 +596,7 @@ export class DebtNegotiationService {
           desconto: desconto,
           incidencia: (propina.Preco - desconto),
           valor_iva: 0,
-          taxa_iva: 0,
+          tipo_taxas: 0,
           taxa_descricao: ''
         });
       }
@@ -570,48 +604,52 @@ export class DebtNegotiationService {
 
     // === DÍVIDAS NOVAS ===
     const dividas: any[] = [];
-    const aluno = { codigo_inscricao, AlunoCacuaco: matricula1.aluno_cacuaco, codigo_tipo_candidatura: 1 };
+    const aluno = { codigo_inscricao, AlunoCacuaco: matricula1.aluno_cacuaco, desconto: matricula1.desconto, codigo_tipo_candidatura: 1 };
     const confirmacaoExiste = await this.confirmacao(codigo_matricula);
     const pagamentoOutubro = await this.pagouOutubro(codigo_inscricao);
 
-    const anosInscritos = await this.confirmacaoRepo
-      .createQueryBuilder('c')
-      .innerJoin('c.anoLectivo', 'al')
-      .select('c.Codigo_Ano_lectivo', 'Codigo_Ano_lectivo')
-      .addSelect('al.ordem', 'ordem')
-      .where('c.Codigo_Matricula = :matricula', { matricula: codigo_matricula })
-      .groupBy('c.Codigo_Ano_lectivo')
-      .orderBy('al.ordem', 'ASC')
-      .getRawMany();
+    const anosInscritos = await this.confirmacaoRepo.query(`
+  SELECT 
+    c.Codigo_Ano_lectivo,
+    al.ordem
+  FROM tb_confirmacoes c
+  INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
+  WHERE c.Codigo_Matricula = ?
+  GROUP BY c.Codigo_Ano_lectivo, al.ordem
+  ORDER BY al.ordem ASC
+`, [codigo_matricula]);
 
     if (!diplomado) {
       for (const value of anosInscritos) {
         if (value.Codigo_Ano_lectivo === anoCorrente) continue;
 
-        const confirmacao = await this.confirmacaoRepo
-          .createQueryBuilder('c')
-          .innerJoin('c.anoLectivo', 'al')
-          .innerJoin('c.matricula', 'm')
-          .where('m.Codigo = :matricula', { matricula: codigo_matricula })
-          .andWhere('c.Codigo_Ano_lectivo = :ano', { ano: value.Codigo_Ano_lectivo })
-          .select('ANY_VALUE(al.Codigo) as ultimoAnoInscritoId')
-          .addSelect('ANY_VALUE(al.Designacao) as ultimoAnoInscritoDesig')
-          .orderBy('al.ordem', 'DESC')
-          .getRawOne();
+        const confirmacao = await this.confirmacaoRepo.query(`
+  SELECT 
+    al.Codigo AS ultimoAnoInscritoId,
+    al.Designacao AS ultimoAnoInscritoDesig
+  FROM tb_confirmacoes c
+  INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
+  INNER JOIN tb_matriculas m ON m.Codigo = c.Codigo_Matricula
+  WHERE m.Codigo = ?
+    AND c.Codigo_Ano_lectivo = ?
+  ORDER BY al.ordem DESC
+  LIMIT 1
+`, [codigo_matricula, value.Codigo_Ano_lectivo]);
 
-        const cond1 = confirmacao && confirmacao.ultimoAnoInscritoId === 1 && pagamentoOutubro;
-        const cond2 = confirmacao && confirmacao.ultimoAnoInscritoId !== 1 && !(parseInt(confirmacao.ultimoAnoInscritoDesig) <= 2019);
+        const confirmacaoResult = confirmacao[0] || null;
+
+        const cond1 = confirmacao && confirmacao?.ultimoAnoInscritoId === 1 && pagamentoOutubro;
+        const cond2 = confirmacao && confirmacao?.ultimoAnoInscritoId !== 1 && !(parseInt(confirmacao?.ultimoAnoInscritoDesig) <= 2019);
 
         if (!cond1 && !cond2) continue;
 
-        const mesesPagos = await this.mesesPagosPorAnoPropina(confirmacao.ultimoAnoInscritoId, codigo_inscricao);
-        const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao.ultimoAnoInscritoId, mesesPagos.map(m => m.codigo_mes));
-        const propina = await this.propinaAluno(codigo_inscricao, aluno.AlunoCacuaco, confirmacao.ultimoAnoInscritoId);
+        const mesesPagos = await this.mesesPagosPorAnoPropina(confirmacao?.ultimoAnoInscritoId, codigo_inscricao);
+        const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao?.ultimoAnoInscritoId, mesesPagos.map(m => m.codigo_mes));
+        const propina = await this.propinaAluno(codigo_inscricao, aluno.AlunoCacuaco, confirmacao?.ultimoAnoInscritoId);
 
         if (!propina) continue;
 
-        const taxaMultaMeses = await this.mesesPagarPropina(new Date().toISOString(), 1, 0, confirmacao.ultimoAnoInscritoId);
-        const anoLectivo = await this.anoLectivoRepo.findOne({ where: { Codigo: confirmacao.ultimoAnoInscritoId } });
+        const taxaMultaMeses = await this.mesesPagarPropina(new Date().toISOString().split('T')[0], 1, 0, confirmacao?.ultimoAnoInscritoId);
 
         for (const mes of mesesNaoPagos) {
           const mesNPago = taxaMultaMeses.find(m => m.codigo === mes.id);
@@ -638,16 +676,16 @@ export class DebtNegotiationService {
             mes_propina: mesNPago.mes,
             mes_temp_id: mesNPago.codigo,
             n_prestacao: mesNPago.prestacao,
-            ano_lectivo: confirmacao.ultimoAnoInscritoDesig,
+            ano_lectivo: confirmacao?.ultimoAnoInscritoDesig,
             taxa_multa: mesNPago.taxa,
             taxa_desconto: taxa_desconto,
             bolsa: bolsa,
             codigo_propina: propina.Codigo,
-            codigo_anoLectivo: confirmacao.ultimoAnoInscritoId,
+            codigo_anoLectivo: confirmacao?.ultimoAnoInscritoId,
             desconto: desconto,
             incidencia: (propina.Preco - desconto),
             valor_iva: 0,
-            taxa_iva: 0,
+            tipo_taxas: 0,
             taxa_descricao: ''
           });
         }
@@ -657,7 +695,7 @@ export class DebtNegotiationService {
     return [...collection, ...dividas];
   }
 
-  // === PÓS-GRADUAÇÃO ===
+  // === 8. handlePosGraduacao ===
   private async handlePosGraduacao(user: any, codigo_matricula: number): Promise<any[]> {
     if (!user || user.codigo_tipo_candidatura === 1) return [];
 
@@ -665,26 +703,38 @@ export class DebtNegotiationService {
       ? this.anoAtualPrincipal // cicloMestrado
       : this.anoAtualPrincipal; // cicloDoutoramento
 
-    const matricula1 = await this.matriculaRepo
-      .createQueryBuilder('m')
-      .innerJoinAndSelect('m.admissao', 'a')
-      .innerJoinAndSelect('a.preinscricao', 'pre')
-      .select([
-        'm.Codigo', 'pre.Codigo as codigo_inscricao',
-        'pre.AlunoCacuaco as aluno_cacuaco', 'pre.desconto as desconto'
-      ])
-      .where('pre.Codigo = :codigo', { codigo: user.Codigo })
-      .getRawOne();
 
-    const curso = await this.cursoRepo
-      .createQueryBuilder('c')
-      .innerJoin('c.preinscricao', 'pre')
-      .where('pre.Codigo = :codigo', { codigo: matricula1.codigo_inscricao })
-      .select(['c.Designacao as curso'])
-      .getRawOne();
+    const matricula1Result = await this.matriculaRepo.query(`
+  SELECT 
+    m.Codigo,
+    pre.Codigo AS codigo_inscricao,
+    pre.AlunoCacuaco AS aluno_cacuaco,
+    pre.desconto
+  FROM tb_matriculas m
+  INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
+  INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
+  WHERE pre.Codigo = ?
+  LIMIT 1
+`, [user.Codigo]);
+
+    const matricula1 = matricula1Result[0] || null;
+
+
+
+    const cursoResult = await this.cursoRepo.query(`
+  SELECT 
+    c.Designacao AS curso
+  FROM tb_cursos c
+  INNER JOIN tb_preinscricao pre ON pre.Curso_Candidatura = c.Codigo
+  WHERE pre.Codigo = ?
+  LIMIT 1
+`, [matricula1?.codigo_inscricao]);
+
+    const curso = cursoResult[0] || null;
 
     const anoCorrente = this.anoAtualPrincipal;
     const anoActual = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
+    if (!anoActual) return [];
 
     const meses = user.codigo_tipo_candidatura === 2
       ? await this.mesTempRepo.find({ where: { activo_posgraduacao: 1 }, take: 24 })
@@ -733,7 +783,7 @@ export class DebtNegotiationService {
           codigo_anoLectivo: anoActual.Codigo,
           desconto: desconto,
           valor_iva: 0,
-          taxa_iva: 0
+          tipo_taxas: 0
         });
       }
     }
@@ -741,37 +791,40 @@ export class DebtNegotiationService {
     return collection;
   }
 
+  // === 9. getMesesPagosPosGraduacaoFatura ===
   private async getMesesPagosPosGraduacaoFatura(codigo_matricula: number): Promise<any[]> {
-    return this.facturaRepo
-      .createQueryBuilder('f')
-      .innerJoin('f.items', 'fi')
-      .innerJoin('f.pagamentos', 'p')
-      .innerJoin('p.itens', 'pi')
-      .innerJoin('p.anoLectivo', 'al')
-      .innerJoin('pi.produto', 'ts')
-      .where('f.CodigoMatricula = :matricula', { matricula: codigo_matricula })
-      .andWhere('p.estado = 1')
-      .andWhere('ts.TipoServico = :tipo', { tipo: 'Mensal' })
-      .select('pi.mes_temp_id as codigo_mes')
-      .distinct()
-      .getRawMany();
-  }
+    const result = await this.facturaRepo.query(`
+    SELECT DISTINCT pi.mes_temp_id AS codigo_mes
+    FROM factura f
+    INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
+    INNER JOIN tb_pagamentos p ON p.codigo_factura = f.Codigo
+   -- INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
+    INNER JOIN tb_ano_lectivo al ON al.Codigo = p.AnoLectivo
+    INNER JOIN tb_tipo_servicos ts ON ts.Codigo = pi.codigo_produto
+    WHERE f.CodigoMatricula = ?
+      AND p.estado = 1
+      AND ts.TipoServico = 'Mensal'
+  `, [codigo_matricula]);
 
-  private async getMesesPagosPosGraduacaoPreinscricao(codigo_inscricao: number): Promise<any[]> {
-    return this.pagamentoRepo
-      .createQueryBuilder('p')
-      .innerJoin('p.itens', 'pi')
-      .innerJoin('p.preinscricao', 'pre')
-      .innerJoin('pi.produto', 'ts')
-      .innerJoin('p.anoLectivo', 'al')
-      .where('pre.Codigo = :codigo', { codigo: codigo_inscricao })
-      .andWhere('ts.TipoServico = :tipo', { tipo: 'Mensal' })
-      .andWhere('p.estado = 1')
-      .select('pi.mes_temp_id as codigo_mes')
-      .distinct()
-      .getRawMany();
+    return result.map(row => row.codigo_mes);
   }
+  // === 10. getMesesPagosPosGraduacaoPreinscricao ===
+  private async getMesesPagosPosGraduacaoPreinscricao(codigo_inscricao: number): Promise<number[]> {
+    const result = await this.pagamentoRepo.query(`
+    SELECT DISTINCT pi.mes_temp_id AS codigo_mes
+    FROM tb_pagamentos p
+   -- INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
+    INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
+    INNER JOIN tb_tipo_servicos ts ON ts.Codigo = pi.codigo_produto
+    INNER JOIN tb_ano_lectivo al ON al.Codigo = p.AnoLectivo
+    WHERE pre.Codigo = ?
+      AND ts.TipoServico = 'Mensal'
+      AND p.estado = 1
+  `, [codigo_inscricao]);
 
+    return result.map(row => row.codigo_mes).filter(Boolean);
+  }
+  // === 11. getPropinaPosGraduacao ===
   private async getPropinaPosGraduacao(curso: string, cacuaco: number, ciclo: number, anoLectivo: number): Promise<any> {
     return this.tipoServicoRepo
       .createQueryBuilder('ts')
@@ -782,11 +835,11 @@ export class DebtNegotiationService {
       .getOne();
   }
 
-  // === 4. DividasTodosAnos ===
+  // === 12. DividasTodosAnos ===
   async DividasTodosAnos(numero_matricula: number, tipo: 1 | 2): Promise<DividaDto[] | number> {
     const aluno = await this.getAlunoPorMatricula(numero_matricula);
     const pagamentoOutubro = await this.pagouOutubro(aluno.codigo_inscricao);
-    const dividasNovaVersao = await this.dividasNovaVersao(numero_matricula);
+    const dividasNovaVersao = await this.dividasNovaVersao(numero_matricula, aluno.codigo_inscricao);
     const outrosServicos = await this.dividaOutrosServicos(numero_matricula);
 
     if (tipo === 2) {
@@ -804,17 +857,17 @@ export class DebtNegotiationService {
     return dividas;
   }
 
-  // === 5. index ===
-  async index(tipo: 1 | 2 = 1) {
-    const aluno = await this.alunoRepository.dadosAlunoLogado();
-    let dividas = await this.DividasTodosAnos(aluno.matricula, 1);
+  // === 13. index ===
+  async getDebt(enrrolmentId: number, codigo_inscricao: number, tipo: 1 | 2 = 1) {
+
+    let dividas = await this.DividasTodosAnos(enrrolmentId, 1) as DividaDto[];
 
     if (tipo === 2) {
-      const propinaCorrente = await this.dividasPropinaAnoCorrente(aluno.matricula);
+      const propinaCorrente = await this.dividasPropinaAnoCorrente(enrrolmentId, codigo_inscricao);
       dividas = [...dividas, ...propinaCorrente];
     }
 
-    const anoCorrente = await this.anoAtualPrincipal.index();
+    const anoCorrente = this.anoAtualPrincipal;
     const anoCorrenteObj = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
     const meses = await this.mesCalendarioRepo.find({ where: { id: 7 } });
     const mesesDividas = dividas.sort((a, b) => a.ano_lectivo.localeCompare(b.ano_lectivo));
@@ -825,11 +878,11 @@ export class DebtNegotiationService {
     const total_retencao = totalDivida * (percentagem_retencao / 100);
     const totalDividaFinal = totalDivida - total_retencao;
 
-    const saldo_reset = (await this.preinscricaoRepo.findOne({ where: { Codigo: aluno.codigo_inscricao } }))?.saldo_reset || 0;
-    const dividas_recurso = await this.dividaOutrosServicos(aluno.matricula);
+    const saldo_reset = (await this.preinscricaoRepo.findOne({ where: { Codigo: codigo_inscricao } }))?.saldo_reset || 0;
+    const dividas_recurso = await this.dividaOutrosServicos(enrrolmentId);
 
     return {
-      empresa: await this.empresaRepo.findOne(),
+      empresa: "",//await this.empresaRepo.findOne(),
       anoAtual: anoCorrente,
       anoCorrente: anoCorrenteObj,
       meses,
@@ -846,81 +899,285 @@ export class DebtNegotiationService {
       saldo_reset,
       somaValorDividaRecurso: 0,
       dividaRecurso: dividas_recurso.length > 0 ? dividas_recurso : [],
-      somaDividaFacturas: await this.dividasFacturasAnoCorrente(),
+      somaDividaFacturas: await this.dividasFacturasAnoCorrente(codigo_inscricao),
     };
   }
 
-  // === MÉTODOS AUXILIARES (REAL) ===
-  private async getAlunoPorMatricula(codigo_matricula: number) {
-    return this.matriculaRepo
-      .createQueryBuilder('m')
-      .innerJoinAndSelect('m.admissao', 'a')
-      .innerJoinAndSelect('a.preinscricao', 'pre')
-      .where('m.Codigo = :codigo', { codigo: codigo_matricula })
-      .select(['m.Codigo', 'pre.codigo_inscricao', 'pre.AlunoCacuaco', 'pre.desconto', 'pre.codigo_tipo_candidatura'])
-      .getRawOne();
+  // === MÉTODOS AUXILIARES ===
+  async BolsaPorSemestre1(
+    codigo_matricula: number,
+    codigo_anoLectivo: number,
+    semestre_id: number = 1,
+  ): Promise<any> {
+    const result = await this.bolseiroRepo.query(`
+  SELECT 
+    b.*,
+    tb.designacao AS tipo_bolsa
+  FROM tb_bolseiro b
+  INNER JOIN tb_tipo_bolsa tb ON tb.Codigo = b.codigo_tipo_bolsa
+  WHERE b.codigo_matricula = ?
+    AND b.codigo_anoLectivo = ?
+    AND b.semestre = ?
+    AND b.status = 0
+  LIMIT 1
+`, [codigo_matricula, codigo_anoLectivo, semestre_id]);
+
+    return result[0] || null;
   }
 
-  private async confirmacao(codigo_matricula: number) {
-    return this.confirmacaoRepo
-      .createQueryBuilder('c')
-      .innerJoin('c.matricula', 'm')
-      .innerJoin('c.anoLectivo', 'al')
-      .where('m.Codigo = :matricula', { matricula: codigo_matricula })
-      .select('ANY_VALUE(al.Codigo)', 'ultimoAnoInscritoId')
-      .addSelect('ANY_VALUE(al.Designacao)', 'ultimoAnoInscritoDesig')
-      .orderBy('al.ordem', 'DESC')
-      .getRawOne();
+  async BolsaPorSemestre2(
+    codigo_matricula: number,
+    codigo_anoLectivo: number,
+    semestre_id: number = 2,
+  ): Promise<any> {
+    const result = await this.bolseiroRepo.query(`
+  SELECT 
+    b.*,
+    tb.designacao AS tipo_bolsa
+  FROM tb_bolseiro b
+  INNER JOIN tb_tipo_bolsa tb ON tb.Codigo = b.codigo_tipo_bolsa
+  WHERE b.codigo_matricula = ?
+    AND b.codigo_anoLectivo = ?
+    AND b.semestre = ?
+    AND b.status = 0
+  LIMIT 1
+`, [codigo_matricula, codigo_anoLectivo, semestre_id]);
+
+    return result[0] || null;
   }
 
-  private async confirmacaoAnoCorrente(codigo_matricula: number) {
-    const anoCorrente = await this.anoAtualPrincipal.index();
-    return this.confirmacaoRepo
-      .createQueryBuilder('c')
-      .innerJoin('c.anoLectivo', 'al')
-      .where('c.Codigo_Matricula = :matricula', { matricula: codigo_matricula })
-      .andWhere('al.Codigo = :ano', { ano: anoCorrente })
-      .select(['c.Codigo_Ano_lectivo as ano_lectivo_id', 'al.Designacao as ano_lectivo_designacao'])
-      .getRawOne();
+  private async getAlunoPorMatricula(codigo_matricula: number): Promise<any> {
+    const result = await this.matriculaRepo.query(`
+    SELECT 
+      m.Codigo,
+      pre.Codigo AS codigo_inscricao,
+      pre.AlunoCacuaco,
+      pre.desconto,
+      pre.codigo_tipo_candidatura
+    FROM tb_matriculas m
+    INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
+    INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
+    WHERE m.Codigo = ?
+    LIMIT 1
+  `, [codigo_matricula]);
+
+    return result[0] || null;
+  }
+  private async confirmacao(codigo_matricula: number): Promise<any> {
+    const result = await this.confirmacaoRepo.query(`
+    SELECT 
+      al.Codigo AS ultimoAnoInscritoId,
+      al.Designacao AS ultimoAnoInscritoDesig
+    FROM tb_confirmacoes c
+    INNER JOIN tb_matriculas m ON m.Codigo = c.Codigo_Matricula
+    INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
+    WHERE m.Codigo = ?
+    ORDER BY al.ordem DESC
+    LIMIT 1
+  `, [codigo_matricula]);
+
+    return result[0] || null;
+  }
+  private async confirmacaoAnoCorrente(codigo_matricula: number): Promise<any> {
+    // 1. Busca o ano letivo corrente (Ativo)
+    const anoCorrente = await this.anoLectivoRepo.query(`
+    SELECT Codigo, Designacao
+    FROM tb_ano_lectivo
+    WHERE estado = 'Ativo'
+    LIMIT 1
+  `);
+
+    if (!anoCorrente[0]) return null;
+
+    const { Codigo: anoId, Designacao: anoDesignacao } = anoCorrente[0];
+
+    // 2. Busca a confirmação para o ano corrente
+    const confirmacao = await this.confirmacaoRepo.query(`
+    SELECT 
+      c.Codigo_Ano_lectivo AS ano_lectivo_id,
+      al.Designacao AS ano_lectivo_designacao
+    FROM tb_confirmacoes c
+    INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
+    WHERE c.Codigo_Matricula = ?
+      AND c.Codigo_Ano_lectivo = ?
+    LIMIT 1
+  `, [codigo_matricula, anoId]);
+
+    return confirmacao[0] || null;
+  }
+  private async mesesPagosPorAnoPropina(
+    ano_lectivo_id: number,
+    codigo_inscricao: number
+  ) {
+    const result = await this.pagamentosiRepo.query(`
+    SELECT DISTINCT pi.mes_id AS codigo_mes
+    FROM tb_pagamentosi pi
+    INNER JOIN tb_pagamentos p ON p.Codigo = pi.codigo_pagamento
+    WHERE p.Codigo_PreInscricao = ?
+      AND p.AnoLectivo = ?
+      AND p.estado = 1
+  `, [codigo_inscricao, ano_lectivo_id]);
+
+    return result.map(row => row.codigo_mes).filter(Boolean);
+  }
+  private async getPrestacoesPorAnoLectivo(
+    ano_lectivo_id: number,
+    mesesPagos: number[]
+  ): Promise<any[]> {
+    const placeholders = mesesPagos.length ? mesesPagos.map(() => '?').join(', ') : '0';
+
+    const result = await this.mesTempRepo.query(`
+    SELECT 
+      mt.id,
+      mt.designacao,
+      mt.prestacao,
+      mt.data_final
+    FROM mes_temp mt
+    WHERE mt.activo = 1
+      AND mt.id NOT IN (${placeholders})
+  `, mesesPagos.length ? mesesPagos : []);
+
+    return result;
   }
 
-  private async mesesPagosPorAnoPropina(ano_lectivo_id: number, codigo_inscricao: number) {
-    return this.pagamentosiRepo
-      .createQueryBuilder('pi')
-      .innerJoin('pi.pagamento', 'p')
-      .where('p.Codigo_PreInscricao = :inscricao', { inscricao: codigo_inscricao })
-      .andWhere('p.AnoLectivo = :ano', { ano: ano_lectivo_id })
-      .andWhere('p.estado = 1')
-      .select('pi.mes_id as codigo_mes')
-      .distinct(true)
-      .getRawMany();
+  private async propinaAluno(
+    codigo_inscricao: number,
+    alunoCacuaco: number,
+    ano_lectivo_id: number
+  ): Promise<any> {
+    const result = await this.tipoServicoRepo.query(`
+    SELECT 
+      ts.Descricao,
+      ts.Preco,
+      ts.Codigo
+    FROM tb_tipo_servicos ts
+    INNER JOIN tb_ano_lectivo al ON al.Codigo = ts.codigo_ano_lectivo
+    INNER JOIN tb_preinscricao pre ON pre.Codigo = ts.codigo_preinscricao
+    WHERE pre.Codigo = ?
+      AND ts.cacuaco = ?
+      AND al.Codigo = ?
+      AND ts.Descricao LIKE 'propina %'
+    LIMIT 1
+  `, [codigo_inscricao, alunoCacuaco, ano_lectivo_id]);
+
+    return result[0] || null;
   }
 
-  private async getPrestacoesPorAnoLectivo(ano_lectivo_id: number, mesesPagos: number[]) {
-    return this.tipoServicoRepo
-      .createQueryBuilder('ts')
-      .innerJoin('ts.anoLectivo', 'al')
-      .where('al.Codigo = :ano', { ano: ano_lectivo_id })
-      .andWhere('ts.TipoServico = :tipo', { tipo: 'Mensal' })
-      .select(['ts.Descricao as servico', 'ts.Preco as valor'])
-      .getRawMany();
+  /**
+   * Verifica se o aluno é finalista com base no ano letivo e matrícula
+   * Retorna o número de cadeiras restantes (ou 0 se finalista)
+   */
+  async pegar_finalista(ano_lectivo: number, matricula: number, candidatoId: number): Promise<number> {
+
+
+    if (!candidatoId && !matricula) return 0;
+
+    // === 3. Busca aluno (por candidato_id ou matrícula) ===
+    let aluno: any = null;
+
+    if (candidatoId) {
+      const alunoResult = await this.matriculaRepo.query(`
+  SELECT 
+    m.Codigo AS matricula,
+    m.Codigo_Curso AS curso_matricula,
+    pre.Curso_Candidatura AS curso_preinscricao
+  FROM tb_matriculas m
+  INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
+  INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
+  WHERE pre.Codigo = ?
+  LIMIT 1
+`, [candidatoId]);
+
+      aluno = alunoResult[0] || null;
+    }
+
+    if (!aluno && matricula) {
+      const alunoResult = await this.matriculaRepo.query(`
+  SELECT 
+    m.Codigo AS matricula,
+    m.Codigo_Curso AS curso_matricula,
+    pre.Curso_Candidatura AS curso_preinscricao
+  FROM tb_matriculas m
+  INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
+  INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
+  WHERE m.Codigo = ?
+  LIMIT 1
+`, [matricula]);
+
+      aluno = alunoResult[0] || null;
+    }
+
+    if (!aluno) return 0;
+
+    // === 4. Busca último ano letivo inscrito (simulação do AnoLectivoService) ===
+    const ultimoAnoInscrito = await this.inscricaoAnteriorRepo.query(`
+  SELECT al.Codigo
+  FROM tb_inscricoes_ano_anterior ia
+  INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
+  WHERE ia.codigo_matricula = ?
+    AND ia.status = 1
+  ORDER BY al.ordem DESC
+  LIMIT 1
+`, [aluno.matricula]);
+
+
+    const ultimoAnoLectivoId = ultimoAnoInscrito?.Codigo || ano_lectivo;
+
+    // === 5. Verifica se é finalista: conta cadeiras pendentes ===
+    // (Assumindo que há uma tabela de inscrições em disciplinas ou avaliações)
+    const cadeirasPendentes = await this.avaliacaoRepo.query(`
+  SELECT COUNT(*) AS total
+  FROM inscricao_avaliacoes ia
+  INNER JOIN tb_grade_curricular gc ON gc.Codigo = ia.codigo_grade_curricular
+  INNER JOIN tb_cursos c ON c.Codigo = gc.codigo_curso
+  WHERE ia.codigo_matricula = ?
+    AND ia.codigo_ano_lectivo = ?
+    AND ia.estado = 'pendente'
+`, [aluno.matricula, ultimoAnoLectivoId]);
+
+    const totalPendentes = Number(cadeirasPendentes[0]?.total || 0);
+
+    // Se não houver cadeiras pendentes → finalista → retorna 0
+    return totalPendentes > 0 ? totalPendentes : 0;
   }
 
-  private async propinaAluno(codigo_inscricao: number, alunoCacuaco: number, ano_lectivo_id: number) {
-    return this.tipoServicoRepo
-      .createQueryBuilder('ts')
-      .innerJoin('ts.anoLectivo', 'al')
-      .innerJoin('ts.preinscricao', 'pre')
-      .where('pre.Codigo = :inscricao', { inscricao: codigo_inscricao })
-      .andWhere('ts.cacuaco = :cacuaco', { cacuaco: alunoCacuaco })
-      .andWhere('al.Codigo = :ano', { ano: ano_lectivo_id })
-      .andWhere('ts.Descricao LIKE :descricao', { descricao: 'propina %' })
-      .select(['ts.Descricao', 'ts.Preco', 'ts.Codigo'])
-      .getRawOne();
-  }
+  // Adicione no seu DebtNegotiationService
 
-  private async pegar_finalista(ano_lectivo_id: number, codigo_matricula: number): Promise<number> {
-    // Implementação real conforme sua lógica
-    return 0;
+  /**
+   * Calcula o total da dívida de faturas do ano corrente (não pagas ou parcialmente pagas)
+   */
+  async dividasFacturasAnoCorrente(preinscricaoId: number): Promise<number> {
+
+    const faturas = await this.facturaRepo.query(`
+  SELECT DISTINCT
+    f.Codigo AS codigo_factura,
+    f.DataFactura,
+    f.TotalPreco AS total,
+    f.ValorAPagar AS apagar,
+    f.Referencia AS referencia,
+    f.Desconto AS desconto,
+    f.TotalMulta,
+    al.Designacao AS ano,
+    f.codigo_descricao,
+    f.ValorEntregue,
+    f.estado AS estado_factura
+  FROM factura f
+  INNER JOIN tb_matriculas m ON m.Codigo = f.CodigoMatricula
+  INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
+  INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
+  INNER JOIN tb_ano_lectivo al ON al.Codigo = f.ano_lectivo
+  WHERE pre.Codigo = ?
+    AND f.corrente = 1
+    AND f.estado != 3
+    AND f.ano_lectivo = ?
+  ORDER BY f.Codigo ASC
+`, [preinscricaoId, this.anoAtualPrincipal]);
+
+    const totalEntregue = faturas.reduce((sum, f) => sum + (f.ValorEntregue || 0), 0);
+    const totalAPagar = faturas.reduce((sum, f) => sum + (f.apagar || 0), 0);
+
+    const totalDivida = totalEntregue < totalAPagar ? totalAPagar - totalEntregue : 0;
+
+    return totalDivida;
   }
 }

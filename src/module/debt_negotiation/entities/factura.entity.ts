@@ -30,8 +30,7 @@ export class Factura {
   @OneToMany(() => TbPagamento, p => p.factura)
   pagamentos: TbPagamento[];
 
-  @OneToMany(() => InscricaoAvaliacao, ia => ia.factura)
-  avaliacoes: InscricaoAvaliacao[];
+
 
   @ManyToOne(() => TbAnoLectivo, al => al.facturas)
   anoLectivo: TbAnoLectivo;

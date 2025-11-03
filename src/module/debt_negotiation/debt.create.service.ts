@@ -67,7 +67,7 @@ export class CreateDebtNegotiationService {
         where: { codigo_matricula: aluno.matricula, codigo_ano_lectivo: this.anoAtualPrincipal },
       });
 
-      if (HasNegotation) return new BadRequestException(`Aluno ${aluno.matricula}" já possui negociação Neste Ano Lectivo ${anoLectivo.Designacao}`)
+      //if (HasNegotation) return new BadRequestException(`Aluno ${aluno.matricula}" já possui negociação Neste Ano Lectivo ${anoLectivo.Designacao}`)
 
 
       // 2. Ano letivo
@@ -89,7 +89,6 @@ export class CreateDebtNegotiationService {
       // 4. Determinar tipo
       const isTotal = dto.tipoPagamento === 'TOTAL';
       const tipo_negociacao_id = isTotal ? 2 : 1;
-
       // 5. VALIDAÇÃO 50% (PARCELADO)
       let primeiroValorApagar: number;
       let valorRestante: number;

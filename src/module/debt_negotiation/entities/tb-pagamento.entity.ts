@@ -19,8 +19,7 @@ export class TbPagamento {
   @Column()
   estado: number;
 
-  @ManyToOne(() => TbPreinscricao, p => p.pagamentos)
-  preinscricao: TbPreinscricao;
+
 
   @ManyToOne(() => Factura, f => f.pagamentos)
   factura: Factura;

@@ -9,6 +9,5 @@ export class TbAdmissao {
   @Column({ name: 'pre_incricao' })
   pre_incricao: number;
 
-  @ManyToOne(() => TbPreinscricao, p => p.admissao)
-  preinscricao: TbPreinscricao;
+
 }

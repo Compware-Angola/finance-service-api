@@ -248,8 +248,9 @@ export class PaymentReferencesService {
           multa: item.multa,
           mesTempId: mes.id,
           codigoAnoLectivo: invoice.anoLectivo,
-          estado: item.estado,
+          estado:0,
           valorPago: item.valorPago,
+        
           valorATransportar: item.valorATransportar,
         };
 
@@ -257,7 +258,6 @@ export class PaymentReferencesService {
         await this.invoiceItemRepository.save(invoiceItem);
       })
     );
-
     return {
       message: 'Referências AppyPay e faturas criadas com sucesso ✅',
     };

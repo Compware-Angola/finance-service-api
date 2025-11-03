@@ -55,7 +55,6 @@ export class CreateDebtNegotiationService {
 
       const aluno = await this.getAlunoPorMatricula(codigo_matricula);
 
-
       if (!aluno) throw new BadRequestException('Matrícula não encontrada');
 
       const anoLectivo = await this.academicYearRepo.findOne({

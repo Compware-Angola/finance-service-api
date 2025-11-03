@@ -21,11 +21,11 @@ import { InvoiceService } from '../invoice/invoice.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 
 @Injectable()
-export class DebtNegotiationService {
+export class CreateDebtNegotiationService {
   private anoAtualPrincipal: number;
 
   constructor(
-      private readonly anoLectivoUtil: AnoLectivoUtil,
+    private readonly anoLectivoUtil: AnoLectivoUtil,
     @InjectRepository(Invoice) private invoiceRepo: Repository<Invoice>,
     @InjectRepository(InvoiceItem) private invoiceItemRepo: Repository<InvoiceItem>,
     @InjectRepository(TbPreinscricao) private preinscricaoRepo: Repository<TbPreinscricao>,
@@ -35,8 +35,8 @@ export class DebtNegotiationService {
     @InjectRepository(DebtNegotiation) private negotiationRepo: Repository<DebtNegotiation>,
     @InjectRepository(InscricaoAvaliacao) private avaliacaoRepo: Repository<InscricaoAvaliacao>,
     private dataSource: DataSource,
-    private readonly  invoiceService: InvoiceService,
-  ){ this.initAnoAtual(); }
+    private readonly invoiceService: InvoiceService,
+  ) { this.initAnoAtual(); }
   private async initAnoAtual() {
     this.anoAtualPrincipal = await this.anoLectivoUtil.getAnoAtualId();
   }
@@ -45,24 +45,36 @@ export class DebtNegotiationService {
   async createDebtNegotiation(
     dto: CreateDebtNegotiationDto,
     codigo_matricula: number,
-  ): Promise<{ last_fatura_id: number }> {
+  ) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
       // 1. Buscar aluno
+
       const aluno = await this.getAlunoPorMatricula(codigo_matricula);
+
+
       if (!aluno) throw new BadRequestException('Matrícula não encontrada');
 
-      // 2. Ano letivo
       const anoLectivo = await this.academicYearRepo.findOne({
         where: { Codigo: this.anoAtualPrincipal },
       });
       if (!anoLectivo) throw new BadRequestException('Ano letivo não encontrado');
 
+
+      const HasNegotation = await this.negotiationRepo.findOne({
+        where: { codigo_matricula: aluno.matricula, codigo_ano_lectivo: this.anoAtualPrincipal },
+      });
+
+      if (HasNegotation) return new BadRequestException(`Aluno ${aluno.matricula}" já possui negociação Neste Ano Lectivo ${anoLectivo.Designacao}`)
+
+
+      // 2. Ano letivo
+
       const itensOutrosServicos = dto.fatura_item_servicos;
-      const itensMensal =dto.fatura_item_mensalidades
+      const itensMensal = dto.fatura_item_mensalidades
       let valorApagar = dto.totalDivida;
       const saldo_reset = dto.saldo_reset || 0;
 
@@ -101,10 +113,10 @@ export class DebtNegotiationService {
       }
 
       // 6. Gerar numeração + hash
-   
+
       const dataAtual = new Date();
       const dataISO = dataAtual.toISOString();
-   
+
       // 7. Criar fatura com queryRunner
       const createInvoiceDto: CreateInvoiceDto = {
         DataFactura: dataISO,
@@ -122,8 +134,10 @@ export class DebtNegotiationService {
         canal: 1,
         CodigoMatricula: aluno.matricula,
         codigo_preinscricao: aluno.codigo_inscricao,
-       
+
       };
+
+
 
       const invoice = await this.invoiceService.create(createInvoiceDto);
 
@@ -166,6 +180,8 @@ export class DebtNegotiationService {
 
       await queryRunner.manager.insert(InvoiceItem, invoiceItems);
 
+
+
       // 10. Cálculo de prestações
       const mesesComPropina = itensMensal.filter(d => d.mes_propina);
       const qtd_meses = mesesComPropina.length;
@@ -185,11 +201,15 @@ export class DebtNegotiationService {
         valor_prestacao_mensal: parseFloat(valorPM.toFixed(2)),
       });
 
-      await queryRunner.manager.save(negociacao);
+      const aaa = await queryRunner.manager.save(negociacao);
+      console.log(aaa);
+
 
       await queryRunner.commitTransaction();
       return { last_fatura_id: invoice.Codigo };
     } catch (error) {
+      console.log(error);
+
       await queryRunner.rollbackTransaction();
       throw error instanceof BadRequestException
         ? error

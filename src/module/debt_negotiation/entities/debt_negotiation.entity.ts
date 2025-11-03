@@ -3,7 +3,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 @Entity('negociacao_dividas')
 export class DebtNegotiation {
   @PrimaryGeneratedColumn()
-  codigo: number;
+  id: number;
 
   @Column({ name: 'valor_divida', type: 'decimal', precision: 10, scale: 2 })
   valor_divida: number;

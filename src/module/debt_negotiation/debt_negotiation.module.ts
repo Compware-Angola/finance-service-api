@@ -28,13 +28,18 @@ import { TbGradeCurricular } from './entities/tb-grade-curricular.entity';
 import { TbInscricaoAnoAnterior } from './entities/tb-inscricao-ano-anterior.entity';
 import { TipoTaxa } from './entities/tipo-taxa.entity';
 import { Empresa } from './entities/empresa.entity';
+import { TypeInvoiceDocument } from '../invoice/entities/type.invoice.document.entity';
+import { DebtNegotiation } from './entities/debt_negotiation.entity';
 
 // Services
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { MesesPagarService } from './meses-pagar.service';
 import { PropinaAlunoService } from './propina-aluno.service';
 import { InvoiceService } from '../invoice/invoice.service';
-import { TypeInvoiceDocument } from '../invoice/entities/type.invoice.document.entity';
+
+import { CreateDebtNegotiationService } from './debt.create.service';
+import { InvoiceNumberingAndHashService } from '../invoice/invoice-numbering-hash.service';
+import { CompanyKey } from 'src/common/config/security/key-company';
 
 @Module({
   imports: [
@@ -64,17 +69,20 @@ import { TypeInvoiceDocument } from '../invoice/entities/type.invoice.document.e
       TbInscricaoAnoAnterior,
       TipoTaxa,
       Empresa,
-      TypeInvoiceDocument, 
+      TypeInvoiceDocument,
+      DebtNegotiation,
     ]),
   ],
   controllers: [DebtNegotiationController],
   providers: [
     DebtNegotiationService,
+    CreateDebtNegotiationService,
     AnoLectivoUtil,
     MesesPagarService,
-    PropinaAlunoService
-     
-    
+    PropinaAlunoService,
+    InvoiceService,
+    InvoiceNumberingAndHashService,
+    CompanyKey, // ADICIONADO!
   ],
 })
 export class DebtNegotiationModule {}

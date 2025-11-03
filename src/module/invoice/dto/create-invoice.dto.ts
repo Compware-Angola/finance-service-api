@@ -14,6 +14,7 @@ import {
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { InvoiceItemDto } from './create-invoice-itens.dto';
+import { Optional } from '@nestjs/common';
 
 
 
@@ -51,6 +52,28 @@ export class CreateInvoiceDto {
   @IsNumber()
   @Min(0)
   TotalPreco: number;
+
+  @Optional()
+  @IsNumber()
+  @Min(0)
+  codigo_descricao?:number
+
+  @Optional()
+  @IsNumber()
+  @Min(0)
+  ValorAPagar?: number
+
+
+  @Optional()
+  @IsNumber()
+ total_incidencia?:number
+
+ @Optional()
+ @IsNumber()
+ total_retencao?:number
+
+
+  
 
   // --------------------------------------------------------------------------------
   // RELACIONAMENTOS

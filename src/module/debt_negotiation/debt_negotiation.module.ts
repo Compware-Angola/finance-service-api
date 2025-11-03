@@ -1,7 +1,11 @@
+// debt-negotiation.module.ts
 import { Module } from '@nestjs/common';
 import { DebtNegotiationService } from './debt_negotiation.service';
 import { DebtNegotiationController } from './debt_negotiation.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
+
+// Entidades
 import { Payment } from '../payment/entities/payment.entity';
 import { TbPreinscricao } from './entities/tb-preinscricao.entity';
 import { TbPagamentosi } from './entities/tb-pagamentosi.entity';
@@ -24,25 +28,53 @@ import { TbGradeCurricular } from './entities/tb-grade-curricular.entity';
 import { TbInscricaoAnoAnterior } from './entities/tb-inscricao-ano-anterior.entity';
 import { TipoTaxa } from './entities/tipo-taxa.entity';
 import { Empresa } from './entities/empresa.entity';
+
+// Services
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { MesesPagarService } from './meses-pagar.service';
 import { PropinaAlunoService } from './propina-aluno.service';
+import { InvoiceService } from '../invoice/invoice.service';
+import { TypeInvoiceDocument } from '../invoice/entities/type.invoice.document.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Payment, TbPreinscricao,
-
-    TbPagamentosi, Invoice, InvoiceItem, TbTipoServico, TbMatricula,
-    TbAdmissao, TbCurso, AcademicYear, TbInscricaoAnoAnterior, TbConfirmacao,
-    MesTemp, TbBolseiroSiiuma, InscricaoAvaliacao, TbGradeCurricular,
-    TipoTaxa, MotivoIsencaoIva,
-    TbDisciplina,
-    MesCalendario,
-    Parametro,
-    Empresa
-  ]),],
+  imports: [
+    BullModule.registerQueue({
+      name: 'invoice_service',
+    }),
+    TypeOrmModule.forFeature([
+      Payment,
+      TbPreinscricao,
+      TbPagamentosi,
+      Invoice,
+      InvoiceItem,
+      TbTipoServico,
+      TbMatricula,
+      TbAdmissao,
+      TbCurso,
+      AcademicYear,
+      InscricaoAvaliacao,
+      MesCalendario,
+      MesTemp,
+      MotivoIsencaoIva,
+      Parametro,
+      TbBolseiroSiiuma,
+      TbConfirmacao,
+      TbDisciplina,
+      TbGradeCurricular,
+      TbInscricaoAnoAnterior,
+      TipoTaxa,
+      Empresa,
+      TypeInvoiceDocument, 
+    ]),
+  ],
   controllers: [DebtNegotiationController],
-  providers: [DebtNegotiationService,AnoLectivoUtil,MesesPagarService,PropinaAlunoService],
+  providers: [
+    DebtNegotiationService,
+    AnoLectivoUtil,
+    MesesPagarService,
+    PropinaAlunoService
+     
+    
+  ],
 })
-export class DebtNegotiationModule { }
-
-
+export class DebtNegotiationModule {}

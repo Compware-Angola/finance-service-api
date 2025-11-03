@@ -49,6 +49,7 @@ export interface DividaDto {
   valor_iva: number;
   tipo_taxas: number;
   taxa_descricao: string | null;
+  codidigo_servico?:number
 }
 
 @Injectable()
@@ -212,9 +213,10 @@ export class DebtNegotiationService {
           n_prestacao: '',
           ano_lectivo: value.ano_lectivo,
           taxa_multa: 0,
+          codigo_propina: '',
           taxa_desconto: 0,
           bolsa: '',
-          codigo_propina: value.cod_servico,
+          codidigo_servico: value.cod_servico,
           codigo_anoLectivo: value.cod_ano_lectivo,
           desconto: value.descontoProduto,
           incidencia: value.incidencia,
@@ -881,9 +883,6 @@ export class DebtNegotiationService {
 
     let dividas = await this.DividasTodosAnos(enrrolmentId, 1) as DividaDto[];
 
-
-
-
     if (tipo === 2) {
       const propinaCorrente = await this.dividasPropinaAnoCorrente(enrrolmentId, codigo_inscricao);
       dividas = [...dividas, ...propinaCorrente];
@@ -903,8 +902,6 @@ export class DebtNegotiationService {
     const saldo_reset = (await this.preinscricaoRepo.findOne({ where: { Codigo: codigo_inscricao } }))?.saldo_reset || 0;
     const dividas_recurso = await this.dividaOutrosServicos(enrrolmentId);
 
-    console.log(dividas_recurso);
-    
 
     return {
       empresa: await this.empresaRepo.findOne({ where: { nif: "5000977381" } }),
@@ -923,7 +920,7 @@ export class DebtNegotiationService {
       bolsa: mesesDividas[0]?.bolsa || null,
       saldo_reset,
       somaValorDividaRecurso: 0,
-      dividaRecurso: dividas_recurso.length > 0 ? dividas_recurso : [],
+      dividaOutrosServicos: dividas_recurso.length > 0 ? dividas_recurso : [],
       somaDividaFacturas: await this.dividasFacturasAnoCorrente(codigo_inscricao),
     };
   }

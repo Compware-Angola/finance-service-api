@@ -159,19 +159,23 @@ export class InvoiceService {
 
 
   async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
-    const { limit = 10, page = 1, codigoMatricula } = filterQuery;
+    const { limit = 10, page = 1, codigoMatricula, academicYear } = filterQuery;
+
+    console.log(codigoMatricula, academicYear);
+
 
     if (isNaN(codigoMatricula)) {
       throw new BadRequestException('O código de matrícula fornecido é inválido.');
     }
 
     const skip = (page - 1) * limit;
-
+    
     // 1️⃣ TOTAL DE FATURAS
     const totalResult = await this.invoiceRepository.query(
-      `SELECT COUNT(*) AS total FROM factura WHERE CodigoMatricula = ?`,
-      [codigoMatricula],
+      `SELECT COUNT(*) AS total FROM factura WHERE CodigoMatricula = ? AND ano_lectivo = ?`,
+      [codigoMatricula, academicYear],
     );
+
     const total = Number(totalResult[0]?.total || 0);
     const totalPages = Math.ceil(total / limit);
 
@@ -181,8 +185,8 @@ export class InvoiceService {
 
     // 2️⃣ CONSULTA PRINCIPAL COM PAGINAÇÃO COMPATÍVEL
 
-const rawResults = await this.invoiceRepository.query(
-  `
+    const rawResults = await this.invoiceRepository.query(
+      `
   SELECT 
     f.Codigo AS f_Codigo,
     f.DataFactura AS f_DataFactura,
@@ -265,6 +269,7 @@ const rawResults = await this.invoiceRepository.query(
     SELECT Codigo
     FROM factura
     WHERE CodigoMatricula = ?
+     AND ano_lectivo = ?
     ORDER BY Codigo DESC
     LIMIT ? OFFSET ?
   ) AS sub
@@ -272,9 +277,9 @@ const rawResults = await this.invoiceRepository.query(
   LEFT JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
   LEFT JOIN tb_tipo_servicos ts ON fi.CodigoProduto = ts.Codigo
   LEFT JOIN mes_temp mt ON fi.mes_temp_id = mt.id
-  INNER JOIN tb_matriculas m ON f.CodigoMatricula = m.Codigo
-  INNER JOIN tb_admissao a ON m.Codigo_Aluno = a.codigo
-  INNER JOIN tb_preinscricao p ON a.pre_incricao = p.Codigo
+ LEFT JOIN tb_matriculas m ON f.CodigoMatricula = m.Codigo
+LEFT JOIN tb_admissao a ON m.Codigo_Aluno = a.codigo
+LEFT JOIN tb_preinscricao p ON a.pre_incricao = p.Codigo
 
   -- JOIN com pagamento_por_referencias (apenas status != 'Expired')
   LEFT JOIN pagamento_por_referencias ppr 
@@ -283,8 +288,8 @@ const rawResults = await this.invoiceRepository.query(
 
   ORDER BY f.Codigo DESC, fi.codigo ASC, ppr.id ASC
   `,
-  [codigoMatricula, limit, skip],
-);
+      [codigoMatricula, academicYear, limit, skip],
+    );
 
     // 3️⃣ AGRUPAR RESULTADOS
     const paginatedInvoices = groupInvoices(rawResults);
@@ -362,7 +367,7 @@ const rawResults = await this.invoiceRepository.query(
       createInvoiceDto,
       referenceParams,
       dueDateParams
-    },{
+    }, {
       attempts: 5,
       backoff: { type: 'fixed', delay: 10000 },
       removeOnComplete: true,

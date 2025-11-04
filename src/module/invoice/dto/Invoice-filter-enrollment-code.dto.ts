@@ -15,4 +15,15 @@ export class InvoiceFilterEnrollmentDto extends PaginationQueryDto {
   @IsPositive()
   @Type(() => Number) 
   codigoMatricula: number;
+
+  @ApiProperty({
+    description:'O Codigo do ano lectivi',
+    example:23,
+    required:true,
+    type:Number,
+  })
+  @IsNotEmpty()
+  @IsPositive()
+  @Type(() => Number)
+  academicYear:number
 }

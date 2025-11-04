@@ -372,7 +372,7 @@ export class PaymentReferencesService {
   }
   async queueUpdatePaymentReferences(invoiceId: number) {
     const job = await this.paymentReferenceQueue.add('updatePaymentReferencesJob', {
-      invoiceId, // ← Certifique-se que é um número
+      invoiceId,
     }, {
       attempts: 5,
       backoff: { type: 'fixed', delay: 10000 },
@@ -383,6 +383,7 @@ export class PaymentReferencesService {
     return {
       message: 'Processamento iniciado: renovando referência de pagamento...',
       taskId: job.id,
+      invoiceId
     };
   }
   async queuecreateMonthlyPaymentReferences(

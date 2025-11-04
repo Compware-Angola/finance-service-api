@@ -5,7 +5,8 @@ import {
   Put,
   Param,
   ParseIntPipe,
-  Patch,  
+  Patch,
+  Get,  
 } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger'
 import { PaymentReferencesService } from './payment-references.service'
@@ -50,6 +51,13 @@ renewReference(
   return this.paymentReferencesService.queueUpdatePaymentReferences(invoiceId);
 }
 
+@Get('status/:taskId')
+@ApiOperation({ summary: 'Obter o status de uma tarefa de processamento' })
+@ApiResponse({ status: 200, description: 'Status da tarefa obtido com sucesso.' })
+@ApiResponse({ status: 404, description: 'Tarefa não encontrada.' })
+async getJobStatus(@Param('taskId') taskId: string) {
+  return this.paymentReferencesService.getJobStatus(taskId);
+} 
 
 
 

@@ -4,7 +4,7 @@ import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { MonthlyFeesFilterDto } from './dto/monthly-fees-filter.dto'; // Novo DTO
 // ... outros imports ...
 
-@Controller('monthly-fees')
+@Controller('financial/monthly-fees')
 export class MonthlyFeesController {
   constructor(private readonly monthlyFeesService: MonthlyFeesService) {}
 

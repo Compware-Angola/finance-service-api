@@ -1,3 +1,4 @@
+// src/module/payment-references/payment-references.module.ts
 import { Module } from '@nestjs/common';
 import { PaymentReferencesService } from './payment-references.service';
 import { PaymentReferencesController } from './payment-references.controller';
@@ -8,19 +9,18 @@ import { InvoiceItem } from '../../invoice/entities/InvoiceIten.entity';
 import { MesTemp } from './entities/mes-temp.entity';
 import { AcademicYear } from 'src/module/invoice/entities/academic.year.entity';
 import { BullModule } from '@nestjs/bullmq';
-import { CreatePaymentReferencesProcessor } from 'src/module/jobs/payment-reference-servico.processor';
+import { CreatePaymentReferencesProcessor } from 'src/module/jobs/create-payment-references.processor';
 
 @Module({
-  imports: [InvoiceModule, TypeOrmModule.forFeature([PaymentReferences, InvoiceItem, MesTemp, AcademicYear]),
+  imports: [
+    InvoiceModule,
+    TypeOrmModule.forFeature([PaymentReferences, InvoiceItem, MesTemp, AcademicYear]),
     BullModule.registerQueue({
       name: 'payment_reference_service',
     }),
-
   ],
-
-
   controllers: [PaymentReferencesController],
-  providers: [PaymentReferencesService,CreatePaymentReferencesProcessor],
-  exports: [PaymentReferencesService],
+  providers: [PaymentReferencesService, CreatePaymentReferencesProcessor], 
+  exports: [PaymentReferencesService,CreatePaymentReferencesProcessor],
 })
-export class PaymentReferencesModule { }
+export class PaymentReferencesModule {}

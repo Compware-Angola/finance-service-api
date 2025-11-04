@@ -21,13 +21,15 @@ export class CreatePaymentReferencesProcessor extends WorkerHost {
       return { success: true };
     }
     if (job.name === 'updatePaymentReferencesJob') {
-      const { invoiceId,newAmount } = job.data;
-    
-      await this.paymentReferencesService.renewPaymentReference(invoiceId, newAmount);
-      console.log(`Job ${job.id} completed successfully.`);
+      const { invoiceId } = job.data;
+
+      if (!invoiceId || isNaN(Number(invoiceId))) {
+        throw new Error('invoiceId inválido');
+      }
+
+      await this.paymentReferencesService.renewPaymentReference(Number(invoiceId));
       return { success: true };
     }
-
     if (job.name === 'createMonthlyPaymentReferencesJob') {
       const { createPaymentReferenceDto } = job.data;
       await this.paymentReferencesService.createMonthlyPaymentReferences(createPaymentReferenceDto);

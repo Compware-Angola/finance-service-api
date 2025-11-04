@@ -9,7 +9,7 @@ import { AppyPayWebhookDto } from '../../webhook/dto/appypay-webhook.dto'
 import { InjectRepository } from '@nestjs/typeorm'
 import { PaymentReferences } from './entities/payment-reference.entity'
 import { Repository } from 'typeorm'
-import {  RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
+import { RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
 import { InvoiceItem } from '../../invoice/entities/InvoiceIten.entity'
 import { MesTemp } from './entities/mes-temp.entity'
 import { AcademicYear } from 'src/module/invoice/entities/academic.year.entity'
@@ -136,13 +136,39 @@ export class PaymentReferencesService {
       nextInvoice: invoice.NextFactura,
     };
   }
-  async registerPaymentReference(appyPayWebhookDto: RegisterPaymentReferenceDto) {
-    // PAGAR REFERÊNCIA NO SISTEMA
+  async registerPaymentReference(dto: RegisterPaymentReferenceDto) {
+    try {
+   
+      const sourceId = await this.generateNextSourceId(); 
+      
+      
 
-    const paymentReference = this.paymentReferencesRepository.create({
-      ...appyPayWebhookDto
-    });
-    return this.paymentReferencesRepository.save(paymentReference);
+      const paymentReference = this.paymentReferencesRepository.create({
+        paymentId: dto.paymentId,
+        sourceId,
+        facturaCodigo: dto.facturaCodigo,
+        entityId: dto.entityId,
+        reference: dto.reference,
+        referenceId: dto.referenceId,
+        merchantTransactionId: dto.merchantTransactionId,
+        amount: dto.amount,
+        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
+        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        status: dto.status,
+        webhook: dto.webhook,
+      });
+
+      const saved = await this.paymentReferencesRepository.save(paymentReference);
+ 
+      return saved;
+    } catch (error: any) {
+      if (error.code === 'ER_DUP_ENTRY') {
+        console.warn('SOURCE_ID duplicado. Tentando novamente...');
+        return this.registerPaymentReference(dto);
+      }
+      console.error('Erro ao salvar:', error);
+      throw error;
+    }
   }
 
   async createMonthlyPaymentReferences(
@@ -248,9 +274,9 @@ export class PaymentReferencesService {
           multa: item.multa,
           mesTempId: mes.id,
           codigoAnoLectivo: invoice.anoLectivo,
-          estado:0,
+          estado: 0,
           valorPago: item.valorPago,
-        
+
           valorATransportar: item.valorATransportar,
         };
 
@@ -263,7 +289,7 @@ export class PaymentReferencesService {
     };
   }
 
-  async renewPaymentReference(invoiceId: number, newAmount?: number) {
+  async renewPaymentReference(invoiceId: number) {
 
 
 
@@ -271,6 +297,7 @@ export class PaymentReferencesService {
     if (!invoice) {
       throw new NotFoundException('Fatura não encontrada.');
     }
+ 
     // 🕒 Gera dueDate e referenceNumber em paralelo (melhor desempenho)
     const [dueDate, referenceNumber] = await Promise.all([
       generateDueDate(3),
@@ -280,7 +307,7 @@ export class PaymentReferencesService {
     // 📦 Monta payload para AppyPay
     const payload = this.buildAppyPayPayload(
       {
-        amount: newAmount || invoice.TotalPreco,
+        amount: invoice.TotalPreco,
         currency: 'AOA',
         description: invoice.Descricao || 'Renovação de referência de pagamento',
 
@@ -294,20 +321,34 @@ export class PaymentReferencesService {
 
     const status = appyResponse?.responseStatus;
 
+
+
     if (!status?.successful || !status?.reference?.referenceNumber) {
       console.error('❌ Falha ao gerar referência no AppyPay:', appyResponse);
       throw new BadGatewayException(
         'Falha ao gerar referência de pagamento. A fatura não será criada.'
       );
     }
+    const aaa=  await this.generateRandomCode()
 
-    const updatedInvoice = await this.invoiceService.updateReferenceNumber(
-      invoiceId,
-      referenceNumber,
-      dueDate,
-      newAmount || invoice.TotalPreco,
-    );
-    return updatedInvoice;
+    const finalPayload: RegisterPaymentReferenceDto = {
+      paymentId: undefined,
+
+      facturaCodigo: invoiceId,                     // ← mapeado
+      entityId: status?.reference?.entity || '10065',
+      reference: referenceNumber,
+      referenceId: appyResponse.id,
+      merchantTransactionId: aaa,
+      amount: Number(invoice.TotalPreco),
+      startDate: new Date().toISOString(),         // ← string ISO
+      endDate: new Date(dueDate).toISOString(),     // ← string ISO
+      status: status?.status,
+      webhook: 'https://api.seusistema.com/webhook/pagamento-be'
+    };
+
+    const register = await this.registerPaymentReference(finalPayload)
+    
+    return register;
 
 
     // RENOVAR REFERÊNCIA NO SISTEMA
@@ -329,20 +370,21 @@ export class PaymentReferencesService {
       taskId: job.id,
     };
   }
-  async queueUpdatePaymentReferences(
-    invoiceId: number,
-    newAmount?: number
-  ) {
+  async queueUpdatePaymentReferences(invoiceId: number) {
     const job = await this.paymentReferenceQueue.add('updatePaymentReferencesJob', {
-      invoiceId,
-      newAmount,
+      invoiceId, // ← Certifique-se que é um número
+    }, {
+      attempts: 5,
+      backoff: { type: 'fixed', delay: 10000 },
+      removeOnComplete: true,
+      removeOnFail: false,
     });
+
     return {
       message: 'Processamento iniciado: renovando referência de pagamento...',
       taskId: job.id,
     };
   }
-
   async queuecreateMonthlyPaymentReferences(
     createPaymentReferenceDto: CreatePaymentReferenceDto
   ) {
@@ -353,7 +395,7 @@ export class PaymentReferencesService {
       message: 'Processamento iniciado: criando faturas de mensalidades...',
       taskId: job.id,
     };
-}
+  }
 
 
   async getJobStatus(taskId: string) {
@@ -405,4 +447,38 @@ export class PaymentReferencesService {
 
     return finalPayload
   }
+private async generateNextSourceId(): Promise<string> {
+  try {
+    const result = await this.paymentReferencesRepository
+      .createQueryBuilder()
+      .select('SOURCE_ID') // ← NOME DA COLUNA NO BANCO
+      .where("SOURCE_ID LIKE :pattern", { pattern: '%REF1' })
+      .orderBy('CAST(SUBSTRING(SOURCE_ID, 1, LENGTH(SOURCE_ID) - 4) AS UNSIGNED)', 'DESC')
+      .limit(1)
+      .getRawOne();
+
+    if (result?.SOURCE_ID) {
+      const match = result.SOURCE_ID.match(/^(\d+)REF1$/);
+      if (match) {
+        const next = parseInt(match[1], 10) + 1;
+        return `${next}REF1`;
+      }
+    }
+  } catch (error) {
+    console.warn('Erro ao buscar último SOURCE_ID:', error.message);
+  }
+
+  // Fallback: aleatório
+  const random = Math.floor(100000 + Math.random() * 900000);
+  return `${random}REF1`;
+}
+// payment-references.service.ts
+private async generateRandomCode(length: number = 15): Promise<string> {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 }

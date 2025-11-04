@@ -8,6 +8,7 @@ import { PaymentModule } from './module/payment/payment.module';
 import { BullModule } from '@nestjs/bullmq';
 import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
 import { AdvancePaymentsModule } from './module/advance_payments/advance_payments.module';
+import { BullMQWorkerService } from './bullmq-worker.service';
 
 
 @Module({
@@ -58,6 +59,9 @@ import { AdvancePaymentsModule } from './module/advance_payments/advance_payment
     DebtNegotiationModule,
     AdvancePaymentsModule,
 
+  ],
+  providers: [
+    BullMQWorkerService, // ADICIONE AQUI
   ],
 
 

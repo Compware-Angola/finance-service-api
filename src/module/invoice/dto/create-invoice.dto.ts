@@ -11,12 +11,9 @@ import {
   ArrayMinSize, 
   IsArray 
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptions } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { InvoiceItemDto } from './create-invoice-itens.dto';
-import { Optional } from '@nestjs/common';
-
-
 
 export class CreateInvoiceDto {
   // --------------------------------------------------------------------------------
@@ -53,27 +50,47 @@ export class CreateInvoiceDto {
   @Min(0)
   TotalPreco: number;
 
-  @Optional()
+  @ApiProperty({ 
+    description: 'Código da descrição (opcional, usado em contextos específicos).', 
+    type: Number, 
+    required: false,
+    example: 101
+  })
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  codigo_descricao?:number
+  codigo_descricao?: number;
 
-  @Optional()
+  @ApiProperty({ 
+    description: 'Valor a pagar após descontos, retenções e incidências.', 
+    type: Number, 
+    required: false,
+    example: 13000.00
+  })
+  @IsOptional()
   @IsNumber()
   @Min(0)
-  ValorAPagar?: number
+  ValorAPagar?: number;
 
-
-  @Optional()
+  @ApiProperty({ 
+    description: 'Total de incidência tributária aplicada.', 
+    type: Number, 
+    required: false,
+    example: 500.00
+  })
+  @IsOptional()
   @IsNumber()
- total_incidencia?:number
+  total_incidencia?: number;
 
- @Optional()
- @IsNumber()
- total_retencao?:number
-
-
-  
+  @ApiProperty({ 
+    description: 'Total de retenção na fonte.', 
+    type: Number, 
+    required: false,
+    example: 200.00
+  })
+  @IsOptional()
+  @IsNumber()
+  total_retencao?: number;
 
   // --------------------------------------------------------------------------------
   // RELACIONAMENTOS
@@ -187,5 +204,5 @@ export class CreateInvoiceDto {
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => InvoiceItemDto)
-  itens?: InvoiceItemDto[];
+  itens?: InvoiceItemDto[]; // Removido o ? para reforçar obrigatoriedade (conforme @ArrayMinSize(1))
 }

@@ -25,6 +25,6 @@ import { InvoiceProcessor } from '../jobs/invoice-servico.processor';
     CompanyKey ,
     InvoiceProcessor,
   ],
-  exports: [InvoiceService, CompanyKey, InvoiceNumberingAndHashService],
+  exports: [InvoiceService, CompanyKey, InvoiceNumberingAndHashService,InvoiceProcessor],
 })
 export class InvoiceModule {}

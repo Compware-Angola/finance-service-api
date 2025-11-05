@@ -17,7 +17,10 @@ import { InvoiceItem } from './entities/InvoiceIten.entity';
 import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 
-
+//0 - pendente,
+//1 - validado
+//2 - parcelarmente pago
+//3 - eliminado
 @Injectable()
 export class InvoiceService {
   constructor(
@@ -160,8 +163,6 @@ export class InvoiceService {
 
   async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
     const { limit = 10, page = 1, codigoMatricula, academicYear } = filterQuery;
-
-    console.log(codigoMatricula, academicYear);
 
 
     if (isNaN(codigoMatricula)) {
@@ -333,6 +334,9 @@ LEFT JOIN tb_preinscricao p ON a.pre_incricao = p.Codigo
     await this.invoiceRepository.update(Codigo, updateInvoiceDto);
 
     return this.findOne(Codigo); // Retorna a fatura atualizada
+  }
+  async updateEntity(invoice:Invoice){
+  return this.invoiceRepository.save(invoice);
   }
 
   async updateStatusByReference(reference: string, status: number): Promise<Invoice> {

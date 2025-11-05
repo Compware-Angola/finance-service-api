@@ -4,10 +4,16 @@ import { PaymentController } from './payment.controller';
 import { Payment } from './entities/payment.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MonthlyFeesModule } from './monthly_fees/monthly_fees.module';
+import { AcademicYear } from '../invoice/entities/academic.year.entity';
+import { MesTemp } from './payment-references/entities/mes-temp.entity';
+import { InvoiceItem } from '../invoice/entities/InvoiceIten.entity';
+import { InvoiceModule } from '../invoice/invoice.module';
+import { AnoLectivoUtil } from '../util/current-academic-year';
 
 @Module({
-  imports: [ TypeOrmModule.forFeature([Payment]), MonthlyFeesModule,],
+  imports: [ TypeOrmModule.forFeature([Payment, InvoiceItem, MesTemp, AcademicYear]), MonthlyFeesModule,InvoiceModule],
   controllers: [PaymentController],
-  providers: [PaymentService],
+  providers: [PaymentService,AnoLectivoUtil],
+  exports: [PaymentService],
 })
 export class PaymentModule {}

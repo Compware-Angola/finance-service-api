@@ -82,7 +82,7 @@ import { CompanyKey } from 'src/common/config/security/key-company';
     PropinaAlunoService,
     InvoiceService,
     InvoiceNumberingAndHashService,
-    CompanyKey, // ADICIONADO!
+    CompanyKey, 
   ],
 })
 export class DebtNegotiationModule {}

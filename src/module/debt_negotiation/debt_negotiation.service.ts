@@ -49,7 +49,7 @@ export interface DividaDto {
   valor_iva: number;
   tipo_taxas: number;
   taxa_descricao: string | null;
-  codidigo_servico?:number
+  codidigo_servico?: number
 }
 
 @Injectable()
@@ -883,11 +883,8 @@ export class DebtNegotiationService {
     const pre_ins = await this.preinscricaoRepo.findOne({ where: { Codigo: codigo_inscricao } });
     if (!pre_ins) throw new NotFoundException("Pre-inscrição não encontrada");
 
-    const aluno = await  this.getAlunoPorMatricula(pre_ins.Codigo);
-    if (!aluno) throw   new NotFoundException("Aluno não encontrado");
-
-  const  enr_Id = await this.matriculaRepo.findOne({where:{Codigo:enrrolmentId}})
-  if(!enr_Id) throw new NotFoundException("Matricula não encontrada");
+    const enr_Id = await this.matriculaRepo.findOne({ where: { Codigo: enrrolmentId } })
+    if (!enr_Id) throw new NotFoundException("Matricula não encontrada");
 
 
     let dividas = await this.DividasTodosAnos(enrrolmentId, 1) as DividaDto[];
@@ -1040,7 +1037,7 @@ export class DebtNegotiationService {
     ano_lectivo_id: number,
     codigo_inscricao: number
   ) {
-      // Validar Bem onde fica os pagamentos ou no factura_itens ou pagamentosi
+    // Validar Bem onde fica os pagamentos ou no factura_itens ou pagamentosi
 
     const result = await this.pagamentosiRepo.query(`
     SELECT DISTINCT pi.mes_temp_id AS codigo_mes

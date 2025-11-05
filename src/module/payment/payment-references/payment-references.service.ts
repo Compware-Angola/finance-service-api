@@ -138,10 +138,10 @@ export class PaymentReferencesService {
   }
   async registerPaymentReference(dto: RegisterPaymentReferenceDto) {
     try {
-   
-      const sourceId = await this.generateNextSourceId(); 
-      
-      
+
+      const sourceId = await this.generateNextSourceId();
+
+
 
       const paymentReference = this.paymentReferencesRepository.create({
         paymentId: dto.paymentId,
@@ -159,7 +159,7 @@ export class PaymentReferencesService {
       });
 
       const saved = await this.paymentReferencesRepository.save(paymentReference);
- 
+
       return saved;
     } catch (error: any) {
       if (error.code === 'ER_DUP_ENTRY') {
@@ -245,6 +245,7 @@ export class PaymentReferencesService {
           Desconto: 0,
           totalIVA: 0,
           TotalMulta: 0,
+          ValorAPagar: payments.amount,
           canal: 3,
 
           CodigoMatricula: payments.enrollment?.CodigoMatricula,
@@ -256,6 +257,27 @@ export class PaymentReferencesService {
           referenceNumber,
           dueDate,
         );
+        /* ADD tb_pagamentos_ref
+
+        const aaa = await this.generateRandomCode()
+
+        const finalPayload: RegisterPaymentReferenceDto = {
+          paymentId: undefined,
+
+          facturaCodigo: invoice.Codigo,                   
+          entityId: status?.reference?.entity || '10065',
+          reference: referenceNumber,
+          referenceId: appyResponse.id,
+          merchantTransactionId: aaa,
+          amount: Number(invoice.TotalPreco),
+          startDate: new Date().toISOString(),         
+          endDate: new Date(dueDate).toISOString(),     
+          status: status?.status,
+          webhook: 'https://api.seusistema.com/webhook/pagamento-be'
+        };
+
+         await this.registerPaymentReference(finalPayload)
+         */
 
         const invoiceItemData = {
           codigoProduto: item.CodigoProduto,
@@ -297,7 +319,7 @@ export class PaymentReferencesService {
     if (!invoice) {
       throw new NotFoundException('Fatura não encontrada.');
     }
- 
+
     // 🕒 Gera dueDate e referenceNumber em paralelo (melhor desempenho)
     const [dueDate, referenceNumber] = await Promise.all([
       generateDueDate(3),
@@ -329,7 +351,7 @@ export class PaymentReferencesService {
         'Falha ao gerar referência de pagamento. A fatura não será criada.'
       );
     }
-    const aaa=  await this.generateRandomCode()
+    const aaa = await this.generateRandomCode()
 
     const finalPayload: RegisterPaymentReferenceDto = {
       paymentId: undefined,
@@ -340,14 +362,14 @@ export class PaymentReferencesService {
       referenceId: appyResponse.id,
       merchantTransactionId: aaa,
       amount: Number(invoice.TotalPreco),
-      startDate: new Date().toISOString(),         // ← string ISO
-      endDate: new Date(dueDate).toISOString(),     // ← string ISO
+      startDate: new Date().toISOString(),         
+      endDate: new Date(dueDate).toISOString(),     
       status: status?.status,
       webhook: 'https://api.seusistema.com/webhook/pagamento-be'
     };
 
     const register = await this.registerPaymentReference(finalPayload)
-    
+
     return register;
 
 
@@ -448,38 +470,38 @@ export class PaymentReferencesService {
 
     return finalPayload
   }
-private async generateNextSourceId(): Promise<string> {
-  try {
-    const result = await this.paymentReferencesRepository
-      .createQueryBuilder()
-      .select('SOURCE_ID') // ← NOME DA COLUNA NO BANCO
-      .where("SOURCE_ID LIKE :pattern", { pattern: '%REF1' })
-      .orderBy('CAST(SUBSTRING(SOURCE_ID, 1, LENGTH(SOURCE_ID) - 4) AS UNSIGNED)', 'DESC')
-      .limit(1)
-      .getRawOne();
+  private async generateNextSourceId(): Promise<string> {
+    try {
+      const result = await this.paymentReferencesRepository
+        .createQueryBuilder()
+        .select('SOURCE_ID') // ← NOME DA COLUNA NO BANCO
+        .where("SOURCE_ID LIKE :pattern", { pattern: '%REF1' })
+        .orderBy('CAST(SUBSTRING(SOURCE_ID, 1, LENGTH(SOURCE_ID) - 4) AS UNSIGNED)', 'DESC')
+        .limit(1)
+        .getRawOne();
 
-    if (result?.SOURCE_ID) {
-      const match = result.SOURCE_ID.match(/^(\d+)REF1$/);
-      if (match) {
-        const next = parseInt(match[1], 10) + 1;
-        return `${next}REF1`;
+      if (result?.SOURCE_ID) {
+        const match = result.SOURCE_ID.match(/^(\d+)REF1$/);
+        if (match) {
+          const next = parseInt(match[1], 10) + 1;
+          return `${next}REF1`;
+        }
       }
+    } catch (error) {
+      console.warn('Erro ao buscar último SOURCE_ID:', error.message);
     }
-  } catch (error) {
-    console.warn('Erro ao buscar último SOURCE_ID:', error.message);
-  }
 
-  // Fallback: aleatório
-  const random = Math.floor(100000 + Math.random() * 900000);
-  return `${random}REF1`;
-}
-// payment-references.service.ts
-private async generateRandomCode(length: number = 15): Promise<string> {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+    // Fallback: aleatório
+    const random = Math.floor(100000 + Math.random() * 900000);
+    return `${random}REF1`;
   }
-  return result;
-}
+  // payment-references.service.ts
+  private async generateRandomCode(length: number = 15): Promise<string> {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
 }

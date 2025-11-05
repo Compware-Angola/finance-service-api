@@ -170,7 +170,7 @@ export class InvoiceService {
     }
 
     const skip = (page - 1) * limit;
-    
+
     // 1️⃣ TOTAL DE FATURAS
     const totalResult = await this.invoiceRepository.query(
       `SELECT COUNT(*) AS total FROM factura WHERE CodigoMatricula = ? AND ano_lectivo = ?`,
@@ -278,14 +278,15 @@ export class InvoiceService {
   LEFT JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
   LEFT JOIN tb_tipo_servicos ts ON fi.CodigoProduto = ts.Codigo
   LEFT JOIN mes_temp mt ON fi.mes_temp_id = mt.id
- LEFT JOIN tb_matriculas m ON f.CodigoMatricula = m.Codigo
-LEFT JOIN tb_admissao a ON m.Codigo_Aluno = a.codigo
-LEFT JOIN tb_preinscricao p ON a.pre_incricao = p.Codigo
+  LEFT JOIN tb_matriculas m ON f.CodigoMatricula = m.Codigo
+  LEFT JOIN tb_admissao a ON m.Codigo_Aluno = a.codigo
+  LEFT JOIN tb_preinscricao p ON a.pre_incricao = p.Codigo
 
   -- JOIN com pagamento_por_referencias (apenas status != 'Expired')
   LEFT JOIN pagamento_por_referencias ppr 
     ON ppr.factura_codigo = f.Codigo 
     AND ppr.Status != 'Expired'
+     AND f.estado !=3
 
   ORDER BY f.Codigo DESC, fi.codigo ASC, ppr.id ASC
   `,
@@ -335,8 +336,8 @@ LEFT JOIN tb_preinscricao p ON a.pre_incricao = p.Codigo
 
     return this.findOne(Codigo); // Retorna a fatura atualizada
   }
-  async updateEntity(invoice:Invoice){
-  return this.invoiceRepository.save(invoice);
+  async updateEntity(invoice: Invoice) {
+    return this.invoiceRepository.save(invoice);
   }
 
   async updateStatusByReference(reference: string, status: number): Promise<Invoice> {

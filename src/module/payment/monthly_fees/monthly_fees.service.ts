@@ -56,6 +56,7 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
     LEFT JOIN tb_tipo_servicos ts ON fi.CodigoProduto = ts.Codigo
     WHERE mt.ano_lectivo = ?
       AND f.CodigoMatricula = ?
+      AND f.estado !=3
     GROUP BY mt.id, fi.codigo, f.Codigo  -- evita duplicatas se houver múltiplos items
     ORDER BY mt.ordem_mes ASC
     LIMIT ? OFFSET ?;

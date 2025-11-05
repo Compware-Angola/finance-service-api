@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not, Raw, DataSource } from 'typeorm';
 import { TbPreinscricao } from './entities/tb-preinscricao.entity';
@@ -880,6 +880,15 @@ export class DebtNegotiationService {
 
   // === 13. index ===
   async getDebt(enrrolmentId: number, codigo_inscricao: number, tipo: number) {
+    const pre_ins = await this.preinscricaoRepo.findOne({ where: { Codigo: codigo_inscricao } });
+    if (!pre_ins) throw new NotFoundException("Pre-inscrição não encontrada");
+
+    const aluno = await  this.getAlunoPorMatricula(pre_ins.Codigo);
+    if (!aluno) throw   new NotFoundException("Aluno não encontrado");
+
+  const  enr_Id = await this.matriculaRepo.findOne({where:{Codigo:enrrolmentId}})
+  if(!enr_Id) throw new NotFoundException("Matricula não encontrada");
+
 
     let dividas = await this.DividasTodosAnos(enrrolmentId, 1) as DividaDto[];
 

@@ -271,6 +271,7 @@ export class InvoiceService {
     FROM factura
     WHERE CodigoMatricula = ?
      AND ano_lectivo = ?
+     AND estado != 3
     ORDER BY Codigo DESC
     LIMIT ? OFFSET ?
   ) AS sub
@@ -286,7 +287,7 @@ export class InvoiceService {
   LEFT JOIN pagamento_por_referencias ppr 
     ON ppr.factura_codigo = f.Codigo 
     AND ppr.Status != 'Expired'
-     AND f.estado !=3
+    
 
   ORDER BY f.Codigo DESC, fi.codigo ASC, ppr.id ASC
   `,

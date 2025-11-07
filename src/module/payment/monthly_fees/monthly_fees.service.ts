@@ -43,10 +43,12 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
       f.Referencia AS reference,
       f.dataVencimento AS data_vencimento,
       f.Codigo AS codigo_factura,
-      f.TotalPreco AS total_preco,
+       f.TotalPreco AS total_preco_fatura,
       f.Desconto AS desconto,
       fi.Total AS total_item,
       fi.valor_pago AS valor_pago,
+      fi.Total AS total,
+      fi.preco AS total_preco,
       CASE 
         WHEN fi.valor_pago >= fi.Total THEN 1  -- pago total
         WHEN fi.valor_pago > 0 THEN 2          -- pago parcial

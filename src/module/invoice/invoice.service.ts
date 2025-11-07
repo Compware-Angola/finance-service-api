@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { Invoice } from './entities/invoice.entity';
@@ -46,44 +46,67 @@ export class InvoiceService {
    * @param createInvoiceDto Dados da nova fatura.
    * @returns A fatura criada.
    */
-  async create(createInvoiceDto: CreateInvoiceDto, referenceParams?: string,
-    dueDateParams?: string): Promise<Invoice> {
+
+async create(
+  createInvoiceDto: CreateInvoiceDto,
+  referenceParams?: string,
+  dueDateParams?: string ,
+  // 🔥 Manager opcional → permite transação externa (ex: createMonthlyPaymentReferences)
+  transactionalEntityManager?: EntityManager,
+): Promise<Invoice> {
+  // Se não vier manager, cria uma transação interna (compatibilidade total)
+  const manager = transactionalEntityManager || this.invoiceRepository.manager;
+
+  return await manager.transaction(async (em) => {
     const { itens, ...invoiceData } = createInvoiceDto;
-    // 🔹 Se não vier "Referencia", gera automaticamente
+
+    // 🔹 Referência (usa parâmetro ou gera nova)
     const referencia: string =
       referenceParams || (await genearateKeyNumber(9));
 
-    // 🔹 Se não vier "dataVencimento", gera automaticamente
-    const dueDate: string =
+    // 🔹 Data de vencimento (aceita string ou Date)
+     const dueDate: string =
       dueDateParams || (await generateDueDate(10));
-    // 1. Obter Tipo de Documento e Ano Letivo (Geralmente por ID)
+
+    // 1. Tipo de documento
     const tipoDocumentoId = createInvoiceDto.tipo_documento_factura_id || 2;
-
-    // ⚠️ Busque o Tipo de Documento (ou injete um serviço que o faça)
-    const document = await this.typeInvoiceDocumentRepository.findOne({ where: { id: tipoDocumentoId } });
-    if (!document) { throw new NotFoundException('Tipo de documento inválido.'); }
+    const document = await em.findOne(this.typeInvoiceDocumentRepository.target, {
+      where: { id: tipoDocumentoId },
+    });
+    if (!document) {
+      throw new NotFoundException('Tipo de documento inválido.');
+    }
     const tipoDocumentoSigla = document.sigla;
-    const academicyear = await this.academicYearRepository.findOne({ where: { estado: 'Activo' } });
-    if (!academicyear) { throw new NotFoundException('Ano letivo Não definido no sistema .'); }
-    const anoLetivoDesignacao = academicyear.Designacao;
-    // O ID do Polo/Condomínio vem do DTO
-    const poloId = createInvoiceDto.polo_id || 1;
-    const anoLetivoId = academicyear.Codigo;
 
-    // 2. CHAMAR O SERVIÇO UTILIÁRIO
+    // 2. Ano letivo ativo
+    const academicYear = await em.findOne(this.academicYearRepository.target, {
+      where: { estado: 'Activo' },
+    });
+    if (!academicYear) {
+      throw new NotFoundException('Ano letivo não definido no sistema.');
+    }
+    const anoLetivoDesignacao = academicYear.Designacao;
+    const anoLetivoId = academicYear.Codigo;
+
+    // 3. Polo
+    const poloId = createInvoiceDto.polo_id || 1;
+
+    // 4. Gerar hash + numeração (usando o mesmo manager para consistência)
     const hashData = await this.hashService.generateInvoiceHashData(
       createInvoiceDto.TotalPreco,
       tipoDocumentoId,
       anoLetivoId,
       poloId,
       tipoDocumentoSigla,
-      anoLetivoDesignacao
+      anoLetivoDesignacao,
+     
     );
-    // 4. PREPARAÇÃO DA ENTIDADE ANTES DE SALVAR
-    const invoiceToCreate = this.invoiceRepository.create({
+
+    // 5. Criar entidade Invoice
+    const invoiceToCreate = em.create(this.invoiceRepository.target, {
       ...invoiceData,
       DataFactura: new Date(),
-      poloId: poloId,
+      poloId,
       numSequenciaFactura: hashData.numSequenciaFactura,
       NextFactura: hashData.numeracaoFactura,
       next: hashData.numeracaoFactura,
@@ -93,18 +116,19 @@ export class InvoiceService {
       dataVencimento: dueDate,
       tipoDocumentoFacturaId: tipoDocumentoId,
       anoLectivo: anoLetivoId,
-
     });
-    const savedInvoice = await this.invoiceRepository.save(invoiceToCreate);
 
-    if (itens && itens.length > 0) {
-      const invoiceItems = this.invoiceItemRepository.create(
-        itens.map(item => ({
+    const savedInvoice = await em.save(invoiceToCreate);
+
+    // 6. Itens da fatura (se existirem)
+    if (itens?.length) {
+      const invoiceItems = itens.map((item) =>
+        em.create(this.invoiceItemRepository.target, {
           codigoProduto: item.CodigoProduto,
           codigoFactura: savedInvoice.Codigo,
           quantidade: item.Quantidade,
           total: item.Total,
-          obs: item.obs,
+          obs: item.obs || `Item fatura ${savedInvoice.Codigo}`,
           taxaIva: item.taxaIva,
           valorIva: item.valorIva,
           preco: item.preco,
@@ -116,18 +140,18 @@ export class InvoiceService {
           multa: item.multa,
           mesTempId: item.mesTempId,
           codigoAnoLectivo: savedInvoice.anoLectivo,
-          estado: item.estado,
-          valorPago: item.valorPago,
-          valorATransportar: item.valorATransportar,
-        }))
+          estado: item.estado ?? 0,
+          valorPago: item.valorPago ?? 0,
+          valorATransportar: item.valorATransportar ?? 0,
+        }),
       );
 
-      await this.invoiceItemRepository.save(invoiceItems);
+      await em.save(invoiceItems);
     }
 
     return savedInvoice;
-  }
-
+  });
+}
   /**
      * Retorna todas as faturas com paginação.
      * @param paginationQuery O DTO com os parâmetros de paginação (page e limit).

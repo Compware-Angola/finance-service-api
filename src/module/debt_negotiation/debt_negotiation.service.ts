@@ -508,7 +508,7 @@ export class DebtNegotiationService {
       if (!anoLectivoBolsa) return [];
 
       bolseiroGlobal = await this.bolseiroRepo.findOne({
-        where: { codigo_matricula: matricula1.Codigo, ano: anoLectivoBolsa.Designacao }
+        where: { codigo_matricula: matricula1[0].Codigo, ano: anoLectivoBolsa.Designacao }
       });
     }
 
@@ -554,7 +554,7 @@ export class DebtNegotiationService {
     AND ppc.mes_id NOT IN (${mesesIsentos.length ? mesesIsentos.map(() => '?').join(', ') : '0'})
 `, [
         propina.Codigo,
-        matricula1.aluno_cacuaco,
+        matricula1[0].aluno_cacuaco,
         ano.ano_lectivo,
         ...mesesIds,
         ...mesesIsentos

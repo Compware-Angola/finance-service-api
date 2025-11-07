@@ -10,6 +10,8 @@ export class TbBolseiroSiiuma {
 
   @Column()
   ano: string;
+  @Column({ type: "varchar", length: 450, name: "nome" })
+  nome: string;
 
   @Column()
   desconto: number;
@@ -17,6 +19,4 @@ export class TbBolseiroSiiuma {
   @Column()
   instituicao: string;
 
-  @Column({ name: 'tipo_bolsa' })
-  tipo_bolsa: string;
 }

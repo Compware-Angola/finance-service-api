@@ -9,6 +9,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
 import { AdvancePaymentsModule } from './module/advance_payments/advance_payments.module';
 import { BullMQWorkerService } from './bullmq-worker.service';
+import { DefaultNamingStrategy } from 'typeorm';
 
 
 @Module({
@@ -17,38 +18,49 @@ import { BullMQWorkerService } from './bullmq-worker.service';
       isGlobal: true,
     }),
     TypeOrmModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => {
+    const isSSL = config.get<string>('DB_SSL') === 'true';
+
+    return {
+      type: 'oracle' as const,
+      host: config.get<string>('DB_HOST'),
+      port: config.get<number>('DB_PORT', 1521),
+      username: config.get<string>('DB_USERNAME'),
+      password: config.get<string>('DB_PASSWORD'),
+      sid: config.get<string>('DB_SID'),
+
+      // === CORREÇÃO FINAL ===
+     // schema: 'DBUMA',  // <--- SCHEMA CORRETO (o prefixo das tabelas)
+
+      // Força TODOS os nomes de tabela/coluna para UPPERCASE (ex: UMA_FACTURA)
+ namingStrategy: new (class extends DefaultNamingStrategy {
+  tableName(targetName: string, userSpecifiedName: string | undefined): string {
+    const name = userSpecifiedName || targetName;
+    return 'UMA_' + name.toUpperCase(); 
+  }
+
+})(),
+
+      entities: [__dirname + '/**/*.entity{.ts,.js}'],
+      synchronize: false,
+      logging: ['query', 'error'], 
+
+      extra: isSSL
+        ? { ssl: { rejectUnauthorized: true } }
+        : {},
+    };
+  },
+}),
+
+    BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const isSSL = config.get<string>('DB_SSL') === 'true';
-        return {
-          type: 'mysql',
-          host: config.get<string>('DB_HOST'),
-          port: config.get<number>('DB_PORT', 3306),
-          username: config.get<string>('DB_USERNAME'),
-          password: config.get<string>('DB_PASSWORD'),
-          database: config.get<string>('DB_DATABASE'),
-
-          entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          synchronize: false,
-
-          extra: isSSL
-            ? {
-              ssl: {
-                rejectUnauthorized: true,
-              },
-            }
-            : {},
-        };
-      },
-    }),
-  BullModule.forRootAsync({
-      imports: [ConfigModule], 
-      inject: [ConfigService], 
-      useFactory: (config: ConfigService) => ({ 
+      useFactory: (config: ConfigService) => ({
         connection: {
-          host: config.get<string>('REDIS_HOST', 'localhost'), 
-          port: config.get<number>('REDIS_PORT', 6379),      
+          host: config.get<string>('REDIS_HOST', 'localhost'),
+          port: config.get<number>('REDIS_PORT', 6379),
         },
       }),
     }),

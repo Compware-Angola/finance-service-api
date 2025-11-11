@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity('tb_inscricoes_ano_anterior')
+@Entity({ name: 'tb_inscricoes_ano_anterior', schema: 'DBUMA' })
 export class TbInscricaoAnoAnterior {
   @PrimaryGeneratedColumn()
   codigo: number;

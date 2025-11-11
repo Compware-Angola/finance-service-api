@@ -1,6 +1,9 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 
-@Entity('tb_ano_lectivo')
+@Entity({
+  name: 'TB_ANO_LECTIVO',  // sem UMA_ (namingStrategy adiciona)
+  schema: 'DBUMA',         // <--- SCHEMA CORRETO (owner das tabelas)
+})
 export class AcademicYear {
   @PrimaryGeneratedColumn({ name: 'Codigo', type: 'int', unsigned: true })
   Codigo: number;

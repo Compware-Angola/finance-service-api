@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { Factura } from './factura.entity';
 
-@Entity('inscricao_avaliacoes')
+@Entity({ name: 'inscricao_avaliacoes', schema: 'DBUMA' })
 export class InscricaoAvaliacao {
   @PrimaryGeneratedColumn()
   codigo: number;

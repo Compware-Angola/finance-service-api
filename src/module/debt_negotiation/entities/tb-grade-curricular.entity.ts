@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 
 import { TbDisciplina } from './tb-disciplina.entity';
-@Entity('tb_grade_curricular')
+@Entity({ name: 'tb_grade_curricular', schema: 'DBUMA' })
 export class TbGradeCurricular {
   @PrimaryGeneratedColumn()
   Codigo: string;

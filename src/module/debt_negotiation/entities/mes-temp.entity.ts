@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity('mes_temp')
+@Entity({ name: 'mes_temp', schema: 'DBUMA' })
 export class MesTemp {
   @PrimaryGeneratedColumn()
   id: number;

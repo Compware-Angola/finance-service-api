@@ -6,12 +6,21 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-@Entity('pagamento_por_referencias')
+@Entity({ name: 'pagamento_por_referencias', schema: 'DBUMA' })
 export class PaymentReferences {
-  @PrimaryGeneratedColumn({ type: 'bigint' })
+  // BIGINT → NUMBER(19,0)
+  @PrimaryGeneratedColumn({ type: 'number',name:'id'})
   id: number;
 
-  @Column({ name: 'PAYMENT_ID', type: 'bigint', nullable: true, comment: 'Id do pagamento no BE' })
+  // BIGINT → NUMBER(19,0)
+  @Column({
+    name: 'PAYMENT_ID',
+    type: 'number',
+    precision: 19,
+    scale: 0,
+    nullable: true,
+    comment: 'Id do pagamento no BE',
+  })
   paymentId?: number;
 
   @Column({
@@ -27,7 +36,6 @@ export class PaymentReferences {
   @Column({
     name: 'factura_codigo',
     type: 'int',
-    unsigned: true,
     nullable: false,
     comment: 'Código da Factura do Mutue',
   })
@@ -68,17 +76,21 @@ export class PaymentReferences {
   })
   merchantTransactionId?: string;
 
+  // DOUBLE → NUMBER(15,2)
   @Column({
     name: 'AMOUNT',
-    type: 'double',
+    type: 'number',
+    precision: 15,
+    scale: 2,
     nullable: false,
     comment: 'Valor a pagar da Factura',
   })
   amount: number;
 
+  // DATETIME → TIMESTAMP
   @Column({
     name: 'START_DATE',
-    type: 'datetime',
+    type: 'timestamp',
     nullable: false,
     comment: 'Data que se gerou a referência',
   })
@@ -86,7 +98,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'END_DATE',
-    type: 'datetime',
+    type: 'timestamp',
     nullable: false,
     comment: 'Data em que a referência vai expirar',
   })
@@ -101,26 +113,27 @@ export class PaymentReferences {
   })
   status: string;
 
+  // TEXT → CLOB
   @Column({
     name: 'webhook',
-    type: 'text',
+    type: 'clob',
     nullable: true,
     comment: 'Payload do Webhook recebido (quando aplicável)',
   })
   webhook?: string;
 
+  // CreateDateColumn simplificado (TypeORM usa TIMESTAMP automaticamente no Oracle)
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamp',
-    default: () => 'CURRENT_TIMESTAMP',
   })
   createdAt: Date;
 
+  // UpdateDateColumn simplificado
   @UpdateDateColumn({
     name: 'updated_at',
     type: 'timestamp',
     nullable: true,
-    onUpdate: 'CURRENT_TIMESTAMP',
   })
   updatedAt: Date;
 }

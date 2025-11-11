@@ -1,6 +1,6 @@
 import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
-@Entity('mes_temp')
+@Entity({ name: 'mes_temp', schema: 'DBUMA' })
 export class MesTemp {
   @PrimaryGeneratedColumn({ type: 'int', unsigned: true })
   id: number;
@@ -8,7 +8,7 @@ export class MesTemp {
   @Column({ type: 'varchar', length: 45 })
   designacao: string;
 
-  @Column({ type: 'tinyint', width: 1, default: 1 })
+  @Column({ type: 'int', width: 1, default: 1 })
   isencao: number;
 
   @Column({ type: 'int', nullable: true })

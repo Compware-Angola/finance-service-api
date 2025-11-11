@@ -1,121 +1,109 @@
-import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-// Esta classe representa a tabela 'factura' no banco de dados.
-@Entity('factura')
+@Entity({ name: 'factura', schema: 'DBUMA' })
 export class Invoice {
+  @PrimaryGeneratedColumn({ name: 'Codigo', type: 'int' })
+  Codigo: number;
 
-    // Chave Primária, AUTO_INCREMENT
-    @PrimaryGeneratedColumn({ name: 'Codigo', type: 'int', unsigned: true })
-    Codigo: number;
+  // DATETIME → TIMESTAMP (Oracle)
+  @Column({ name: 'DataFactura', type: 'timestamp' })
+  DataFactura: Date;
 
-    // Data da Fatura (DATETIME)
-    @Column({ name: 'DataFactura', type: 'datetime' })
-    DataFactura: Date;
+  // DOUBLE → NUMBER(15,2)
+  @Column({ name: 'TotalPreco', type: 'number', precision: 15, scale: 2, default: 0 })
+  TotalPreco: number;
 
-    // Valores Monetários (DOUBLE) - Total Preço
-    @Column({ name: 'TotalPreco', type: 'double', default: 0 })
-    TotalPreco: number;
+  @Column({ name: 'CodigoMatricula', type: 'int', nullable: true })
+  CodigoMatricula: number | null;
 
-    // Chave Estrangeira (Matrícula) - UNSIGNED INT
-    @Column({ name: 'CodigoMatricula', type: 'int', unsigned: true, nullable: true })
-    CodigoMatricula: number | null;
+  @Column({ name: 'Referencia', type: 'varchar', length: 9, default: '000000000' })
+  Referencia: string;
 
-    // Referência de Pagamento (VARCHAR 9)
-    @Column({ name: 'Referencia', type: 'varchar', length: 9, default: '000000000' })
-    Referencia: string;
+  @Column({ name: 'Desconto', type: 'number', precision: 15, scale: 2, default: 0 })
+  Desconto: number;
 
-    // Descontos e outros valores
-    @Column({ name: 'Desconto', type: 'double', default: 0 })
-    Desconto: number;
-    
-    @Column({ name: 'Troco', type: 'double', default: 0 })
-    Troco: number;
-    
-    @Column({ name: 'totalIVA', type: 'double', default: 0 })
-    totalIVA: number;
+  @Column({ name: 'Troco', type: 'number', precision: 15, scale: 2, default: 0 })
+  Troco: number;
 
-    @Column({ name: 'TotalMulta', type: 'double', default: 0 })
-    TotalMulta: number;
+  @Column({ name: 'totalIVA', type: 'number', precision: 15, scale: 2, default: 0 })
+  totalIVA: number;
 
-    @Column({ name: 'total_incidencia', type: 'double', default: 0 })
-    totalIncidencia: number; // Mapeado para camelCase
+  @Column({ name: 'TotalMulta', type: 'number', precision: 15, scale: 2, default: 0 })
+  TotalMulta: number;
 
-    @Column({ name: 'total_retencao', type: 'double', default: 0 })
-    totalRetencao: number; // Mapeado para camelCase
+  @Column({ name: 'total_incidencia', type: 'number', precision: 15, scale: 2, default: 0 })
+  totalIncidencia: number;
 
-    @Column({ name: 'ValorAPagar', type: 'double', default: 0 })
-    ValorAPagar: number;
+  @Column({ name: 'total_retencao', type: 'number', precision: 15, scale: 2, default: 0 })
+  totalRetencao: number;
 
-    @Column({ name: 'ValorEntregue', type: 'double', default: 0 })
-    ValorEntregue: number;
+  @Column({ name: 'ValorAPagar', type: 'number', precision: 15, scale: 2, default: 0 })
+  ValorAPagar: number;
 
-    // Valor por Extenso (VARCHAR 255)
-    @Column({ name: 'ValorAPagarExtenso', type: 'varchar', length: 255, default: '0', collation: 'latin1_swedish_ci', nullable: true })
-    ValorAPagarExtenso: string | null;
-    
-    @Column({ name: 'Descricao', type: 'varchar', length: 500, nullable: true })
-    Descricao: string | null;
+  @Column({ name: 'ValorEntregue', type: 'number', precision: 15, scale: 2, default: 0 })
+  ValorEntregue: number;
 
-    @Column({ name: 'ValorEntregueMltCX', type: 'double', default: 0, nullable: true })
-    ValorEntregueMltCX: number | null;
+  // VARCHAR 255 sem collation
+  @Column({ name: 'ValorAPagarExtenso', type: 'varchar', length: 255, default: '0', nullable: true })
+  ValorAPagarExtenso: string | null;
 
-    @Column({ name: 'codigo_descricao', type: 'int', unsigned: true, nullable: true })
-    codigoDescricao: number | null; // Mapeado para camelCase
+  @Column({ name: 'Descricao', type: 'varchar', length: 500, nullable: true })
+  Descricao: string | null;
 
-    // Numeração e Hash
-    @Column({ name: 'NextFactura', type: 'varchar', length: 45, default: '' })
-    NextFactura: string;
+  @Column({ name: 'ValorEntregueMltCX', type: 'number', precision: 15, scale: 2, default: 0, nullable: true })
+  ValorEntregueMltCX: number | null;
 
-    @Column({ name: 'next', type: 'varchar', length: 45, default: '' })
-    next: string;
+  @Column({ name: 'codigo_descricao', type: 'int', nullable: true })
+  codigoDescricao: number | null;
 
-    @Column({ name: 'texto_hash', type: 'longtext', nullable: true })
-    textoHash: string | null; // Mapeado para camelCase
+  @Column({ name: 'NextFactura', type: 'varchar', length: 45, default: '' })
+  NextFactura: string;
 
-    @Column({ name: 'dataVencimento', type: 'date', nullable: true })
-    dataVencimento: Date | null;
+  @Column({ name: 'next', type: 'varchar', length: 45, default: '' })
+  next: string;
 
-    // Chave Estrangeira (Polo)
-    @Column({ name: 'polo_id', type: 'bigint', unsigned: true })
-    poloId: number; // Mapeado para camelCase
+  // LONGTEXT → CLOB (Oracle)
+  @Column({ name: 'texto_hash', type: 'clob', nullable: true })
+  textoHash: string | null;
 
-    @Column({ name: 'obs', type: 'varchar', length: 45000, nullable: true })
-    obs: string | null;
+  // DATE (só data) → mantido
+  @Column({ name: 'dataVencimento', type: 'date', nullable: true })
+  dataVencimento: Date | null;
 
-    @Column({ name: 'hashValor', type: 'varchar', length: 255, collation: 'latin1_swedish_ci', nullable: true })
-    hashValor: string | null;
+@Column({ name: 'polo_id', type: 'number', precision: 19, scale: 0 })
+poloId: number;
 
-    @Column({ name: 'contaCorrente', type: 'varchar', length: 45, nullable: true })
-    contaCorrente: string | null;
+  @Column({ name: 'obs', type: 'varchar', length: 45000, nullable: true })
+  obs: string | null;
 
-    @Column({ name: 'faturaReference', type: 'varchar', length: 45, nullable: true })
-    faturaReference: string | null;
+  // VARCHAR sem collation
+  @Column({ name: 'hashValor', type: 'varchar', length: 255, nullable: true })
+  hashValor: string | null;
 
-    // Canal
-    @Column({ name: 'canal', type: 'int', unsigned: true, default: 3 })
-    canal: number;
+  @Column({ name: 'contaCorrente', type: 'varchar', length: 45, nullable: true })
+  contaCorrente: string | null;
 
-    // Ano Lectivo
-    @Column({ name: 'ano_lectivo', type: 'int', unsigned: true, default: 1 })
-    anoLectivo: number;
+  @Column({ name: 'faturaReference', type: 'varchar', length: 45, nullable: true })
+  faturaReference: string | null;
 
-    // Estado (1-Validado, 2-Pendente, 3-Anulada)
-    @Column({ name: 'estado', type: 'int', unsigned: true, default: 0, comment: '1-Validado, 2-Pendente(pag parcial), 3-anulada' })
-    estado: number;
+  @Column({ name: 'canal', type: 'int', default: 3 })
+  canal: number;
 
-    @Column({ name: 'corrente', type: 'int', unsigned: true, default: 1 })
-    corrente: number;
+  @Column({ name: 'ano_lectivo', type: 'int', default: 1 })
+  anoLectivo: number;
 
-    @Column({ name: 'codigo_preinscricao', type: 'int', unsigned: true, nullable: true })
-    codigoPreinscricao: number | null; // Mapeado para camelCase
+  @Column({ name: 'estado', type: 'int', default: 0, comment: '1-Validado, 2-Pendente(pag parcial), 3-anulada' })
+  estado: number;
 
-    // Numeração sequencial usada para o Hash Fiscal
-    @Column({ name: 'numSequenciaFactura', type: 'int', unsigned: true, nullable: true })
-    numSequenciaFactura: number | null; // Mapeado para camelCase
+  @Column({ name: 'corrente', type: 'int', default: 1 })
+  corrente: number;
 
-    @Column({ name: 'tipo_documento_factura_id', type: 'int', unsigned: true, nullable: true })
-    tipoDocumentoFacturaId: number | null; // Mapeado para camelCase
+  @Column({ name: 'codigo_preinscricao', type: 'int', nullable: true })
+  codigoPreinscricao: number | null;
 
-    // NOTA: As chaves estrangeiras (Constraints) são definidas em outras entidades
-    // usando @ManyToOne e @OneToMany. Para simplificar, mantivemos apenas as colunas aqui.
+  @Column({ name: 'numSequenciaFactura', type: 'int', nullable: true })
+  numSequenciaFactura: number | null;
+
+  @Column({ name: 'tipo_documento_factura_id', type: 'int', nullable: true })
+  tipoDocumentoFacturaId: number | null;
 }

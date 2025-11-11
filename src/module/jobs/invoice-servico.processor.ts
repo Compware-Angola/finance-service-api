@@ -13,6 +13,8 @@ export class InvoiceProcessor extends WorkerHost {
     console.log(`Processing job ${job.id} of type ${job.name}`);
    if (job.name === 'createInvoiceJob') {
       const { createInvoiceDto, referenceParams, dueDateParams } = job.data;
+      console.log("2",createInvoiceDto);
+      
 
       await this.invoiceService.create(createInvoiceDto, referenceParams, dueDateParams);
       console.log(`Job ${job.id} completed successfully.`);

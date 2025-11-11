@@ -54,6 +54,7 @@ async create(
   // 🔥 Manager opcional → permite transação externa (ex: createMonthlyPaymentReferences)
   transactionalEntityManager?: EntityManager,
 ): Promise<Invoice> {
+
   // Se não vier manager, "cria" uma transação interna (compatibilidade total)
   const manager = transactionalEntityManager || this.invoiceRepository.manager;
 
@@ -393,6 +394,8 @@ async create(
 
   async queueCreateInvoice(createInvoiceDto: CreateInvoiceDto, referenceParams?: string,
     dueDateParams?: string): Promise<{ message: string; taskId: string | undefined }> {
+      console.log(createInvoiceDto);
+      
     const job = await this.invoiceQueue.add('createInvoiceJob', {
       createInvoiceDto,
       referenceParams,

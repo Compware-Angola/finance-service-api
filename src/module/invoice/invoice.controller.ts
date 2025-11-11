@@ -8,7 +8,6 @@ import { Invoice } from './entities/invoice.entity';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
-import { InvoiceFilterPreEnrollmentDto } from './dto/invoice-filter-preenrollment.dto';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
 
 @ApiTags('Invoices')

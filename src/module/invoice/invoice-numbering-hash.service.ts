@@ -10,111 +10,106 @@ import { generateDueDate } from '../util/generate-due-date';
 
 // Interfaces
 interface FacturaAnterior {
-    DataFactura: string | Date;
-    hashValor: string;
-    numSequenciaFactura: number;
+  DataFactura: string | Date;
+  hashValor: string;
+  numSequenciaFactura: number;
 }
 
 interface InvoiceHashData {
-    hashValor: string;
-    plaintext: string;
-    numeracaoFactura: string;
-   
-    numSequenciaFactura: number;
-  
+  hashValor: string;
+  plaintext: string;
+  numeracaoFactura: string;
+  numSequenciaFactura: number;
 }
 
 @Injectable()
 export class InvoiceNumberingAndHashService {
-    constructor(
-        @InjectRepository(Invoice)
-        private readonly invoiceRepository: Repository<Invoice>,
-        private readonly key: CompanyKey,
-    ) { }
+  constructor(
+    @InjectRepository(Invoice)
+    private readonly invoiceRepository: Repository<Invoice>,
+    private readonly key: CompanyKey,
+  ) {}
 
-    async generateInvoiceHashData(
-        totalPreco: number,
-        tipo_factura_id: number,
-        ano_id: number,
-        polo_id: number,
-        tipo_factura_sigla: string,
-        ano_designacao: string
-    ): Promise<InvoiceHashData> {
-        try {
-            if (isNaN(totalPreco) || totalPreco < 0) {
-                throw new BadRequestException('O valor totalPreco fornecido é inválido.');
-            }
-
-            const reference_key = await genearateKeyNumber(9);
-            const dueDate = await generateDueDate(10)
-
- const ultimaFaturaResults = await this.invoiceRepository.find({
-  where: {
-    tipoDocumentoFacturaId: tipo_factura_id as any,
-    anoLectivo: ano_id as any,
-    poloId: polo_id as any,
-  },
-  order: { numSequenciaFactura: 'DESC' },
-  take: 1,
-  select: ['DataFactura', 'hashValor', 'numSequenciaFactura'],
-}) as FacturaAnterior[];
-
-            const ultimaFatura = ultimaFaturaResults.length ? ultimaFaturaResults[0] : null;
-            const data_factura = ultimaFatura?.DataFactura
-                ? DateTime.fromJSDate(new Date(ultimaFatura.DataFactura))
-                : DateTime.now();
-
-        
-            const hashAnterior = ultimaFatura?.hashValor ?? '0';
-            const datactual = DateTime.now();
-
-            const diff = datactual.diff(data_factura, 'years').years;
-
-     
-
-const numSequenciaFactura =
-  diff < 1 && ultimaFatura?.numSequenciaFactura != null
-    ? ultimaFatura.numSequenciaFactura + 1
-    : 1;
+  async generateInvoiceHashData(
+    totalPreco: number,
+    tipo_factura_id: number,
+    ano_id: number,
+    polo_id: number,
+    tipo_factura_sigla: string,
+    ano_designacao: string
+  ): Promise<InvoiceHashData> {
+    try {
+      // Validação
+      if (isNaN(totalPreco) || totalPreco < 0) {
+        throw new BadRequestException('O valor totalPreco fornecido é inválido.');
+      }
 
 
-            const numeracaoFactura = `${tipo_factura_sigla} UMA ${ano_designacao}/${numSequenciaFactura}`;
+      // Converte ano_id para string (pois coluna é VARCHAR2)
+   const anoStr = ano_id.toString().trim();
+    const poloStr = polo_id.toString().trim();
+    const tipoStr = tipo_factura_id.toString().trim();
+    
+      // Query com TO_NUMBER seguro + NVL para lidar com NULLs
+      const ultimaFaturaResults = await this.invoiceRepository
+        .createQueryBuilder('i')
+        .select([
+          'i.DataFactura',
+          'i.hashValor',
+          'i.numSequenciaFactura',
+        ])
+        .where(
+          `i.tipoDocumentoFacturaId = :tipo 
+           AND NVL(i.ano_lectivo, '0') = :ano 
+           AND i.poloId = :polo`,
+          {
+         tipo: tipoStr, 
+          ano: anoStr, 
+          polo: poloStr
+          }
+        )
+       .orderBy(`CAST(TRIM(i.numSequenciaFactura) AS NUMBER)`, 'DESC') 
+        .limit(1)
+        .getRawOne() as FacturaAnterior | undefined;
 
+      const ultimaFatura = ultimaFaturaResults;
 
-            const privateKeyString = await this.key.getPrivateKey();
+      const data_factura = ultimaFatura?.DataFactura
+        ? DateTime.fromJSDate(new Date(ultimaFatura.DataFactura))
+        : DateTime.now();
 
+      const hashAnterior = ultimaFatura?.hashValor ?? '0';
+      const datactual = DateTime.now();
+      const diff = datactual.diff(data_factura, 'years').years;
 
+      const numSequenciaFactura =
+        diff < 1 && ultimaFatura?.numSequenciaFactura != null
+          ? ultimaFatura.numSequenciaFactura + 1
+          : 1;
 
-            // 🔹 Cria um objeto RSA a partir da chave
-            const rsa = new NodeRSA(privateKeyString, 'pkcs8-private-pem');
-            rsa.setOptions({ signingScheme: 'pkcs1-sha256' });
+      const numeracaoFactura = `${tipo_factura_sigla} UMA ${ano_designacao}/${numSequenciaFactura}`;
 
-            // 🔹 7. Texto a assinar
-            const dateOnly = datactual.toFormat('yyyy-MM-dd');
-            const dateTimeT = datactual.toFormat("yyyy-MM-dd'T'HH:mm:ss");
-            const totalFormatted = totalPreco.toFixed(2);
-            const plaintext = `${dateOnly};${dateTimeT};${numeracaoFactura};${totalFormatted};${hashAnterior}`;
+      const privateKeyString = await this.key.getPrivateKey();
+      const rsa = new NodeRSA(privateKeyString, 'pkcs8-private-pem');
+      rsa.setOptions({ signingScheme: 'pkcs1-sha256' });
 
+      const dateOnly = datactual.toFormat('yyyy-MM-dd');
+      const dateTimeT = datactual.toFormat("yyyy-MM-dd'T'HH:mm:ss");
+      const totalFormatted = totalPreco.toFixed(2);
 
-            // 🔹 Gera assinatura em Base64
-            const signature = rsa.sign(Buffer.from(plaintext), 'base64', 'utf8');
+      const plaintext = `${dateOnly};${dateTimeT};${numeracaoFactura};${totalFormatted};${hashAnterior}`;
+      const signature = rsa.sign(Buffer.from(plaintext), 'base64', 'utf8');
 
-            return {
-                hashValor: signature,
-                plaintext,
-                numeracaoFactura,
-               
-                numSequenciaFactura,
-              
-            };
-        } catch (error) {
-            console.error('❌ Erro ao gerar hash e sequência da fatura:', "error");
-
-            if (error instanceof BadRequestException) throw error;
-
-            throw new InternalServerErrorException(
-                'Falha na geração da assinatura digital ou sequenciamento.'
-            );
-        }
+      return {
+        hashValor: signature,
+        plaintext,
+        numeracaoFactura,
+        numSequenciaFactura,
+      };
+    } catch (error) {
+      console.error('Erro ao gerar hash e sequência da fatura:', error);
+      if (error instanceof BadRequestException) throw error;
+      throw new InternalServerErrorException('Falha na geração da assinatura digital ou sequenciamento.');
     }
+  }
 }

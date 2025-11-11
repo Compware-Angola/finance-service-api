@@ -56,7 +56,7 @@ export class WebhookService {
         paymentId: paymentId,
         referenceId: 'REF-ID-EXTERNO-12345',
         merchantTransactionId: 'MERCHANT-TXN-12345',
-        webhook: '{"event": "reference_created", "data": {...}}',
+        webhook: '{event: reference_created, data: {...}}',
       };
       await this.paymentReferencesService.registerPaymentReference(registerPayload);
       this.logger.log(`✅ Fatura com referência ${reference} atualizada para status: ${status}`);

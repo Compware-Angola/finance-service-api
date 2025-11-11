@@ -146,7 +146,7 @@ export class InvoiceItemDto {
   mesTempId?: number;
 
   @ApiProperty({
-    description: 'Estado do item (0 = ativo, 1 = removido, etc).',
+    description: 'Estado do item (0 = ativo, 1 = removido, "etc").',
     type: Number,
     example: 0,
   })

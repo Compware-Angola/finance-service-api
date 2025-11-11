@@ -11,10 +11,10 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity({ name: 'tb_parametros', schema: 'DBUMA' })
+@Entity({ name: 'tb_parametros', "schema": 'DBUMA' })
 @Index('CodigoEmpresa20', ['CodigoEmpresa'])
 export class Parametro {
-  @PrimaryGeneratedColumn({ type: 'int', unsigned: true })
+  @PrimaryGeneratedColumn({ type: 'int', "unsigned": true })
   Codigo: number;
 
   @Column({
@@ -25,7 +25,7 @@ export class Parametro {
   })
   Designacao: string | null;
 
-  @Column({ type: 'float', nullable: true })
+  @Column({ type: 'float', "nullable": true })
   Valor: number | null;
 
   @Column({
@@ -44,25 +44,25 @@ export class Parametro {
   })
   CodigoEmpresa: number;
 
-  @Column({ type: 'int', unsigned: true, nullable: true })
+  @Column({ type: 'int', "unsigned": true, "nullable": true })
   Num_max_faltas: number | null;
 
-  @Column({ type: 'int', unsigned: true, nullable: true })
+  @Column({ type: 'int', "unsigned": true, "nullable": true })
   Num_meses_atraso: number | null;
 
-  @Column({ type: 'int', unsigned: true, nullable: true })
+  @Column({ type: 'int', "unsigned": true, "nullable": true })
   control_ip: number | null;
 
-  @Column({ type: 'varchar', length: 50, nullable: true, charset: 'utf8mb3' })
+  @Column({ type: 'varchar', "length": 50, "nullable": true, "charset": 'utf8mb3' })
   ip_interno: string | null;
 
-  @Column({ type: 'varchar', length: 50, nullable: true, charset: 'utf8mb3' })
+  @Column({ type: 'varchar', "length": 50, "nullable": true, "charset": 'utf8mb3' })
   ip_externo: string | null;
 
-  @Column({ type: 'varchar', length: 50, nullable: true, charset: 'utf8mb3' })
+  @Column({ type: 'varchar', "length": 50, "nullable": true, "charset": 'utf8mb3' })
   polo_marc_assuididade: string | null;
 
-  @Column({ type: 'varchar', length: 50, nullable: true, charset: 'utf8mb3' })
+  @Column({ type: 'varchar', "length": 50, "nullable": true, "charset": 'utf8mb3' })
   turno_marc_assuididade: string | null;
 
   @CreateDateColumn({
@@ -79,7 +79,7 @@ export class Parametro {
   })
   updated_at: Date;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', "default": 0 })
   estado: number;
 
 

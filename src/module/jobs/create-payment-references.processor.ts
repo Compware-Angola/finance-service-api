@@ -37,7 +37,7 @@ export class CreatePaymentReferencesProcessor extends WorkerHost {
       return { success: true };
     }
     console.log(`Job ${job.id} has an unknown type: ${job.name}`);
-    return { success: false, message: 'Unknown job type' };
+    return { success: false, "message": 'Unknown job type' };
 
   }
   // Optional: Log completion

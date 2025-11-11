@@ -108,7 +108,7 @@ const numSequenciaFactura =
               
             };
         } catch (error) {
-            console.error('❌ Erro ao gerar hash e sequência da fatura:', error);
+            console.error('❌ Erro ao gerar hash e sequência da fatura:', "error");
 
             if (error instanceof BadRequestException) throw error;
 

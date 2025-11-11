@@ -15,11 +15,11 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
   // 1. Contagem: apenas meses que têm fatura (ou podem ter) para essa matrícula
   const countQuery = `
     SELECT COUNT(DISTINCT mt.id) AS total
-    FROM mes_temp mt
+    FROM "DBUMA"."UMA_MES_TEMP" mt
     INNER JOIN factura_items fi ON fi.mes_temp_id = mt.id
     INNER JOIN factura f ON fi.CodigoFactura = f.Codigo
-    WHERE mt.ano_lectivo = ?
-      AND f.CodigoMatricula = ?
+    WHERE "mt".ano_lectivo = ?
+      AND "f".CodigoMatricula = ?
   `;
 
   const countParams = [codAnoLectivo, codigo_matricula];
@@ -54,14 +54,14 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
         WHEN fi.valor_pago > 0 THEN 2          -- pago parcial
         ELSE 0                                 -- não pago
       END AS status_pagamento
-    FROM mes_temp mt
+    FROM "DBUMA"."UMA_MES_TEMP" mt
     INNER JOIN factura_items fi ON fi.mes_temp_id = mt.id
     INNER JOIN factura f ON fi.CodigoFactura = f.Codigo
     LEFT JOIN tb_tipo_servicos ts ON fi.CodigoProduto = ts.Codigo
-    WHERE mt.ano_lectivo = ?
-      AND f.CodigoMatricula = ?
-      AND f.estado !=3
-    GROUP BY mt.id, fi.codigo, f.Codigo  -- evita duplicatas se houver múltiplos items
+    WHERE "mt".ano_lectivo = ?
+      AND "f".CodigoMatricula = ?
+      AND "f".estado !=3
+    GROUP BY mt.id, "fi".codigo, "f".Codigo  -- evita duplicatas se houver múltiplos items
     ORDER BY mt.ordem_mes ASC
     LIMIT ? OFFSET ?;
   `;

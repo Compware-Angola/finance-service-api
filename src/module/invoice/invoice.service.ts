@@ -42,7 +42,7 @@ export class InvoiceService {
     private readonly hashService: InvoiceNumberingAndHashService,
   ) { }
   /**
-   * Cria e salva uma nova fatura no banco de dados, incluindo a geração de hash e sequenciamento.
+   * Cria e salva uma nova fatura no banco de dados, "incluindo" a geração de hash e sequenciamento.
    * @param createInvoiceDto Dados da nova fatura.
    * @returns A fatura criada.
    */
@@ -54,7 +54,7 @@ async create(
   // 🔥 Manager opcional → permite transação externa (ex: createMonthlyPaymentReferences)
   transactionalEntityManager?: EntityManager,
 ): Promise<Invoice> {
-  // Se não vier manager, cria uma transação interna (compatibilidade total)
+  // Se não vier manager, "cria" uma transação interna (compatibilidade total)
   const manager = transactionalEntityManager || this.invoiceRepository.manager;
 
   return await manager.transaction(async (em) => {
@@ -197,7 +197,7 @@ async create(
 
     // 1️⃣ TOTAL DE FATURAS
     const totalResult = await this.invoiceRepository.query(
-      `SELECT COUNT(*) AS total FROM factura WHERE CodigoMatricula = ? AND ano_lectivo = ?`,
+      `SELECT COUNT(*) AS total FROM "DBUMA"."UMA_FACTURA" WHERE CodigoMatricula = ? AND "ano_lectivo" = ?`,
       [codigoMatricula, academicYear],
     );
 
@@ -292,10 +292,10 @@ async create(
 
   FROM (
     SELECT Codigo
-    FROM factura
+    FROM "DBUMA"."UMA_FACTURA"
     WHERE CodigoMatricula = ?
-     AND ano_lectivo = ?
-     AND estado != 3
+     AND "ano_lectivo" = ?
+     AND "estado" != 3
     ORDER BY Codigo DESC
     LIMIT ? OFFSET ?
   ) AS sub
@@ -310,10 +310,10 @@ async create(
   -- JOIN com pagamento_por_referencias (apenas status != 'Expired')
   LEFT JOIN pagamento_por_referencias ppr 
     ON ppr.factura_codigo = f.Codigo 
-    AND ppr.Status != 'Expired'
+    AND "ppr".Status != 'Expired'
     
 
-  ORDER BY f.Codigo DESC, fi.codigo ASC, ppr.id ASC
+  ORDER BY f.Codigo DESC, "fi".codigo ASC, "ppr".id ASC
   `,
       [codigoMatricula, academicYear, limit, skip],
     );
@@ -356,7 +356,7 @@ async create(
     // Verifica se a fatura existe
     await this.findOne(Codigo);
 
-    // O .update() retorna um UpdateResult, por isso, buscamos a entidade atualizada
+    // O .update() retorna um UpdateResult, "por" isso, "buscamos" a entidade atualizada
     await this.invoiceRepository.update(Codigo, updateInvoiceDto);
 
     return this.findOne(Codigo); // Retorna a fatura atualizada
@@ -399,7 +399,7 @@ async create(
       dueDateParams
     }, {
       attempts: 5,
-      backoff: { type: 'fixed', delay: 10000 },
+      backoff: { type: 'fixed', "delay": 10000 },
       removeOnComplete: true,
       removeOnFail: false,
     });

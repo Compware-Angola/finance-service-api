@@ -15,7 +15,7 @@ export class AnoLectivoUtil {
 
   /**
    * Retorna o ID do ano letivo atual (estado = 'Ativo')
-   * Se não encontrar, retorna o fallback (23)
+   * Se não encontrar, "retorna" o fallback (23)
    */
   async getAnoAtualId(): Promise<number> {
     try {

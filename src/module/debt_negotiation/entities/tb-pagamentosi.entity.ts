@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { TbPagamento } from './tb-pagamento.entity';
 
-@Entity({ name: 'tb_pagamentosi', schema: 'DBUMA' })
+@Entity({ name: 'tb_pagamentosi', "schema": 'DBUMA' })
 export class TbPagamentosi {
   @PrimaryGeneratedColumn()
   Codigo: number;

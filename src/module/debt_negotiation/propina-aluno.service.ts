@@ -71,10 +71,10 @@ export class PropinaAlunoService {
 
   private async getCursoByPreinscricao(codigo_inscricao: number) {
     const result = await this.dataSource.query(`
-      SELECT c.Designacao AS curso, c.Codigo AS codigo_curso
-      FROM tb_cursos c
+      SELECT "c".Designacao AS curso, "c".Codigo AS codigo_curso
+      FROM "DBUMA"."UMA_TB_CURSOS" c
       INNER JOIN tb_preinscricao p ON c.Codigo = p.Curso_Candidatura
-      WHERE p.Codigo = ?
+      WHERE "p".Codigo = ?
       LIMIT 1
     `, [codigo_inscricao]);
     return result[0] || null;
@@ -82,7 +82,7 @@ export class PropinaAlunoService {
 
   private async getCursoById(codigo_curso: number) {
     const result = await this.dataSource.query(`
-      SELECT Designacao AS curso FROM tb_cursos WHERE Codigo = ? LIMIT 1
+      SELECT Designacao AS curso FROM "DBUMA"."UMA_TB_CURSOS" WHERE Codigo = ? LIMIT 1
     `, [codigo_curso]);
     return result[0] || null;
   }
@@ -99,22 +99,22 @@ export class PropinaAlunoService {
         ts.TipoServico,
         ts.Codigo,
         tt.taxa
-      FROM tb_tipo_servicos ts
+      FROM "DBUMA"."UMA_TB_TIPO_SERVICOS" ts
       LEFT JOIN tipo_taxas tt ON tt.id = ts.taxa_iva_id
-      WHERE ts.Descricao LIKE ?
-        AND ts.cacuaco = ?
-        AND ts.codigo_ano_lectivo = ?
+      WHERE "ts".Descricao LIKE ?
+        AND "ts".cacuaco = ?
+        AND "ts".codigo_ano_lectivo = ?
       LIMIT 1
-    `, [`propina ${nomeCurso}%`, cacuaco, ano_lectivo]);
+    `, [`propina ${nomeCurso}%`, "cacuaco", ano_lectivo]);
 
     return result[0] || null;
   }
 
   private async checkExcecao(matricula: number) {
     const result = await this.dataSource.query(`
-      SELECT codigo_curso_pagamento, data_fim
-      FROM curso_pagamento_excepcao
-      WHERE codigo_matricula = ?
+      SELECT "codigo_curso_pagamento, "data_fim""
+      FROM "DBUMA"."UMA_CURSO_PAGAMENTO_EXCEPCAO"
+      WHERE "codigo_matricula" = ?
       LIMIT 1
     `, [matricula]);
     return result[0] || null;
@@ -126,7 +126,7 @@ export class PropinaAlunoService {
 async cicloMestrado(){
   const result = await this.dataSource.query(`
     SELECT Codigo, Designacao
-    FROM tb_ano_lectivo
+    FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
     WHERE Designacao = 'Ciclo Mestrado'
     LIMIT 1
   `);
@@ -136,7 +136,7 @@ async cicloMestrado(){
 async cicloDoutoramento(){
   const result = await this.dataSource.query(`
     SELECT Codigo, Designacao
-    FROM tb_ano_lectivo
+    FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
     WHERE Designacao = 'Ciclo Doutoramento'
     LIMIT 1
   `);

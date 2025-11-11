@@ -1,14 +1,14 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 
-@Entity({ name: 'negociacao_dividas', schema: 'DBUMA' })
+@Entity({ name: 'negociacao_dividas', "schema": 'DBUMA' })
 export class DebtNegotiation {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'valor_divida', type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'valor_divida', "type": 'decimal', "precision": 10, "scale": 2 })
   valor_divida: number;
 
-  @Column({ name: 'primeiroValorApagar', type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'primeiroValorApagar', "type": 'decimal', "precision": 10, "scale": 2 })
   primeiroValorApagar: number;
 
   @Column({ name: 'codigo_matricula' })
@@ -20,7 +20,7 @@ export class DebtNegotiation {
   @Column({ name: 'codigo_fatura' })
   codigo_fatura: number;
 
-  @Column({ name: 'valorRestante', type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'valorRestante', "type": 'decimal', "precision": 10, "scale": 2 })
   valorRestante: number;
 
   @Column({ name: 'qtd_prestacoes' })

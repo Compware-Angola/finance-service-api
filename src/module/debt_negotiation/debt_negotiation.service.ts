@@ -96,19 +96,19 @@ export class DebtNegotiationService {
   async pagouOutubro(codigo_inscricao: number): Promise<any> {
 
     const result = await this.pagamentoRepo.query(`
-    SELECT pi.mes_temp_id
-    FROM tb_pagamentos p
+    SELECT "pi".mes_temp_id
+    FROM "DBUMA"."UMA_TB_PAGAMENTOS" p
     INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
     INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
     INNER JOIN factura f ON f.Codigo = p.codigo_factura
     INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
     INNER JOIN tb_tipo_servicos ts ON ts.Codigo = fi.CodigoProduto
-    WHERE pre.Codigo = ?
-      AND p.AnoLectivo = 1
-      AND pi.mes_temp_id = 5
-      AND f.estado != 3
-      AND ts.TipoServico = 'Mensal'
-      AND p.estado = 1
+    WHERE "pre".Codigo = ?
+      AND "p".AnoLectivo = 1
+      AND "pi".mes_temp_id = 5
+      AND "f".estado != 3
+      AND "ts".TipoServico = 'Mensal'
+      AND "p".estado = 1
     LIMIT 1
   `, [codigo_inscricao]);
 
@@ -130,14 +130,14 @@ export class DebtNegotiationService {
     // Faturas pagas
     const faturasPagas = await this.facturaRepo.query(`
   SELECT DISTINCT ia.codigo_factura
-  FROM factura f
+  FROM "DBUMA"."UMA_FACTURA" f
   INNER JOIN tb_matriculas m ON m.Codigo = f.CodigoMatricula
   INNER JOIN inscricao_avaliacoes ia ON ia.codigo_factura = f.Codigo
   INNER JOIN tb_pagamentos p ON p.codigo_factura = f.Codigo
-  WHERE ia.codigo_ano_lectivo = ?
-    AND f.corrente = 1
-    AND f.estado NOT IN (1, 3)
-    AND m.Codigo = ?
+  WHERE "ia".codigo_ano_lectivo = ?
+    AND "f".corrente = 1
+    AND "f".estado NOT IN (1, 3)
+    AND "m".Codigo = ?
 `, [confirmacao?.ultimoAnoInscritoId, codigo_matricula]);
 
 
@@ -161,7 +161,7 @@ export class DebtNegotiationService {
     ANY_VALUE(fi.valor_iva)            AS valor_iva,
     ANY_VALUE(fi.taxa_iva)             AS taxa_iva,
     ANY_VALUE(tt.descricao)            AS taxa_descricao
-  FROM inscricao_avaliacoes ia
+  FROM "DBUMA"."UMA_INSCRICAO_AVALIACOES" ia
   INNER JOIN factura f               ON f.Codigo = ia.codigo_factura
   INNER JOIN factura_items fi        ON fi.CodigoFactura = f.Codigo
   INNER JOIN tb_ano_lectivo al       ON al.Codigo = f.ano_lectivo
@@ -170,13 +170,13 @@ export class DebtNegotiationService {
   LEFT JOIN tb_motivo_isencao mi     ON mi.Codigo = ts.motivo_isencao_iva_codigo
   LEFT JOIN tb_grade_curricular gc   ON gc.Codigo = ts.codigo_grade_currilular
   LEFT JOIN tb_disciplinas d         ON d.Codigo = gc.codigo_disciplina
-  WHERE ia.codigo_matricula = ?
-    AND ia.codigo_ano_lectivo = ?
-    AND ia.estado != 'anulado'
-    AND f.estado NOT IN (1, 3)
-    AND f.corrente = 1
-    AND f.Codigo NOT IN (${array.length ? array.map(() => '?').join(', ') : '0'})
-  GROUP BY gc.Codigo, f.Codigo
+  WHERE "ia".codigo_matricula = ?
+    AND "ia".codigo_ano_lectivo = ?
+    AND "ia".estado != 'anulado'
+    AND "f".estado NOT IN (1, 3)
+    AND "f".corrente = 1
+    AND "f".Codigo NOT IN (${array.length ? array.map(() => '?').join(', ') : '0'})
+  GROUP BY gc.Codigo, "f".Codigo
   ORDER BY gc.Codigo
 `, [
       codigo_matricula,
@@ -251,12 +251,12 @@ export class DebtNegotiationService {
     const bolseiro1 = await this.BolsaPorSemestre1(codigo_matricula, confirmacao?.ano_lectivo_id, 1);
     const bolseiro2 = await this.BolsaPorSemestre2(codigo_matricula, confirmacao?.ano_lectivo_id, 2);
 
-    const taxaMultaMeses = await this.mesesPagarService.mesesPagar(new Date().toISOString().split('T')[0], 1, 0, confirmacao?.ano_lectivo_id, pre_inscricaoId, null, codigo_matricula);
+    const taxaMultaMeses = await this.mesesPagarService.mesesPagar(new Date().toISOString().split('T')[0], 1, 0, confirmacao?.ano_lectivo_id, pre_inscricaoId, "null", codigo_matricula);
     const desconto_finalista = await this.pegar_finalista(confirmacao?.ano_lectivo_id, codigo_matricula, pre_inscricaoId);
 
     // Semestre 1
     if (propina && (!bolseiro1 || (bolseiro1.desconto > 0 && bolseiro1.desconto < 100))) {
-      const mes_temp = await this.mesTempRepo.find({ where: { semestre: 1, activo: 1 } });
+      const mes_temp = await this.mesTempRepo.find({ where: { semestre: 1, "activo": 1 } });
       for (const mes of mesesNaoPagos) {
         for (const mes_semestre of mes_temp) {
           if (mes.id === mes_semestre.id && mes.data_final < new Date().toISOString().split('T')[0]) {
@@ -322,7 +322,7 @@ export class DebtNegotiationService {
 
     // Semestre 2
     if (propina && (!bolseiro2 || (bolseiro2.desconto > 0 && bolseiro2.desconto < 100))) {
-      const mes_temp = await this.mesTempRepo.find({ where: { semestre: 2, activo: 1 } });
+      const mes_temp = await this.mesTempRepo.find({ where: { semestre: 2, "activo": 1 } });
       for (const mes of mesesNaoPagos) {
         for (const mes_semestre of mes_temp) {
           if (mes.id === mes_semestre.id) {
@@ -460,9 +460,9 @@ export class DebtNegotiationService {
   SELECT 
     c.Designacao AS curso,
     c.Codigo AS codigo_curso
-  FROM tb_cursos c
+  FROM "DBUMA"."UMA_TB_CURSOS" c
   INNER JOIN tb_preinscricao pre ON pre.Curso_Candidatura = c.Codigo
-  WHERE pre.Codigo = ?
+  WHERE "pre".Codigo = ?
   LIMIT 1
 `, [codigo_inscricao]);
 
@@ -474,11 +474,11 @@ export class DebtNegotiationService {
   SELECT 
     al.Designacao AS ano_designacao,
     al.Codigo AS maior
-  FROM tb_inscricoes_ano_anterior ia
+  FROM "DBUMA"."UMA_TB_INSCRICOES_ANO_ANTERIOR" ia
   INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
-  WHERE ia.codigo_matricula = ?
-    AND ia.status = 1
-  ORDER BY al.ordem DESC, al.Designacao DESC
+  WHERE "ia".codigo_matricula = ?
+    AND "ia".status = 1
+  ORDER BY al.ordem DESC, "al".Designacao DESC
   LIMIT 1
 `, [matricula1[0].codigo]);
 
@@ -489,9 +489,9 @@ export class DebtNegotiationService {
   SELECT 
     al.Designacao AS ano_designacao,
     ia.codigo_ano_lectivo AS ano_lectivo
-  FROM tb_inscricoes_ano_anterior ia
+  FROM "DBUMA"."UMA_TB_INSCRICOES_ANO_ANTERIOR" ia
   INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
-  WHERE ia.codigo_matricula = ?
+  WHERE "ia".codigo_matricula = ?
   ORDER BY ia.codigo_ano_lectivo ASC
 `, [matricula1[0].Codigo]);
 
@@ -543,15 +543,15 @@ export class DebtNegotiationService {
     (ts.Preco * 1.1) AS total,
     ts.Preco AS valor,
     (ts.Preco * 0.1) AS multa
-  FROM tb_tipo_servicos ts
+  FROM "DBUMA"."UMA_TB_TIPO_SERVICOS" ts
   INNER JOIN propina_por_curso ppc ON ppc.codigo_servico = ts.Codigo
   INNER JOIN meses m ON m.codigo = ppc.mes_id
   INNER JOIN tb_ano_lectivo al ON al.Codigo = ts.codigo_ano_lectivo
-  WHERE ts.Codigo = ?
-    AND ts.cacuaco = ?
-    AND ts.codigo_ano_lectivo = ?
-    AND ppc.mes_id NOT IN (${mesesIds.length ? mesesIds.map(() => '?').join(', ') : '0'})
-    AND ppc.mes_id NOT IN (${mesesIsentos.length ? mesesIsentos.map(() => '?').join(', ') : '0'})
+  WHERE "ts".Codigo = ?
+    AND "ts".cacuaco = ?
+    AND "ts".codigo_ano_lectivo = ?
+    AND "ppc".mes_id NOT IN (${mesesIds.length ? mesesIds.map(() => '?').join(', ') : '0'})
+    AND "ppc".mes_id NOT IN (${mesesIsentos.length ? mesesIsentos.map(() => '?').join(', ') : '0'})
 `, [
         propina.Codigo,
         matricula1[0].aluno_cacuaco,
@@ -610,7 +610,7 @@ export class DebtNegotiationService {
 
     // === DÍVIDAS NOVAS ===
     const dividas: any[] = [];
-    const aluno = { codigo_inscricao, AlunoCacuaco: matricula1[0].aluno_cacuaco, desconto: matricula1[0].desconto, codigo_tipo_candidatura: 1 };
+    const aluno = { codigo_inscricao, AlunoCacuaco: matricula1[0].aluno_cacuaco, "desconto": matricula1[0].desconto, "codigo_tipo_candidatura": 1 };
     const confirmacaoExiste = await this.confirmacao(codigo_matricula);
     const pagamentoOutubro = await this.pagouOutubro(codigo_inscricao);
 
@@ -618,10 +618,10 @@ export class DebtNegotiationService {
   SELECT 
     c.Codigo_Ano_lectivo,
     al.ordem
-  FROM tb_confirmacoes c
+  FROM "DBUMA"."UMA_TB_CONFIRMACOES" c
   INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
-  WHERE c.Codigo_Matricula = ?
-  GROUP BY c.Codigo_Ano_lectivo, al.ordem
+  WHERE "c".Codigo_Matricula = ?
+  GROUP BY c.Codigo_Ano_lectivo, "al".ordem
   ORDER BY al.ordem ASC
 `, [codigo_matricula]);
 
@@ -635,11 +635,11 @@ export class DebtNegotiationService {
   SELECT 
     al.Codigo AS ultimoAnoInscritoId,
     al.Designacao AS ultimoAnoInscritoDesig
-  FROM tb_confirmacoes c
+  FROM "DBUMA"."UMA_TB_CONFIRMACOES" c
   INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
   INNER JOIN tb_matriculas m ON m.Codigo = c.Codigo_Matricula
-  WHERE m.Codigo = ?
-    AND c.Codigo_Ano_lectivo = ?
+  WHERE "m".Codigo = ?
+    AND "c".Codigo_Ano_lectivo = ?
   ORDER BY al.ordem DESC
   LIMIT 1
 `, [codigo_matricula, value.Codigo_Ano_lectivo]);
@@ -726,10 +726,10 @@ export class DebtNegotiationService {
     pre.Codigo AS codigo_inscricao,
     pre.AlunoCacuaco AS aluno_cacuaco,
     pre.desconto
-  FROM tb_matriculas m
+  FROM "DBUMA"."UMA_TB_MATRICULAS" m
   INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
   INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
-  WHERE pre.Codigo = ?
+  WHERE "pre".Codigo = ?
   LIMIT 1
 `, [user.Codigo]);
 
@@ -740,9 +740,9 @@ export class DebtNegotiationService {
     const cursoResult = await this.cursoRepo.query(`
   SELECT 
     c.Designacao AS curso
-  FROM tb_cursos c
+  FROM "DBUMA"."UMA_TB_CURSOS" c
   INNER JOIN tb_preinscricao pre ON pre.Curso_Candidatura = c.Codigo
-  WHERE pre.Codigo = ?
+  WHERE "pre".Codigo = ?
   LIMIT 1
 `, [matricula1?.codigo_inscricao]);
 
@@ -753,7 +753,7 @@ export class DebtNegotiationService {
     if (!anoActual) return [];
 
     const meses = user?.codigo_tipo_candidatura === 2
-      ? await this.mesTempRepo.find({ where: { activo_posgraduacao: 1 }, take: 24 })
+      ? await this.mesTempRepo.find({ where: { activo_posgraduacao: 1 }, "take": 24 })
       : await this.mesTempRepo.find({ where: { activo_posgraduacao: 1 } });
 
     const mesesCiclo = meses.map(m => m.id);
@@ -811,15 +811,15 @@ export class DebtNegotiationService {
   private async getMesesPagosPosGraduacaoFatura(codigo_matricula: number): Promise<any[]> {
     const result = await this.facturaRepo.query(`
     SELECT DISTINCT pi.mes_temp_id AS codigo_mes
-    FROM factura f
+    FROM "DBUMA"."UMA_FACTURA" f
     INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
     INNER JOIN tb_pagamentos p ON p.codigo_factura = f.Codigo
      INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
     INNER JOIN tb_ano_lectivo al ON al.Codigo = p.AnoLectivo
     INNER JOIN tb_tipo_servicos ts ON ts.Codigo = pi.codigo_produto
-    WHERE f.CodigoMatricula = ?
-      AND p.estado = 1
-      AND ts.TipoServico = 'Mensal'
+    WHERE "f".CodigoMatricula = ?
+      AND "p".estado = 1
+      AND "ts".TipoServico = 'Mensal'
   `, [codigo_matricula]);
 
     return result.map(row => row.codigo_mes);
@@ -828,14 +828,14 @@ export class DebtNegotiationService {
   private async getMesesPagosPosGraduacaoPreinscricao(codigo_inscricao: number): Promise<number[]> {
     const result = await this.pagamentoRepo.query(`
     SELECT DISTINCT pi.mes_temp_id AS codigo_mes
-    FROM tb_pagamentos p
+    FROM "DBUMA"."UMA_TB_PAGAMENTOS" p
     INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
     INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
     INNER JOIN tb_tipo_servicos ts ON ts.Codigo = pi.codigo_produto
     INNER JOIN tb_ano_lectivo al ON al.Codigo = p.AnoLectivo
-    WHERE pre.Codigo = ?
-      AND ts.TipoServico = 'Mensal'
-      AND p.estado = 1
+    WHERE "pre".Codigo = ?
+      AND "ts".TipoServico = 'Mensal'
+      AND "p".estado = 1
   `, [codigo_inscricao]);
 
     return result.map(row => row.codigo_mes).filter(Boolean);
@@ -857,11 +857,7 @@ export class DebtNegotiationService {
     const pagamentoOutubro = await this.pagouOutubro(aluno.codigo_inscricao);
     const dividasNovaVersao = await this.dividasNovaVersao(numero_matricula, aluno.codigo_inscricao);
     const outrosServicos = await this.dividaOutrosServicos(numero_matricula);
-    //console.log("Aluno",aluno);
-    //console.log("Pagou Outuvro",pagamentoOutubro);
-    //console.log("DIVIDAS NOVA VERSAO",dividasNovaVersao);
-    console.log("OUTROS SERVICOS", outrosServicos);
-
+ 
 
     if (tipo === 2) {
       let total = dividasNovaVersao.length;
@@ -900,7 +896,7 @@ export class DebtNegotiationService {
     const mesesDividas = dividas.sort((a, b) => a.ano_lectivo.localeCompare(b.ano_lectivo));
 
     const totalIVA = mesesDividas.reduce((s, d) => s + d.valor_iva, 0);
-    const percentagem_retencao = (await this.parametroRepo.findOne({ where: { Descricao: 'PC', estado: 1 } }))?.Valor || 0;
+    const percentagem_retencao = (await this.parametroRepo.findOne({ where: { Descricao: 'PC', "estado": 1 } }))?.Valor || 0;
     const totalDivida = mesesDividas.reduce((s, d) => s + d.total, 0);
     const total_retencao = totalDivida * (percentagem_retencao / 100);
     const totalDividaFinal = totalDivida - total_retencao;
@@ -941,12 +937,12 @@ export class DebtNegotiationService {
   SELECT 
     b.*,
     tb.designacao AS tipo_bolsa
-  FROM tb_bolseiro b
+  FROM "DBUMA"."UMA_TB_BOLSEIRO" b
   INNER JOIN tb_tipo_bolsa tb ON tb.Codigo = b.codigo_tipo_bolsa
-  WHERE b.codigo_matricula = ?
-    AND b.codigo_anoLectivo = ?
-    AND b.semestre = ?
-    AND b.status = 0
+  WHERE "b".codigo_matricula = ?
+    AND "b".codigo_anoLectivo = ?
+    AND "b".semestre = ?
+    AND "b".status = 0
   LIMIT 1
 `, [codigo_matricula, codigo_anoLectivo, semestre_id]);
 
@@ -962,12 +958,12 @@ export class DebtNegotiationService {
   SELECT 
     b.*,
     tb.designacao AS tipo_bolsa
-  FROM tb_bolseiro b
+  FROM "DBUMA"."UMA_TB_BOLSEIRO" b
   INNER JOIN tb_tipo_bolsa tb ON tb.Codigo = b.codigo_tipo_bolsa
-  WHERE b.codigo_matricula = ?
-    AND b.codigo_anoLectivo = ?
-    AND b.semestre = ?
-    AND b.status = 0
+  WHERE "b".codigo_matricula = ?
+    AND "b".codigo_anoLectivo = ?
+    AND "b".semestre = ?
+    AND "b".status = 0
   LIMIT 1
 `, [codigo_matricula, codigo_anoLectivo, semestre_id]);
 
@@ -982,10 +978,10 @@ export class DebtNegotiationService {
       pre.AlunoCacuaco,
       pre.desconto,
       pre.codigo_tipo_candidatura
-    FROM tb_matriculas m
+    FROM "DBUMA"."UMA_TB_MATRICULAS" m
     INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
     INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
-    WHERE m.Codigo = ?
+    WHERE "m".Codigo = ?
     LIMIT 1
   `, [codigo_matricula]);
 
@@ -996,10 +992,10 @@ export class DebtNegotiationService {
     SELECT 
       al.Codigo AS ultimoAnoInscritoId,
       al.Designacao AS ultimoAnoInscritoDesig
-    FROM tb_confirmacoes c
+    FROM "DBUMA"."UMA_TB_CONFIRMACOES" c
     INNER JOIN tb_matriculas m ON m.Codigo = c.Codigo_Matricula
     INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
-    WHERE m.Codigo = ?
+    WHERE "m".Codigo = ?
     ORDER BY al.ordem DESC
     LIMIT 1
   `, [codigo_matricula]);
@@ -1010,8 +1006,8 @@ export class DebtNegotiationService {
     // 1. Busca o ano letivo corrente (Ativo)
     const anoCorrente = await this.anoLectivoRepo.query(`
     SELECT Codigo, Designacao
-    FROM tb_ano_lectivo
-    WHERE estado = 'Ativo'
+    FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
+    WHERE "estado" = 'Ativo'
     LIMIT 1
   `);
 
@@ -1024,10 +1020,10 @@ export class DebtNegotiationService {
     SELECT 
       c.Codigo_Ano_lectivo AS ano_lectivo_id,
       al.Designacao AS ano_lectivo_designacao
-    FROM tb_confirmacoes c
+    FROM "DBUMA"."UMA_TB_CONFIRMACOES" c
     INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
-    WHERE c.Codigo_Matricula = ?
-      AND c.Codigo_Ano_lectivo = ?
+    WHERE "c".Codigo_Matricula = ?
+      AND "c".Codigo_Ano_lectivo = ?
     LIMIT 1
   `, [codigo_matricula, anoId]);
 
@@ -1041,14 +1037,14 @@ export class DebtNegotiationService {
 
     const result = await this.pagamentosiRepo.query(`
     SELECT DISTINCT pi.mes_temp_id AS codigo_mes
-    FROM tb_pagamentosi pi
+    FROM "DBUMA"."UMA_TB_PAGAMENTOSI" pi
     INNER JOIN tb_pagamentos p ON p.Codigo = pi.codigo_pagamento
     INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
     INNER JOIN factura f ON f.Codigo = p.codigo_factura
     INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
-    WHERE p.Codigo_PreInscricao = ?
-      AND p.AnoLectivo = ?
-      AND p.estado = 1
+    WHERE "p".Codigo_PreInscricao = ?
+      AND "p".AnoLectivo = ?
+      AND "p".estado = 1
   `, [codigo_inscricao, ano_lectivo_id]);
 
 
@@ -1093,12 +1089,12 @@ export class DebtNegotiationService {
 
   private async getIsencaoIds(matricula: number, anoLectivoId: number): Promise<number[]> {
     const result = await this.dataSource.query(`
-    SELECT mes_temp_id
-    FROM tb_isencoes
-    WHERE mes_temp_id IS NOT NULL
+    SELECT "mes_temp_id"
+    FROM "DBUMA"."UMA_TB_ISENCOES"
+    WHERE "mes_temp_id" IS NOT NULL
       AND codigo_matricula = ?
-      AND estado_isensao = 'Activo'
-      AND codigo_anoLectivo = ?
+      AND "estado_isensao" = 'Activo'
+      AND "codigo_ano"Lectivo = ?
   `, [matricula, anoLectivoId]);
 
     return result.map((row: any) => row.mes_temp_id);
@@ -1116,12 +1112,12 @@ export class DebtNegotiationService {
     const placeholdersPagos = mesesPagos.length ? mesesPagos.map(() => '?').join(', ') : 'NULL';
 
     const query = `
-      SELECT id, designacao, data_limite, data_final, prestacao
-      FROM mes_temp
-      WHERE ano_lectivo = ?
+      SELECT "id, "designacao", "data_limite", "data_final", "prestacao""
+      FROM "DBUMA"."UMA_MES_TEMP"
+      WHERE "ano_lectivo" = ?
         AND ${activoField} = 1
-        ${isencaoIds.length ? `AND id NOT IN (${placeholdersIsencao})` : ''}
-        ${mesesPagos.length ? `AND id NOT IN (${placeholdersPagos})` : ''}
+        ${isencaoIds.length ? `AND "id" NOT IN (${placeholdersIsencao})` : ''}
+        ${mesesPagos.length ? `AND "id" NOT IN (${placeholdersPagos})` : ''}
       ORDER BY id ASC
     `;
 
@@ -1141,15 +1137,15 @@ export class DebtNegotiationService {
       ts.Descricao,
       ts.Preco,
       ts.Codigo
-    FROM tb_tipo_servicos ts
+    FROM "DBUMA"."UMA_TB_TIPO_SERVICOS" ts
     INNER JOIN tb_ano_lectivo al ON al.Codigo = ts.codigo_ano_lectivo
     INNER JOIN tb_preinscricao pre ON pre.Codigo = ts.codigo_preinscricao
-    WHERE pre.Codigo = ?
-      AND ts.cacuaco = ?
-      AND al.Codigo = ?
-      AND ts.Descricao LIKE 'propina %'
+    WHERE "pre".Codigo = ?
+      AND "ts".cacuaco = ?
+      AND "al".Codigo = ?
+      AND "ts".Descricao LIKE 'propina %'
     LIMIT 1
-  `, [codigo_inscricao, alunoCacuaco, ano_lectivo_id]);
+  `, [codigo_inscricao, alunoCacuaco, "ano_lectivo_id"]);
 
     return result[0] || null;
   }
@@ -1172,10 +1168,10 @@ export class DebtNegotiationService {
     m.Codigo AS matricula,
     m.Codigo_Curso AS curso_matricula,
     pre.Curso_Candidatura AS curso_preinscricao
-  FROM tb_matriculas m
+  FROM "DBUMA"."UMA_TB_MATRICULAS" m
   INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
   INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
-  WHERE pre.Codigo = ?
+  WHERE "pre".Codigo = ?
   LIMIT 1
 `, [candidatoId]);
 
@@ -1188,10 +1184,10 @@ export class DebtNegotiationService {
     m.Codigo AS matricula,
     m.Codigo_Curso AS curso_matricula,
     pre.Curso_Candidatura AS curso_preinscricao
-  FROM tb_matriculas m
+  FROM "DBUMA"."UMA_TB_MATRICULAS" m
   INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
   INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
-  WHERE m.Codigo = ?
+  WHERE "m".Codigo = ?
   LIMIT 1
 `, [matricula]);
 
@@ -1202,11 +1198,11 @@ export class DebtNegotiationService {
 
     // === 4. Busca último ano letivo inscrito (simulação do AnoLectivoService) ===
     const ultimoAnoInscrito = await this.inscricaoAnteriorRepo.query(`
-  SELECT al.Codigo
-  FROM tb_inscricoes_ano_anterior ia
+  SELECT "al".Codigo
+  FROM "DBUMA"."UMA_TB_INSCRICOES_ANO_ANTERIOR" ia
   INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
-  WHERE ia.codigo_matricula = ?
-    AND ia.status = 1
+  WHERE "ia".codigo_matricula = ?
+    AND "ia".status = 1
   ORDER BY al.ordem DESC
   LIMIT 1
 `, [aluno.matricula]);
@@ -1218,12 +1214,12 @@ export class DebtNegotiationService {
     // (Assumindo que há uma tabela de inscrições em disciplinas ou avaliações)
     const cadeirasPendentes = await this.avaliacaoRepo.query(`
   SELECT COUNT(*) AS total
-  FROM inscricao_avaliacoes ia
+  FROM "DBUMA"."UMA_INSCRICAO_AVALIACOES" ia
   INNER JOIN tb_grade_curricular gc ON gc.Codigo = ia.codigo_grade_curricular
   INNER JOIN tb_cursos c ON c.Codigo = gc.codigo_curso
-  WHERE ia.codigo_matricula = ?
-    AND ia.codigo_ano_lectivo = ?
-    AND ia.estado = 'pendente'
+  WHERE "ia".codigo_matricula = ?
+    AND "ia".codigo_ano_lectivo = ?
+    AND "ia".estado = 'pendente'
 `, [aluno.matricula, ultimoAnoLectivoId]);
 
     const totalPendentes = Number(cadeirasPendentes[0]?.total || 0);
@@ -1252,15 +1248,15 @@ export class DebtNegotiationService {
     f.codigo_descricao,
     f.ValorEntregue,
     f.estado AS estado_factura
-  FROM factura f
+  FROM "DBUMA"."UMA_FACTURA" f
   INNER JOIN tb_matriculas m ON m.Codigo = f.CodigoMatricula
   INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
   INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
   INNER JOIN tb_ano_lectivo al ON al.Codigo = f.ano_lectivo
-  WHERE pre.Codigo = ?
-    AND f.corrente = 1
-    AND f.estado != 3
-    AND f.ano_lectivo = ?
+  WHERE "pre".Codigo = ?
+    AND "f".corrente = 1
+    AND "f".estado != 3
+    AND "f".ano_lectivo = ?
   ORDER BY f.Codigo ASC
 `, [preinscricaoId, this.anoAtualPrincipal]);
 

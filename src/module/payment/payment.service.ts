@@ -24,7 +24,7 @@ export class PaymentService {
 
     /**
      * Busca Pagamentos, Faturas e seus Itens em formato "flat" (plano) com paginação,
-     * incluindo a descrição do serviço, filtrando pelo Ano Lectivo e Código de Pré-Inscrição.
+     * incluindo a descrição do serviço, "filtrando" pelo Ano Lectivo e Código de Pré-Inscrição.
      *
      * @param anoLectivo O ID do ano lectivo.
      * @param codigoPreInscricao O código da pré-inscrição.
@@ -136,9 +136,9 @@ export class PaymentService {
             tp.Preco AS PrecoProduto,
             tp.TipoServico AS TipoServicoProduto,
             fi.*
-        FROM tb_tipo_servicos tp
+        FROM "DBUMA"."UMA_TB_TIPO_SERVICOS" tp
         INNER JOIN factura_items fi ON fi.CodigoProduto = tp.Codigo
-        WHERE fi.CodigoFactura = ?`, [invoice.Codigo]);
+        WHERE "fi".CodigoFactura = ?`, [invoice.Codigo]);
         const specific_services = [
             "Taxa de Reingresso",
             "Candidatura de Transferência para UMA",

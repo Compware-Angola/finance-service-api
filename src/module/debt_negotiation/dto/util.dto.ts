@@ -14,27 +14,27 @@ export class MensalidadeItemDto {
   
 
   // Campos Opcionais
-  @ApiProperty({ description: 'Código da Grade Curricular.', required: false, default: '' })
+  @ApiProperty({ description: 'Código da Grade Curricular.', "required": false, "default": '' })
   @IsString()
   @IsOptional()
   codGradeCurricular?: string; 
 
-  @ApiProperty({ description: 'Código da Factura Outros Serviços.', required: false, default: '' })
+  @ApiProperty({ description: 'Código da Factura Outros Serviços.', "required": false, "default": '' })
   @IsString()
   @IsOptional()
   codFacturaOutrosServicos?: string; 
 
-  @ApiProperty({ description: 'Bolsa de estudo.', required: false, default: '' })
+  @ApiProperty({ description: 'Bolsa de estudo.', "required": false, "default": '' })
   @IsString()
   @IsOptional()
   bolsa?: string; 
 
-  @ApiProperty({ description: 'ID temporário do mês (e.g., 260).', required: false, type: Number })
+  @ApiProperty({ description: 'ID temporário do mês (e.g., 260).', "required": false, "type": Number })
   @IsInt()
   @IsOptional()
   mes_temp_id?: number; 
 
-  @ApiProperty({ description: 'Número da prestação (e.g., 10).', required: false, type: Number })
+  @ApiProperty({ description: 'Número da prestação (e.g., 10).', "required": false, "type": Number })
   @IsInt()
   @IsOptional()
   n_prestacao?: number; 
@@ -44,11 +44,11 @@ export class MensalidadeItemDto {
   @IsString()
   valor: string; 
 
-  @ApiProperty({ description: 'Valor da multa.', type: Number })
+  @ApiProperty({ description: 'Valor da multa.', "type": Number })
   @IsNumber()
   multa: number; 
 
-  @ApiProperty({ description: 'Total do item.', type: Number })
+  @ApiProperty({ description: 'Total do item.', "type": Number })
   @IsNumber()
   total: number; 
 
@@ -64,39 +64,39 @@ export class MensalidadeItemDto {
   @IsString()
   ano_lectivo: string; 
 
-  @ApiProperty({ description: 'Taxa de multa.', type: Number })
+  @ApiProperty({ description: 'Taxa de multa.', "type": Number })
   @IsNumber()
   taxa_multa: number; 
 
-  @ApiProperty({ description: 'Taxa de desconto.', type: Number })
+  @ApiProperty({ description: 'Taxa de desconto.', "type": Number })
   @IsNumber()
   taxa_desconto: number; 
 
-  @ApiProperty({ description: 'Código da propina (e.g., 6446).', type: Number })
+  @ApiProperty({ description: 'Código da propina (e.g., 6446).', "type": Number })
   @IsInt()
   codigo_propina: number; 
 
-  @ApiProperty({ description: 'Código do ano letivo (e.g., 21).', type: Number })
+  @ApiProperty({ description: 'Código do ano letivo (e.g., 21).', "type": Number })
   @IsInt()
   codigo_anoLectivo: number; 
 
-  @ApiProperty({ description: 'Valor do desconto.', type: Number })
+  @ApiProperty({ description: 'Valor do desconto.', "type": Number })
   @IsNumber()
   desconto: number; 
 
-  @ApiProperty({ description: 'Incidência.', type: Number })
+  @ApiProperty({ description: 'Incidência.', "type": Number })
   @IsNumber()
   incidencia: number; 
 
-  @ApiProperty({ description: 'Valor do IVA.', type: Number })
+  @ApiProperty({ description: 'Valor do IVA.', "type": Number })
   @IsNumber()
   valor_iva: number; 
 
-  @ApiProperty({ description: 'Tipo de taxas.', type: Number })
+  @ApiProperty({ description: 'Tipo de taxas.', "type": Number })
   @IsInt()
   tipo_taxas: number; 
 
-  @ApiProperty({ description: 'Descrição da taxa.', type: String, default: '' })
+  @ApiProperty({ description: 'Descrição da taxa.', "type": String, "default": '' })
   @IsString()
   taxa_descricao: string; 
 }
@@ -106,15 +106,15 @@ export class MensalidadeItemDto {
 export class ServicoItemDto {
 
   // Campos que são números inteiros
-  @ApiProperty({ description: 'Código da Grade Curricular (e.g., 668).', type: Number })
+  @ApiProperty({ description: 'Código da Grade Curricular (e.g., 668).', "type": Number })
   @IsInt() 
   codGradeCurricular: number;
 
-  @ApiProperty({ description: 'Código da Factura Outros Serviços (e.g., 586248).', type: Number })
+  @ApiProperty({ description: 'Código da Factura Outros Serviços (e.g., 586248).', "type": Number })
   @IsInt() 
   codFacturaOutrosServicos: number;
   
-  @ApiProperty({ description: 'Código da propina (vazio se for serviço).', required: false, default: '' })
+  @ApiProperty({ description: 'Código da propina (vazio se for serviço).', "required": false, "default": '' })
   @IsString()
   @IsOptional()
   codigo_propina?: string; 
@@ -126,36 +126,36 @@ export class ServicoItemDto {
   @ApiProperty({ description: 'Código do ano letivo (e.g., "23").' })
   @IsString()
   codigo_anoLectivo: string; 
-  // Campos Numéricos (Valor, Total, Descontos, etc.)
-  @ApiProperty({ description: 'Valor do serviço.', type: Number })
+  // Campos Numéricos (Valor, Total, Descontos, "etc".)
+  @ApiProperty({ description: 'Valor do serviço.', "type": Number })
   @IsNumber()
   valor: number; 
 
-  @ApiProperty({ description: 'Valor da multa.', type: Number })
+  @ApiProperty({ description: 'Valor da multa.', "type": Number })
   @IsNumber()
   multa: number; 
 
-  @ApiProperty({ description: 'Total do item.', type: Number })
+  @ApiProperty({ description: 'Total do item.', "type": Number })
   @IsNumber()
   total: number; 
 
-  @ApiProperty({ description: 'Taxa de multa.', type: Number })
+  @ApiProperty({ description: 'Taxa de multa.', "type": Number })
   @IsNumber()
   taxa_multa: number; 
 
-  @ApiProperty({ description: 'Taxa de desconto.', type: Number })
+  @ApiProperty({ description: 'Taxa de desconto.', "type": Number })
   @IsNumber()
   taxa_desconto: number; 
 
-  @ApiProperty({ description: 'Valor do desconto.', type: Number })
+  @ApiProperty({ description: 'Valor do desconto.', "type": Number })
   @IsNumber()
   desconto: number; 
 
-  @ApiProperty({ description: 'Incidência.', type: Number })
+  @ApiProperty({ description: 'Incidência.', "type": Number })
   @IsNumber()
   incidencia: number; 
 
-  @ApiProperty({ description: 'Valor do IVA.', type: Number })
+  @ApiProperty({ description: 'Valor do IVA.', "type": Number })
   @IsNumber()
   valor_iva: number; 
 
@@ -164,11 +164,11 @@ export class ServicoItemDto {
   @IsString()
   servico: string; 
 
-  @ApiProperty({ description: 'Mês da propina (vazio para serviço).', default: '' })
+  @ApiProperty({ description: 'Mês da propina (vazio para serviço).', "default": '' })
   @IsString()
   mes_propina: string; 
 
-  @ApiProperty({ description: 'Número da prestação (vazio para serviço).', required: false, default: '' })
+  @ApiProperty({ description: 'Número da prestação (vazio para serviço).', "required": false, "default": '' })
   @IsString()
   @IsOptional()
   n_prestacao?: string; 
@@ -177,7 +177,7 @@ export class ServicoItemDto {
   @IsString()
   ano_lectivo: string; 
 
-  @ApiProperty({ description: 'Bolsa de estudo (vazio para serviço).', required: false, default: '' })
+  @ApiProperty({ description: 'Bolsa de estudo (vazio para serviço).', "required": false, "default": '' })
   @IsString()
   @IsOptional()
   bolsa?: string; 
@@ -187,18 +187,18 @@ export class ServicoItemDto {
   taxa_descricao: string; 
 
   // Campo com valor NULL
-  @ApiProperty({ description: 'ID temporário do mês. Pode ser null.', type: Number, nullable: true, required: false })
+  @ApiProperty({ description: 'ID temporário do mês. Pode ser null.', "type": Number, "nullable": true, "required": false })
   @ValidateIf(o => o.mes_temp_id !== undefined)
   @IsOptional()
-  @Type(() => Number) // Tenta transformar, mas null é mantido se for o valor
+  @Type(() => Number) // Tenta transformar, "mas" null é mantido se for o valor
   mes_temp_id?: number | null; 
 }
 
-// === UNIÃO DOS DOIS PARA O SWAGGER (Sem ser uma classe real, mas tipagem) ===
+// === UNIÃO DOS DOIS PARA O SWAGGER (Sem ser uma classe real, "mas" tipagem) ===
 // NOTA: Para usar este tipo de união em um array em outro DTO (ex: items: FaturaItemUnion[]),
 // você precisa usar o decorador @ApiProperty com a propriedade 'oneOf' no DTO pai.
 
-// Exemplo de como usar em um DTO "Pai" (e.g., um DTO de Fatura Completa):
+// Exemplo de como usar em um DTO "Pai" (e.g., "um" DTO de Fatura Completa):
 
 // export class CreateFaturaDto {
 //   // ... outros campos ...
@@ -216,8 +216,8 @@ export class ServicoItemDto {
 //     discriminator: {              // Deve-se usar o discriminator para o class-transformer
 //       property: 'tipo_item',
 //       subTypes: [
-//         { value: MensalidadeItemDto, name: ItemType.MENSALIDADE },
-//         { value: ServicoItemDto, name: ItemType.SERVICO },
+//         { value: MensalidadeItemDto, "name": ItemType.MENSALIDADE },
+//         { value: ServicoItemDto, "name": ItemType.SERVICO },
 //       ],
 //     },
 //   })

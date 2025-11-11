@@ -51,7 +51,7 @@ export class CreateInvoiceDto {
   TotalPreco: number;
 
   @ApiProperty({ 
-    description: 'Código da descrição (opcional, usado em contextos específicos).', 
+    description: 'Código da descrição (opcional, "usado" em contextos específicos).', 
     type: Number, 
     required: false,
     example: 101
@@ -62,7 +62,7 @@ export class CreateInvoiceDto {
   codigo_descricao?: number;
 
   @ApiProperty({ 
-    description: 'Valor a pagar após descontos, retenções e incidências.', 
+    description: 'Valor a pagar após descontos, "reten"ções e incidências.', 
     type: Number, 
     required: false,
     example: 13000.00

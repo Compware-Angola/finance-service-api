@@ -1,7 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { TbPreinscricao } from './tb-preinscricao.entity';
 
-@Entity({ name: 'tb_admissao', schema: 'DBUMA' })
+@Entity({ name: 'tb_admissao', "schema": 'DBUMA' })
 export class TbAdmissao {
   @PrimaryGeneratedColumn()
   codigo: number;

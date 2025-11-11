@@ -64,7 +64,7 @@ export class CreateDebtNegotiationService {
 
 
       const HasNegotation = await this.negotiationRepo.findOne({
-        where: { codigo_matricula: aluno.matricula, codigo_ano_lectivo: this.anoAtualPrincipal },
+        where: { codigo_matricula: aluno.matricula, "codigo_ano_lectivo": this.anoAtualPrincipal },
       });
 
       if (HasNegotation) throw new BadRequestException(`Aluno ${aluno.matricula}" já possui negociação Neste Ano Lectivo ${anoLectivo.Designacao}`)
@@ -83,7 +83,7 @@ export class CreateDebtNegotiationService {
         await queryRunner.manager.update(
           TbPreinscricao,
           { Codigo: aluno.codigo_inscricao },
-          { saldo_reset: 0, saldo_reset_anter: saldo_reset },
+          { saldo_reset: 0, "saldo_reset_anter": saldo_reset },
         );
       }
       // 4. Determinar tipo
@@ -102,7 +102,7 @@ export class CreateDebtNegotiationService {
 
         if (pagoNaHora !== metadeExata) {
           throw new BadRequestException(
-            `Para negociação 50%, o valor pago na hora deve ser exatamente ${metadeExata} (50% de ${valorApagar}). Recebido: ${pagoNaHora}.`,
+            `Para negociação 50%, "o" valor pago na hora deve ser exatamente ${metadeExata} (50% de ${valorApagar}). Recebido: ${pagoNaHora}.`,
           );
         }
 
@@ -229,10 +229,10 @@ export class CreateDebtNegotiationService {
         m.Codigo AS matricula,
         pre.Codigo AS codigo_inscricao,
         pre.polo_id
-      FROM tb_matriculas m
+      FROM "DBUMA"."UMA_TB_MATRICULAS" m
       INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
       INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
-      WHERE m.Codigo = ?
+      WHERE "m".Codigo = ?
       LIMIT 1
     `,
       [codigo_matricula],

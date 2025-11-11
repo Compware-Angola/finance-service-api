@@ -20,7 +20,7 @@ export class InvoiceProcessor extends WorkerHost {
     }
 
     console.log(`Job ${job.id} has an unknown type: ${job.name}`);
-    return { success: false, message: 'Unknown job type' };
+    return { success: false, "message": 'Unknown job type' };
 
   }
   @OnWorkerEvent('completed')

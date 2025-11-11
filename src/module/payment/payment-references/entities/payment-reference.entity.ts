@@ -6,10 +6,10 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-@Entity({ name: 'pagamento_por_referencias', schema: 'DBUMA' })
+@Entity({ name: 'pagamento_por_referencias', "schema": 'DBUMA' })
 export class PaymentReferences {
   // BIGINT → NUMBER(19,0)
-  @PrimaryGeneratedColumn({ type: 'number',name:'id'})
+  @PrimaryGeneratedColumn({ type: 'number', "name":'id'})
   id: number;
 
   // BIGINT → NUMBER(19,0)

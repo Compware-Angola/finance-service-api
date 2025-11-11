@@ -94,7 +94,7 @@ async parametroTaxaMulta(
     const dataLimiteObj = new Date(dataLimite);
     const dataBancoObj = new Date(dataBanco);
 
-    // Mesmo mês, mas pagamento após limite
+    // Mesmo mês, "mas" pagamento após limite
     if (this.isSameMonth(dataLimiteObj, dataBancoObj) && dataBancoObj > dataLimiteObj) {
       return this.getPercentagemByCodigo(1); // 5%
     }
@@ -118,7 +118,7 @@ async parametroTaxaMulta(
 
   private async getPercentagemByCodigo(codigo: number): Promise<number> {
     const result = await this.dataSource.query(
-      `SELECT percentagem FROM tb_parametros_multa WHERE codigo = ? LIMIT 1`,
+      `SELECT "percentagem "FROM "DBUMA"."UMA_TB_PARAMETROS_MULTA" WHERE "codigo" = ? LIMIT 1`,
       [codigo],
     );
     return result[0]?.percentagem ?? 0;
@@ -193,7 +193,7 @@ async parametroTaxaMulta(
 async cicloMestrado(){
   const result = await this.dataSource.query(`
     SELECT Codigo, Designacao
-    FROM tb_ano_lectivo
+    FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
     WHERE Designacao = 'Ciclo Mestrado'
     LIMIT 1
   `);
@@ -203,7 +203,7 @@ async cicloMestrado(){
 async cicloDoutoramento(){
   const result = await this.dataSource.query(`
     SELECT Codigo, Designacao
-    FROM tb_ano_lectivo
+    FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
     WHERE Designacao = 'Ciclo Doutoramento'
     LIMIT 1
   `);
@@ -216,13 +216,13 @@ async checkIsencaoMultaRaw(
 ): Promise<boolean> {
   const result = await this.dataSource.query(`
     SELECT 1
-    FROM tb_isencoe_multa
-    WHERE mes_temp_id = ?
-      AND codigo_matricula = ?
-      AND estado_isensao = 'Activo'
+    FROM "DBUMA"."UMA_TB_ISENCOE_MULTA"
+    WHERE "mes_temp_id" = ?
+      AND "codigo_matricula" = ?
+      AND "estado_isensao" = 'Activo'
       AND codigo_anoLectivo = ?
     LIMIT 1
-  `, [mes_id, matricula, ano_lectivo_id]);
+  `, [mes_id, "matricula", "ano_lectivo_id"]);
 
   return result.length > 0;
 }

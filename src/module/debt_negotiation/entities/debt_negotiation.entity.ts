@@ -2,7 +2,7 @@
 import { Entity, PrimaryColumn, Column, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { BaseEntity } from 'src/common/base-entity';
 
-@Entity({ name: 'negociacao_dividas', schema: 'DBUMA' })
+@Entity({ name: 'UMA_NEGOCIACAO_DIVIDAS', schema: 'DBUMA' })
 export class DebtNegotiation extends BaseEntity {
   @PrimaryColumn({ name: 'id', type: 'varchar2', length: 20 }) 
   id: string;

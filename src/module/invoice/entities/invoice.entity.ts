@@ -1,7 +1,7 @@
 import { BaseEntity } from 'src/common/base-entity';
 import { Entity, PrimaryGeneratedColumn, Column, BeforeInsert, PrimaryColumn } from 'typeorm';
 
-@Entity({ name: 'factura', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_FACTURA', "schema": 'DBUMA' })
 export class Invoice extends BaseEntity{
 @PrimaryColumn({ name: 'Codigo', type: 'varchar2', length: 20 })
   Codigo: string;

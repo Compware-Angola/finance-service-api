@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity({ name: 'tb_bolseiro_siiuma', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_TB_BOLSEIRO_SIIUMA', "schema": 'DBUMA' })
 export class TbBolseiroSiiuma {
   @PrimaryGeneratedColumn()
   codigo: number;

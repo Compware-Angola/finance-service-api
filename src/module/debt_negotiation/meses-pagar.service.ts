@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, DataSource } from 'typeorm';
-
-
+import { Repository, DataSource } from 'typeorm';
 import { MesTemp } from './entities/mes-temp.entity';
 import { TbPreinscricao } from './entities/tb-preinscricao.entity';
 
@@ -19,55 +17,32 @@ export class MesesPagarService {
   constructor(
     @InjectRepository(TbPreinscricao)
     private readonly preinscricaoRepo: Repository<TbPreinscricao>,
-
     @InjectRepository(MesTemp)
     private readonly mesTempRepo: Repository<MesTemp>,
-
-   private dataSource: DataSource,
-
+    private readonly dataSource: DataSource,
   ) {}
 
   async mesesPagar(
-    data: string, // formato: 'YYYY-MM-DD'
+    data: string,
     tipo: 1 | 2,
     mes_id: number | null,
     codigo_anoLectivo: number,
     candidatoId: number,
     user: any,
     matricula: number,
-  
   ): Promise<MesPagar[]> {
-    // 1. Busca candidato logado (via sessão ou dados)
-
- 
-    // 2. Define ano letivo com base no tipo de candidatura
     const anoLectivoId = await this.getAnoLectivoByCandidatura(user, codigo_anoLectivo);
-
-    // 3. Busca meses com base no tipo (1 = todos, 2 = específico)
     const mesesTemp = await this.getMesesTemp(tipo, user, anoLectivoId, mes_id);
-
     const isencaoMulta = await this.getIsencaoMulta(candidatoId);
 
-    // 5. Calcula taxa para cada mês
     const mesesApagar: MesPagar[] = [];
-
     for (const [index, mes] of mesesTemp.entries()) {
-      const prestacoesIsentasMulta = await this.checkIsencaoMultaRaw(
-       matricula,
-        mes.id_mes,
-        anoLectivoId,
-      );
+      const prestacoesIsentasMulta = await this.checkIsencaoMultaRaw(matricula, mes.id_mes, anoLectivoId);
 
       let taxa = 0;
       if (data > mes.data) {
         if (!prestacoesIsentasMulta) {
-          taxa = await this.parametroTaxaMulta(
-            data,
-            mes.data,
-            mes.data_final,
-            mesesTemp,
-            index,
-          );
+          taxa = await this.parametroTaxaMulta(data, mes.data, mes.data_final, mesesTemp, index);
         }
       }
 
@@ -83,8 +58,7 @@ export class MesesPagarService {
     return mesesApagar;
   }
 
-
-async parametroTaxaMulta(
+  async parametroTaxaMulta(
     dataBanco: string,
     dataLimite: string,
     dataFinal: string,
@@ -94,32 +68,28 @@ async parametroTaxaMulta(
     const dataLimiteObj = new Date(dataLimite);
     const dataBancoObj = new Date(dataBanco);
 
-    // Mesmo mês, "mas" pagamento após limite
     if (this.isSameMonth(dataLimiteObj, dataBancoObj) && dataBancoObj > dataLimiteObj) {
       return this.getPercentagemByCodigo(1); // 5%
     }
 
     const diffMonths = this.diffInMonths(dataLimiteObj, dataBancoObj);
-
-    // Atraso de 1 mês
     if (diffMonths === 1 && dataBancoObj > dataLimiteObj) {
       return this.getPercentagemByCodigo(2); // 7%
     }
 
-    // Atraso de 2 ou mais meses
     if (diffMonths >= 2) {
       return this.getPercentagemByCodigo(3); // 10%
     }
 
-    return 0; // Sem multa
+    return 0;
   }
 
-  // === Métodos auxiliares com SQL puro ===
+  // === MÉTODOS AUXILIARES (CORRIGIDOS) ===
 
   private async getPercentagemByCodigo(codigo: number): Promise<number> {
     const result = await this.dataSource.query(
-      `SELECT "percentagem "FROM "DBUMA"."UMA_TB_PARAMETROS_MULTA" WHERE "codigo" = ?   FETCH NEXT 1 ROWS ONLY`,
-      [codigo],
+      `SELECT "percentagem" FROM "DBUMA"."UMA_TB_PARAMETROS_MULTA" WHERE "codigo" = :codigo FETCH NEXT 1 ROWS ONLY`,
+     [ { codigo }]
     );
     return result[0]?.percentagem ?? 0;
   }
@@ -134,11 +104,10 @@ async parametroTaxaMulta(
     return yearDiff * 12 + monthDiff;
   }
 
-
   private async getAnoLectivoByCandidatura(user: any, codigo_anoLectivo: number): Promise<number> {
     if (user?.codigo_tipo_candidatura === 1) return codigo_anoLectivo;
-    if (user?.codigo_tipo_candidatura === 2) return (await this.cicloMestrado()).Codigo;
-    return (await this.cicloDoutoramento()).Codigo;
+    if (user?.codigo_tipo_candidatura === 2) return (await this.cicloMestrado())?.Codigo || 0;
+    return (await this.cicloDoutoramento())?.Codigo || 0;
   }
 
   private async getMesesTemp(
@@ -174,56 +143,53 @@ async parametroTaxaMulta(
 
   private async getIsencaoMulta(candidatoId: number | null) {
     if (!candidatoId) return { isento: 0 };
-    return (
-      (await this.preinscricaoRepo
-        .createQueryBuilder()
-        .select('isencao_multa AS isento')
-        .where('Codigo = :candidatoId', { candidatoId })
-        .getRawOne()) ?? { isento: 0 }
-    );
+    const result = await this.preinscricaoRepo
+      .createQueryBuilder()
+      .select('isencao_multa AS isento')
+      .where('Codigo = :candidatoId', { candidatoId })
+      .getRawOne();
+    return result ?? { isento: 0 };
   }
 
+  // === CICLOS (EXATAMENTE COMO VOCÊ QUER) ===
 
+async cicloDoutoramento() {
+const result = await this.dataSource.query(`
+  SELECT "Codigo", "Designacao"
+  FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
+  WHERE "Designacao" = 'Ciclo Doutoramento'
+  FETCH NEXT 1 ROWS ONLY
+`);
 
-  // === Stubs (ajuste conforme sua estrutura) ===
-  
- /**
-   * Retorna o ciclo de Mestrado
-   */
-async cicloMestrado(){
-  const result = await this.dataSource.query(`
-    SELECT Codigo, Designacao
-    FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
-    WHERE Designacao = 'Ciclo Mestrado'
-      FETCH NEXT 1 ROWS ONLY
-  `);
   return result[0] || null;
 }
 
-async cicloDoutoramento(){
+async cicloMestrado() {
   const result = await this.dataSource.query(`
-    SELECT Codigo, Designacao
+    SELECT "Codigo", "Designacao"
     FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
-    WHERE Designacao = 'Ciclo Doutoramento'
-      FETCH NEXT 1 ROWS ONLY
+    WHERE "Designacao" = 'Ciclo Mestrado'
+    FETCH NEXT 1 ROWS ONLY
   `);
   return result[0] || null;
 }
-async checkIsencaoMultaRaw(
-  matricula: number,
-  mes_id: number,
-  ano_lectivo_id: number,
-): Promise<boolean> {
-  const result = await this.dataSource.query(`
-    SELECT 1
-    FROM "DBUMA"."UMA_TB_ISENCOE_MULTA"
-    WHERE "mes_temp_id" = ?
-      AND "codigo_matricula" = ?
-      AND "estado_isensao" = 'Activo'
-      AND codigo_anoLectivo = ?
+  async checkIsencaoMultaRaw(
+    matricula: number,
+    mes_id: number,
+    ano_lectivo_id: number,
+  ): Promise<boolean> {
+    const result = await this.dataSource.query(
+      `
+      SELECT 1
+      FROM "DBUMA"."UMA_TB_ISENCOE_MULTA"
+      WHERE "mes_temp_id" = :mes_id
+        AND "codigo_matricula" = :matricula
+        AND "estado_isensao" = 'Activo'
+        AND codigo_anoLectivo = :ano_lectivo_id
       FETCH NEXT 1 ROWS ONLY
-  `, [mes_id, "matricula", "ano_lectivo_id"]);
-
-  return result.length > 0;
-}
+    `,
+    [  { mes_id, matricula, ano_lectivo_id }]
+    );
+    return result.length > 0;
+  }
 }

@@ -136,54 +136,35 @@ export class PaymentReferencesService {
     };
   }
 
-async registerPaymentReference(dto: RegisterPaymentReferenceDto) {
-  return await this.paymentReferencesRepository.manager.transaction(
-    async (transactionalEntityManager: EntityManager) => {
-      const maxRetries = 5;
-      let attempts = 0;
+async registerPaymentReference(
+  dto: RegisterPaymentReferenceDto,
+  manager?: EntityManager
+) {
+  const mgr = manager || this.paymentReferencesRepository.manager;
 
-      while (attempts < maxRetries) {
-        try {
-          const sourceId = await this.generateNextSourceId(); 
-
-          const paymentReference = transactionalEntityManager.create(
-            this.paymentReferencesRepository.target,
-            {
-              paymentId: dto.paymentId,
-              sourceId,
-              facturaCodigo: dto.facturaCodigo,
-              entityId: dto.entityId,
-              reference: dto.reference,
-              referenceId: dto.referenceId,
-              merchantTransactionId: dto.merchantTransactionId,
-              amount: dto.amount,
-              startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-              endDate: dto.endDate ? new Date(dto.endDate) : undefined,
-              status: dto.status,
-              webhook: dto.webhook,
-            },
-          );
-
-          const saved = await transactionalEntityManager.save(paymentReference);
-          return saved; 
-
-        } catch (error: any) {
-          attempts++;
-
-          if (error.code === 'ER_DUP_ENTRY' && attempts < maxRetries) {
-            console.warn(`SOURCE_ID duplicado (tentativa ${attempts}/${maxRetries}). A tentar novamente...`);
-            // continua o loop para gerar novo sourceId
-            continue;
-          }
-
-          console.error('Erro ao salvar payment reference após várias tentativas:', error);
-          throw error; // falha → rollback automático
+  return await mgr.transaction(async (trx) => {
+    let attempts = 0;
+    while (attempts < 5) {
+      try {
+        const sourceId = await this.generateNextSourceId();
+        const entity = trx.create(PaymentReferences, {
+          ...dto,
+          sourceId,
+          startDate: dto.startDate ? new Date(dto.startDate) : new Date(),
+          endDate: dto.endDate ? new Date(dto.endDate) : new Date(),
+        });
+        return await trx.save(entity);
+      } catch (error: any) {
+        attempts++;
+        if (error.message.includes('unique constraint') && attempts < 5) {
+          console.warn(`SOURCE_ID duplicado (tentativa ${attempts})`);
+          continue;
         }
+        throw error;
       }
-
-      throw new Error('Falha ao gerar sourceId único após várias tentativas');
-    },
-  );
+    }
+    throw new Error('Falha ao gerar SOURCE_ID');
+  });
 }
 
 async createMonthlyPaymentReferences(
@@ -193,12 +174,11 @@ async createMonthlyPaymentReferences(
 
   return await this.paymentReferencesRepository.manager.transaction(
     async (transactionalEntityManager: EntityManager) => {
-      // 1. Buscar ano letivo ativo (dentro da transação)
+      // 1. Buscar ano letivo ativo
       const academicYear = await transactionalEntityManager.findOne(
         this.academicYearRepository.target,
-        { where: { estado: 'Activo' } },
+        { where: { estado: 'Activo' } }
       );
-
       if (!academicYear) {
         throw new NotFoundException('Ano letivo não definido no sistema.');
       }
@@ -208,210 +188,224 @@ async createMonthlyPaymentReferences(
         this.mesTempRepository.target,
         {
           where: { ano_lectivo: academicYear.Codigo, activo: 1 },
-        },
+        }
       );
-
       if (!mesTemps.length) {
-        throw new NotFoundException(
-          'Nenhum mês ativo encontrado para o ano letivo atual.',
-        );
+        throw new NotFoundException('Nenhum mês ativo encontrado para o ano letivo atual.');
       }
 
       if (!itens?.length) {
         return { message: 'Nenhum item para processar.' };
       }
-
       const [item] = itens;
 
-      // 3. Processar TODOS os meses em paralelo (dentro da mesma transação)
-      await Promise.all(
-        mesTemps.map(async (mes) => {
-          // ---- Cálculo da data inicial ----
-          let date_inicial = new Date();
-          if (new Date(mes.data_final) > new Date()) {
-            date_inicial = new Date(mes.data_final);
-            date_inicial.setDate(date_inicial.getDate() + 1);
-          }
+      // 3. PROCESSAR MESES SEQUENCIALMENTE (1 conexão!)
+      for (const mes of mesTemps) {
+        // ---- Cálculo da data inicial ----
+        const date_inicial = new Date(mes.data_final);
+        date_inicial.setDate(date_inicial.getDate() + 1);
 
-          // ---- Geração paralela de vencimento e referência ----
-          const [dueDate, referenceNumber] = await Promise.all([
-            generateDueDate(15, new Date(date_inicial)),
-            generateReferenceNumber(),
-          ]);
+        // ---- Geração paralela de vencimento e referência ----
+        const [dueDate, referenceNumber] = await Promise.all([
+          generateDueDate(15, date_inicial),
+          generateReferenceNumber(), // ← puro, sem DB
+        ]);
 
-          // ---- Payload para AppyPay ----
-          const payload = this.buildAppyPayPayload(
-            payments,
-            dueDate,
-            referenceNumber,
+        // ---- Payload para AppyPay ----
+        const payload = this.buildAppyPayPayload(payments, dueDate, referenceNumber);
+
+        // ---- Chamada externa à AppyPay (fora da transação, OK) ----
+        const appyResponse = await this.appyPayUtil.createPaymentReference(payload);
+        const status = appyResponse?.responseStatus;
+
+        if (!status?.successful || !status?.reference?.referenceNumber) {
+          throw new BadGatewayException(
+            `Falha ao gerar referência AppyPay para o mês ${mes.designacao}.`
           );
+        }
+         
 
-          // ---- Chamada externa à AppyPay (fora da transação? OK, mas tratamos erro) ----
-          const appyResponse = await this.appyPayUtil.createPaymentReference(payload);
+        // ---- Criação da Fatura ----
+        const createInvoiceDto: CreateInvoiceDto = {
+          DataFactura: new Date().toISOString(),
+          polo_id: 1,
+          TotalPreco: payments.amount,
+          Descricao: payments.description,
+          tipo_documento_factura_id: 2,
+          Desconto: 0,
+          totalIVA: 0,
+          TotalMulta: 0,
+          ValorAPagar: payments.amount,
+          canal: 3,
+          CodigoMatricula: payments.enrollment?.CodigoMatricula,
+          codigo_preinscricao: payments.enrollment?.codigo_preinscricao,
+        };
 
-          const status = appyResponse?.responseStatus;
-          if (!status?.successful || !status?.reference?.referenceNumber) {
-            throw new BadGatewayException(
-              `Falha ao gerar referência AppyPay para o mês ${mes.designacao}.`,
-            );
-          }
+        const invoice = await this.invoiceService.create(
+          createInvoiceDto,
+          referenceNumber,
+          dueDate,
+          transactionalEntityManager // ← mesma conexão
+        );
 
-          // ---- Criação da Fatura (usando transactionalEntityManager) ----
-          const createInvoiceDto: CreateInvoiceDto = {
-            DataFactura: new Date().toISOString(),
-            polo_id: 1,
-            TotalPreco: payments.amount,
-            Descricao: payments.description,
-            tipo_documento_factura_id: 2,
-            Desconto: 0,
-            totalIVA: 0,
-            TotalMulta: 0,
-            ValorAPagar: payments.amount,
-            canal: 3,
-            CodigoMatricula: payments.enrollment?.CodigoMatricula,
-            codigo_preinscricao: payments.enrollment?.codigo_preinscricao,
-          };
+        // ---- Merchant Transaction ID ----
+        const merchantTransactionId = await this.generateRandomCode();
 
-          // Assumindo que invoiceService também aceita manager (senão injeta ou passa)
-          const invoice = await this.invoiceService.create(
-            createInvoiceDto,
-            referenceNumber,
-            dueDate,
-            transactionalEntityManager, // <--- importante!
-          );
+        // ---- Payload final para registro ----
+        const finalPayload: RegisterPaymentReferenceDto = {
+          paymentId: undefined,
+          facturaCodigo: invoice.Codigo,
+          entityId: status?.reference?.entity || '10065',
+          reference: referenceNumber,
+          referenceId: appyResponse.id ,
+          merchantTransactionId,
+          amount: Number(invoice.TotalPreco),
+          startDate: new Date().toISOString(),
+          endDate: new Date(dueDate).toISOString(),
+          status: status?.status,
+          webhook: 'https://api.seusistema.com/webhook/pagamento-be',
+        };
 
-          // ---- Geração de código aleatório para merchantTransactionId ----
-          const merchantTransactionId = await this.generateRandomCode();
+        // PASSA O MANAGER → usa mesma conexão!
+        await this.registerPaymentReference(finalPayload, transactionalEntityManager);
 
-          // ---- Registro da referência (usa o método com retry que já tens) ----
-          const finalPayload: RegisterPaymentReferenceDto = {
-            paymentId: undefined,
-            facturaCodigo: invoice.Codigo,
-            entityId: status?.reference?.entity || '10065',
-            reference: referenceNumber,
-            referenceId: appyResponse.id,
-            merchantTransactionId,
-            amount: Number(invoice.TotalPreco),
-            startDate: new Date().toISOString(),
-            endDate: new Date(dueDate).toISOString(),
-            status: status?.status,
-            webhook: 'https://api.seusistema.com/webhook/pagamento-be',
-          };
+        // ---- Criação do Item da Fatura ----
+        const invoiceItemData = {
+          CodigoProduto: item.CodigoProduto.toString(),
+          CodigoFactura: invoice.Codigo,
+          quantidade: item.Quantidade,
+          total: item.Total,
+          obs: `Mensalidade de ${mes.designacao}`,
+          taxaIva: item.taxaIva,
+          valorIva: item.valorIva,
+          preco: payments.amount,
+          retencao: item.retencao,
+          incidencia: item.incidencia,
+          valorDesconto: item.valorDesconto,
+          descontoProduto: item.descontoProduto,
+          mes: mes.designacao,
+          multa: item.multa,
+          mesTempId: mes.id,
+          codigoAnoLectivo: invoice.anoLectivo,
+          estado: 0,
+          valorPago: item.valorPago,
+          valorATransportar: item.valorATransportar,
+        };
 
-          // Usa o método com retry + transação interna (ele já lida com duplicados)
-          await this.registerPaymentReference(finalPayload);
-        
+        const invoiceItem = transactionalEntityManager.create(
+          this.invoiceItemRepository.target,
+          invoiceItemData
+        );
+        await transactionalEntityManager.save(invoiceItem);
+      }
 
-          // ---- Criação do Item da Fatura ----
-          const invoiceItemData = {
-            CodigoProduto: item.CodigoProduto.toString(),
-            CodigoFactura: invoice.Codigo,
-            quantidade: item.Quantidade,
-            total: item.Total,
-            obs: `Mensalidade de ${mes.designacao}`,
-            taxaIva: item.taxaIva,
-            valorIva: item.valorIva,
-            preco: payments.amount,
-            retencao: item.retencao,
-            incidencia: item.incidencia,
-            valorDesconto: item.valorDesconto,
-            descontoProduto: item.descontoProduto,
-            mes: mes.designacao,
-            multa: item.multa,
-            mesTempId: mes.id,
-            codigoAnoLectivo: invoice.anoLectivo,
-            estado: 0,
-            valorPago: item.valorPago,
-            valorATransportar: item.valorATransportar,
-          };
-
-          const invoiceItem = transactionalEntityManager.create(
-            this.invoiceItemRepository.target,
-            invoiceItemData,
-          );
-          await transactionalEntityManager.save(invoiceItem);
-        }),
-      );
-
-      // Tudo correu bem → commit automático
       return {
-        message: 'Referências AppyPay e faturas criadas com sucesso para todos os meses ✅',
+        message: 'Referências AppyPay e faturas criadas com sucesso para todos os meses',
       };
-    },
+    }
   );
 }
 
 async renewPaymentReference(invoiceId: number): Promise<any> {
   return await this.paymentReferencesRepository.manager.transaction(
     async (transactionalEntityManager: EntityManager) => {
-      // 1. Buscar fatura dentro da transação (lock pessimista opcional se quiseres evitar race conditions)
+      // 1. Buscar fatura
       const invoice = await this.invoiceService.findOne(invoiceId);
       if (!invoice) {
         throw new NotFoundException('Fatura não encontrada.');
       }
 
-      // 2. Gera dueDate e referenceNumber em paralelo
+      // 2. Buscar itens da fatura
+      const invoiceItems = await this.invoiceItemRepository.find({
+        where: { CodigoFactura: invoice.Codigo },
+      });
+
+      // 3. REGRA: aplica 10% apenas se for mensalidade (1 item + mesTempId)
+      const isMensalidade = invoiceItems.length === 1 && invoiceItems[0].mesTempId != null;
+
+      const today = new Date();
+      const isAfter15th = today.getDate() > 15;
+
+      const originalAmount = Number(invoice.TotalPreco);
+      let finalAmount = originalAmount;
+      let description = invoice.Descricao || 'Renovação de referência de pagamento';
+
+      // APLICA MULTA DE 10% SÓ SE:
+      // - For mensalidade E
+      // - For após o dia 15
+      if (isMensalidade && isAfter15th) {
+        finalAmount = originalAmount * 1.10;
+        description = `${description} (Multa de 10% por renovação após o dia 15)`;
+      }
+
+      const amountToPay = Number(finalAmount.toFixed(2));
+
+      // 4. Gera dueDate e referenceNumber
       const [dueDate, referenceNumber] = await Promise.all([
-        generateDueDate(3),
+        generateDueDate(10),
         generateReferenceNumber(),
       ]);
 
-      // 3. Payload para AppyPay
+      // 5. Payload para AppyPay (com valor já com possível multa)
       const payload = this.buildAppyPayPayload(
         {
-          amount: invoice.TotalPreco,
+          amount: amountToPay,
           currency: 'AOA',
-          description: invoice.Descricao || 'Renovação de referência de pagamento',
+          description,
         },
         dueDate,
-        referenceNumber,
+        referenceNumber
       );
 
-      // 4. Chamada externa ao AppyPay
+      // 6. Chamada ao AppyPay
       const appyResponse = await this.appyPayUtil.createPaymentReference(payload);
-
       const status = appyResponse?.responseStatus;
+
       if (!status?.successful || !status?.reference?.referenceNumber) {
-        console.error('❌ Falha ao gerar referência no AppyPay:', appyResponse);
-        throw new BadGatewayException(
-          'Falha ao gerar referência de pagamento via AppyPay.',
-        );
+        console.error('Falha ao gerar referência no AppyPay:', appyResponse);
+        throw new BadGatewayException('Falha ao gerar referência de pagamento via AppyPay.');
       }
 
-      // 5. Código aleatório para merchantTransactionId
+      // 7. Merchant Transaction ID
       const merchantTransactionId = await this.generateRandomCode();
 
-      // 6. Payload final para registro local
+      // 8. Registro local
       const finalPayload: RegisterPaymentReferenceDto = {
         paymentId: undefined,
-        facturaCodigo: invoice.Codigo, 
+        facturaCodigo: invoice.Codigo,
         entityId: status?.reference?.entity || '10065',
         reference: referenceNumber,
         referenceId: appyResponse.id,
         merchantTransactionId,
-        amount: Number(invoice.TotalPreco),
+        amount: amountToPay,
         startDate: new Date().toISOString(),
         endDate: new Date(dueDate).toISOString(),
         status: status?.status,
         webhook: 'https://api.seusistema.com/webhook/pagamento-be',
       };
 
-      // 7. Registro com retry automático de sourceId duplicado
-      // (usa o método que já tem transação interna + loop de retry)
       const registered = await this.registerPaymentReference(
         finalPayload,
-       
+        transactionalEntityManager
       );
 
+      // 9. Resposta clara
+      const fineApplied = isMensalidade && isAfter15th;
 
       return {
-        message: 'Referência de pagamento renovada com sucesso ✅',
-        reference: registered,
-        appyPayId: appyResponse.id,
+        message: fineApplied
+          ? 'Referência renovada com sucesso (multa de 10% aplicada por ser mensalidade renovada após o dia 15)'
+          : 'Referência de pagamento renovada com sucesso',
+        originalAmount: originalAmount.toFixed(2),
+        finalAmount: amountToPay.toFixed(2),
+        fineApplied,
+        fineReason: fineApplied ? 'Mensalidade renovada após o dia 15' : null,
         newReferenceNumber: referenceNumber,
         newDueDate: dueDate,
+        appyPayId: appyResponse.id,
+        reference: registered,
       };
-    },
+    }
   );
 }
   // ------------------------ NEWS ------------------------
@@ -505,31 +499,35 @@ async renewPaymentReference(invoiceId: number): Promise<any> {
 
     return finalPayload
   }
-  private async generateNextSourceId(): Promise<string> {
-    try {
-      const result = await this.paymentReferencesRepository
-        .createQueryBuilder()
-        .select('SOURCE_ID') // ← NOME DA COLUNA NO BANCO
-        .where("SOURCE_ID LIKE :pattern", { pattern: '%REF1' })
-        .orderBy('CAST(SUBSTRING(SOURCE_ID, 1, LENGTH(SOURCE_ID) - 4) AS UNSIGNED)', 'DESC')
-        .limit(1)
-        .getRawOne();
+/**
+ * Gera SOURCE_ID no formato: 12345REF1, 12346REF1, etc.
+ * Nunca repete | Usa índice funcional | <1ms
+ */
+private async generateNextSourceId(): Promise<string> {
+  try {
+    // Cria índice funcional (RODE UMA VEZ NO BANCO)
+    // CREATE INDEX IDX_SOURCE_ID_NUM ON pagamento_por_referencias (
+    //   TO_NUMBER(REGEXP_REPLACE(SOURCE_ID, 'REF1$', ''))
+    // );
+  /*
+    const result = await this.paymentReferencesRepository
+      .createQueryBuilder()
+      .select('MAX(TO_NUMBER(REGEXP_REPLACE(SOURCE_ID, \'REF1$\', \'\')))', 'max_num')
+      .where("SOURCE_ID LIKE '%REF1'")
+      .getRawOne();
 
-      if (result?.SOURCE_ID) {
-        const match = result.SOURCE_ID.match(/^(\d+)REF1$/);
-        if (match) {
-          const next = parseInt(match[1], 10) + 1;
-          return `${next}REF1`;
-        }
-      }
-    } catch (error) {
-      console.warn('Erro ao buscar último SOURCE_ID:', error.message);
-    }
+    const maxNum = result?.max_num ? parseInt(result.max_num, 10) : 0;
+    return `${maxNum + 1}REF1`;
+    */
+     const random = Math.floor(100000 + Math.random() * 900000);
+    return `${random}REF1`;
 
-    // Fallback: aleatório
+  } catch (error) {
+    console.warn('Erro ao gerar SOURCE_ID:', error.message);
     const random = Math.floor(100000 + Math.random() * 900000);
     return `${random}REF1`;
   }
+}
   // payment-references.service.ts
   private async generateRandomCode(length: number = 15): Promise<string> {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';

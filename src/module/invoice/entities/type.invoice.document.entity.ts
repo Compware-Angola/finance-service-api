@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity({ name: 'tipo_documentos_faturacao', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_TIPO_DOCUMENTOS_FATURACAO', "schema": 'DBUMA' })
 export class TypeInvoiceDocument {
   @PrimaryGeneratedColumn({ name: 'id', "type": 'int', "unsigned": true })
   id: number;

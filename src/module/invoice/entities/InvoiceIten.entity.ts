@@ -7,7 +7,7 @@ import {
   BeforeInsert,
 } from 'typeorm';
 
-@Entity({ name: 'factura_items', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_FACTURA_ITEMS', "schema": 'DBUMA' })
 export class InvoiceItem  extends BaseEntity{
 @PrimaryColumn({ name: 'codigo', type: 'varchar2', length: 20 })
   codigo: string;

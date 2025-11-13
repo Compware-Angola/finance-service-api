@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'ty
 import { TbPreinscricao } from './tb-preinscricao.entity';
 import { Factura } from './factura.entity';
 import { TbPagamentosi } from './tb-pagamentosi.entity';
-@Entity({ name: 'tb_pagamentos', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_TB_PAGAMENTOS', "schema": 'DBUMA' })
 export class TbPagamento {
   @PrimaryGeneratedColumn()
   Codigo: number;

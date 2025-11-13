@@ -9,9 +9,9 @@ import {
 } from 'typeorm';
 import { BaseEntity } from 'src/common/base-entity';
 
-@Entity({ name: 'pagamento_por_referencias', schema: 'DBUMA' })
+@Entity({ name: 'UMA_PAGAMENTO_POR_REFERENCIAS', schema: 'DBUMA' })
 export class PaymentReferences extends BaseEntity {
-  @PrimaryColumn({ name: 'id', type: 'varchar2', length: 20 })  // ← STRING!
+  @PrimaryColumn({ name: 'id', type: 'varchar2', length: 20 })  
   id: string;
 
   @Column({

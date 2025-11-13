@@ -11,7 +11,7 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity({ name: 'tb_parametros', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_TB_PARAMETROS', "schema": 'DBUMA' })
 @Index('CodigoEmpresa20', ['CodigoEmpresa'])
 export class Parametro {
   @PrimaryGeneratedColumn({ type: 'int', "unsigned": true })

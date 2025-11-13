@@ -30,18 +30,7 @@ import { DefaultNamingStrategy } from 'typeorm';
       password: config.get<string>('DB_PASSWORD'),
       sid: config.get<string>('DB_SID'),
 
-      // === CORREÇÃO FINAL ===
-     // schema: 'DBUMA',  // <--- SCHEMA CORRETO (o prefixo das tabelas)
-
-      // Força TODOS os nomes de tabela/coluna para UPPERCASE (ex: UMA_FACTURA)
- namingStrategy: new (class extends DefaultNamingStrategy {
-  tableName(targetName: string, userSpecifiedName: string | undefined): string {
-    const name = userSpecifiedName || targetName;
-    return 'UMA_' + name.toUpperCase(); 
-  }
-
-})(),
-
+  
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: false,
       logging: ['query', 'error'], 

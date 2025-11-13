@@ -6,7 +6,10 @@ import { AcademicYear } from '../invoice/entities/academic.year.entity';
 
 @Injectable()
 export class AnoLectivoUtil {
-  private readonly FALLBACK_ANO_ID = 23; // fallback caso não encontre
+  private readonly FALLBACK_ANO_ID = 23;
+  private static cachedAnoId: number | null = null;
+  private static lastFetched = 0;
+  private static readonly CACHE_TTL = 10 * 60 * 1000; // 10 minutos (ajuste conforme necessidade)
 
   constructor(
     @InjectRepository(AcademicYear)
@@ -14,53 +17,50 @@ export class AnoLectivoUtil {
   ) {}
 
   /**
-   * Retorna o ID do ano letivo atual (estado = 'Ativo')
-   * Se não encontrar, "retorna" o fallback (23)
+   * Retorna o ID do ano letivo ativo com cache em memória + fallback
    */
   async getAnoAtualId(): Promise<number> {
+    const now = Date.now();
+
+    // 1. Usa cache em memória se válido
+    if (
+      AnoLectivoUtil.cachedAnoId !== null &&
+      now - AnoLectivoUtil.lastFetched < AnoLectivoUtil.CACHE_TTL
+    ) {
+      return AnoLectivoUtil.cachedAnoId;
+    }
+
     try {
+      // 2. Busca no banco (com cache do TypeORM como backup)
       const anoAtivo = await this.anoLectivoRepo.findOne({
         where: { estado: 'Ativo' },
         select: ['Codigo'],
-        cache: 60_000, // cache por 1 minuto
+        cache: {
+          id: 'ano_letivo_ativo',
+          milliseconds: 60_000, 
+        },
       });
 
-      return anoAtivo?.Codigo ?? this.FALLBACK_ANO_ID;
+      const anoId = anoAtivo?.Codigo ?? this.FALLBACK_ANO_ID;
+
+      // 3. Atualiza cache em memória
+      AnoLectivoUtil.cachedAnoId = anoId;
+      AnoLectivoUtil.lastFetched = now;
+
+      return anoId;
     } catch (error) {
-      console.warn('Erro ao buscar ano letivo ativo:', error.message);
-      return this.FALLBACK_ANO_ID;
+      console.warn('Erro ao buscar ano letivo ativo:', error instanceof Error ? error.message : error);
+      
+      // 4. Em caso de erro, retorna fallback e mantém cache antigo (se houver)
+      return AnoLectivoUtil.cachedAnoId ?? this.FALLBACK_ANO_ID;
     }
   }
 
   /**
-   * Versão síncrona com cache em memória (ideal para uso em serviços)
+   * Limpa o cache (útil em testes ou admin)
    */
-  private static cachedAnoId: number | null = null;
-  private static lastFetched: number = 0;
-  private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutos
-
-  static async getAnoAtualIdSync(
-    repo: Repository<AcademicYear>,
-    fallback: number = 23,
-  ): Promise<number> {
-    const now = Date.now();
-    if (
-      this.cachedAnoId !== null &&
-      now - this.lastFetched < this.CACHE_TTL
-    ) {
-      return this.cachedAnoId;
-    }
-
-    try {
-      const ano = await repo.findOne({
-        where: { estado: 'Ativo' },
-        select: ['Codigo'],
-      });
-      this.cachedAnoId = ano?.Codigo ?? fallback;
-      this.lastFetched = now;
-      return this.cachedAnoId;
-    } catch {
-      return fallback;
-    }
+  static clearCache() {
+    this.cachedAnoId = null;
+    this.lastFetched = 0;
   }
 }

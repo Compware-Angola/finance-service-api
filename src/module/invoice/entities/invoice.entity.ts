@@ -1,9 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { BaseEntity } from 'src/common/base-entity';
+import { Entity, PrimaryGeneratedColumn, Column, BeforeInsert, PrimaryColumn } from 'typeorm';
 
 @Entity({ name: 'factura', "schema": 'DBUMA' })
-export class Invoice {
-  @PrimaryGeneratedColumn({ name: 'Codigo', "type": 'int' })
-  Codigo: number;
+export class Invoice extends BaseEntity{
+@PrimaryColumn({ name: 'Codigo', type: 'varchar2', length: 20 })
+  Codigo: string;
 
   // DATETIME → TIMESTAMP (Oracle)
   @Column({ name: 'DataFactura', "type": 'timestamp' })
@@ -105,5 +106,38 @@ poloId: number;
   numSequenciaFactura: number | null;
 
   @Column({ name: 'tipo_documento_factura_id', "type": 'int', "nullable": true })
-  tipoDocumentoFacturaId: number | null;
+  tipoDocumentoFacturaId: number | null;@BeforeInsert()
+async generateCodigo() {
+  if (!this.Codigo) {
+    const repo = (this.constructor as any).repo;
+    if (!repo) throw new Error('Repositório não configurado');
+
+    console.log('GERANDO CÓDIGO DA FATURA...');
+
+    const last = await repo
+      .createQueryBuilder('i')
+      .select('i.Codigo', 'i_Codigo')  // ← ALIAS EXATO!
+      .where("REGEXP_LIKE(i.Codigo, '^[0-9]+$')")
+      .orderBy('TO_NUMBER(i.Codigo)', 'DESC')
+      .limit(1)
+      .getRawOne();
+
+    console.log('ÚLTIMA FATURA ENCONTRADA:', last);
+
+    let nextNumber = 1;
+    if (last && last.i_Codigo) {
+      const lastNum = Number(last.i_Codigo);
+      console.log('Último número:', lastNum);
+      if (!isNaN(lastNum)) {
+        nextNumber = lastNum + 1;
+        console.log('Próximo número:', nextNumber);
+      }
+    } else {
+      console.log('Nenhuma fatura encontrada, começando do 1');
+    }
+
+    this.Codigo = nextNumber.toString();
+    console.log('CÓDIGO GERADO:', this.Codigo);
+  }
+}
 }

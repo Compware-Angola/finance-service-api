@@ -85,7 +85,7 @@ export class CreatePaymentDto {
   @IsOptional()
   @IsInt()
   @IsPositive()
-  Codigo_PreInscricao?: number;
+  Codigo_PreInscricao?: any;
 
   @ApiPropertyOptional({
     description: 'Forma de pagamento',
@@ -186,7 +186,7 @@ export class CreatePaymentDto {
   @IsOptional()
   @IsInt()
   @IsPositive()
-  codigo_factura?: number;
+  codigo_factura?: any;
 
   @ApiPropertyOptional({
     description: 'ID da instituição',

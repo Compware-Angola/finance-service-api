@@ -31,91 +31,90 @@ export class PaymentService {
      * @param paginationQuery O DTO de paginação (limit e page).
      * @returns Uma Promise que resolve para um PagedResult contendo os resultados planos.
      */
-    async findInvoicesAndItemsDetailedFlat(
-        anoLectivo: number,
-        codigoPreInscricao: number,
-        paginationQuery: PaginationQueryDto,
-    ): Promise<PagedResult<any>> { // Usando 'any' ou a interface DetailedPaymentInvoiceItemResult
+async findInvoicesAndItemsDetailedFlat(
+  anoLectivo: string,
+  codigoPreInscricao: string,
+  paginationQuery: PaginationQueryDto,
+): Promise<PagedResult<any>> {
+  const { limit = 10, page = 1 } = paginationQuery;
+  const skip = (page - 1) * limit;
 
-        const { limit = 10, page = 1 } = paginationQuery;
-        const skip = (page - 1) * limit;
+  const baseQuery = this.paymentRepository
+    .createQueryBuilder('p')
+    .innerJoin('UMA_FACTURA', 'f', '"p"."codigo_factura" = "f"."Codigo"')
+    .innerJoin('UMA_FACTURA_ITEMS', 'fi', '"f"."Codigo" = "fi"."CodigoFactura"')
+    .innerJoin('UMA_TB_TIPO_SERVICOS', 'tp', '"fi"."CodigoProduto" = "tp"."Codigo"')
+    .where('REGEXP_LIKE(TRIM("p"."AnoLectivo"), \'^[0-9]+$\')')
+    .andWhere('REGEXP_LIKE(TRIM("p"."Codigo_PreInscricao"), \'^[0-9]+$\')')
+    .andWhere('TRIM("p"."AnoLectivo") = :anoLectivo', { anoLectivo })
+    .andWhere('TRIM("p"."Codigo_PreInscricao") = :codigoPreInscricao', { codigoPreInscricao })
+    .andWhere('"p"."status_pagamento" = :status', { status: 'concluido' });
 
-        const aliasPayment = 'p';
-        const aliasFactura = 'f';
-        const aliasItem = 'fi';
-        const aliasProduto = 'tp';
+  // CONTAGEM
+  const totalResult = await baseQuery
+    .select('COUNT(DISTINCT("p"."Codigo"))', 'cnt')
+    .getRawOne();
 
-        // 1. Criar o QueryBuilder base
-        const baseQuery = this.paymentRepository.createQueryBuilder(aliasPayment)
-            .innerJoin('factura', aliasFactura, `${aliasPayment}.codigo_factura = ${aliasFactura}.Codigo`)
-            .innerJoin('factura_items', aliasItem, `${aliasFactura}.Codigo = ${aliasItem}.CodigoFactura`)
-            .innerJoin('tb_tipo_servicos', aliasProduto, `${aliasItem}.CodigoProduto = ${aliasProduto}.Codigo`)
-            .where(`${aliasPayment}.AnoLectivo = :anoLectivo`, { anoLectivo })
-            .andWhere(`${aliasPayment}.Codigo_PreInscricao = :codigoPreInscricao`, { codigoPreInscricao });
+  const total = Number(totalResult?.cnt || 0);
+  const totalPages = Math.ceil(total / limit);
 
+  if (total === 0) {
+    return { data: [], total, page, limit, totalPages };
+  }
 
-        // --- 2. Obter a contagem total de linhas ---
-        // Usamos o QueryBuilder base para contar todas as linhas que satisfazem os JOINs e WHEREs.
-        const total = await baseQuery.getCount();
+  const results = await baseQuery
+    .select([
+      // PAGAMENTO
+      '"p"."Codigo" AS "CodigoPagamento"',
+      '"p"."Data" AS "DataPagamento"',
+      '"p"."N_Operacao_Bancaria" AS "p_N_Operacao_Bancaria"',
+      '"p"."valor_depositado" AS "p_valor_depositado"',
+      '"p"."status_pagamento" AS "p_status_pagamento"',
+      '"p"."created_at" AS "DataRegistoPagamento"',
+      '"p"."statusMovimento" AS "p_statusMovimento"',
+      '"p"."ContaMovimentada" AS "p_ContaMovimentada"',
+      '"p"."forma_pagamento" AS "p_forma_pagamento"',
 
-        // --- 3. Obter os resultados paginados e formatados ---
-        const results = await baseQuery
-            .select([
-                // DADOS DO PAGAMENTO (tb_pagamentos)
-                `${aliasPayment}.Codigo AS CodigoPagamento`,
-                `${aliasPayment}.Data AS DataPagamento`,
-                `${aliasPayment}.N_Operacao_Bancaria`,
-                `${aliasPayment}.valor_depositado`,
-                `${aliasPayment}.status_pagamento`,
-                `${aliasPayment}.created_at AS DataRegistoPagamento`,
-                `${aliasPayment}.statusMovimento`,
-                `${aliasPayment}.ContaMovimentada`,
-                `${aliasPayment}.forma_pagamento`,
+      // FATURA
+      '"f"."Codigo" AS "CodigoFactura"',
+      '"f"."Descricao" AS "Descricao_factura"',
+      '"f"."DataFactura" AS "f_DataFactura"',
+      '"f"."Referencia" AS "f_Referencia"',
+      '"f"."estado" AS "EstadoFactura"',
+      '"f"."ValorAPagar" AS "f_ValorAPagar"',
+      '"f"."TotalPreco" AS "TotalBrutoFactura"',
+      '"f"."TotalMulta" AS "TotalMultaFactura"',
 
-                // DADOS DA FATURA (factura)
-                `${aliasFactura}.Codigo AS CodigoFactura`,
-                `${aliasFactura}.Descricao AS Descricao_factura`,
-                `${aliasFactura}.DataFactura`,
-                `${aliasFactura}.Referencia`,
-                `${aliasFactura}.estado AS EstadoFactura`,
-                `${aliasFactura}.ValorAPagar`,
-                `${aliasFactura}.TotalPreco AS TotalBrutoFactura`,
-                `${aliasFactura}.TotalMulta AS TotalMultaFactura`,
+      // ITEM
+      '"fi"."codigo" AS "CodigoItem"',
+      '"fi"."CodigoProduto" AS "CodigoProduto"',
+      '"fi"."OBS" AS "ObservacaoItem"',
+      '"fi"."Quantidade" AS "Quantidade"',
+      '"fi"."preco" AS "PrecoUnitario"',
+      '"fi"."Total" AS "TotalItem"',
+      '"fi"."Mes" AS "MesReferencia"',
+      '"fi"."Multa" AS "MultaItem"',
+      '"fi"."valor_pago" AS "valor_pago"',
+      '"fi"."taxa_iva" AS "taxa_iva"',
 
-                // DADOS DOS ITENS (factura_items)
-                `${aliasItem}.codigo AS CodigoItem`,
-                `${aliasItem}.CodigoProduto`,
-                `${aliasItem}.OBS AS ObservacaoItem`,
-                `${aliasItem}.Quantidade`,
-                `${aliasItem}.preco AS PrecoUnitario`,
-                `${aliasItem}.Total AS TotalItem`,
-                `${aliasItem}.Mes AS MesReferencia`,
-                `${aliasItem}.Multa AS MultaItem`,
-                `${aliasItem}.valor_pago`,
-                `${aliasItem}.taxa_iva`,
+      // PRODUTO
+      '"tp"."Descricao" AS "Descricao_produto"',
+    ])
+    .offset(skip)
+    .limit(limit)
+    .orderBy('"p"."DataRegisto"', 'DESC')
+    .addOrderBy('"f"."DataFactura"', 'DESC')
+    .addOrderBy('"fi"."codigo"', 'ASC')
+    .getRawMany();
 
-                // DADOS DO PRODUTO (tb_tipo_servicos)
-                `${aliasProduto}.Descricao AS Descricao_produto`,
-            ])
-            .offset(skip)
-            .limit(limit)
-            .orderBy(`${aliasPayment}.DataRegisto`, 'DESC')
-            .addOrderBy(`${aliasFactura}.DataFactura`, 'DESC')
-            .addOrderBy(`${aliasItem}.codigo`, 'ASC')
-            // O método correto para resultados 'raw' com seleção customizada
-            .getRawMany<DetailedPaymentInvoiceItemResult>();
-
-        // 4. Calcular e retornar a paginação
-        const totalPages = Math.ceil(total / limit);
-
-        return {
-            data: results,
-            total,
-            page,
-            limit,
-            totalPages,
-        };
-    }
+  return {
+    data: results,
+    total,
+    page,
+    limit,
+    totalPages,
+  };
+}
     async createPayment(dto: CreatePaymentDto) {
         const anoCorrente = this.anoAtualPrincipal;
         const { status_pagamento, N_Operacao_Bancaria, N_Operacao_Bancaria2, AnoLectivo, ...rest } = dto;
@@ -136,7 +135,7 @@ export class PaymentService {
             tp.Preco AS PrecoProduto,
             tp.TipoServico AS TipoServicoProduto,
             fi.*
-        FROM "DBUMA"."UMA_TB_TIPO_SERVICOS" tp
+        FROM "."UMA_TB_TIPO_SERVICOS" tp
         INNER JOIN factura_items fi ON fi.CodigoProduto = tp.Codigo
         WHERE "fi".CodigoFactura = ?`, [invoice.Codigo]);
         const specific_services = [
@@ -148,9 +147,9 @@ export class PaymentService {
         const search = await itens.some((item: any) =>
             specific_services.includes(item.DescricaoProduto)
         );
-        if (search) { 
+        if (search) {
             itens.forEach((item: any) => {
-                const serviceDescription = item.DescricaoProduto; 
+                const serviceDescription = item.DescricaoProduto;
 
                 switch (serviceDescription) {
                     case "Taxa de Reingresso":
@@ -181,7 +180,7 @@ export class PaymentService {
             ...rest,
 
             AnoLectivo: anoCorrente,
-            codigo_factura: invoice.Codigo,
+            codigo_factura: dto.codigo_factura,
             instituicao_id: undefined,
             N_Operacao_Bancaria,
             N_Operacao_Bancaria2,

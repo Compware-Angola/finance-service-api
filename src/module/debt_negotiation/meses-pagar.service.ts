@@ -118,7 +118,7 @@ async parametroTaxaMulta(
 
   private async getPercentagemByCodigo(codigo: number): Promise<number> {
     const result = await this.dataSource.query(
-      `SELECT "percentagem "FROM "DBUMA"."UMA_TB_PARAMETROS_MULTA" WHERE "codigo" = ? LIMIT 1`,
+      `SELECT "percentagem "FROM "DBUMA"."UMA_TB_PARAMETROS_MULTA" WHERE "codigo" = ?   FETCH NEXT 1 ROWS ONLY`,
       [codigo],
     );
     return result[0]?.percentagem ?? 0;
@@ -195,7 +195,7 @@ async cicloMestrado(){
     SELECT Codigo, Designacao
     FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
     WHERE Designacao = 'Ciclo Mestrado'
-    LIMIT 1
+      FETCH NEXT 1 ROWS ONLY
   `);
   return result[0] || null;
 }
@@ -205,7 +205,7 @@ async cicloDoutoramento(){
     SELECT Codigo, Designacao
     FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
     WHERE Designacao = 'Ciclo Doutoramento'
-    LIMIT 1
+      FETCH NEXT 1 ROWS ONLY
   `);
   return result[0] || null;
 }
@@ -221,7 +221,7 @@ async checkIsencaoMultaRaw(
       AND "codigo_matricula" = ?
       AND "estado_isensao" = 'Activo'
       AND codigo_anoLectivo = ?
-    LIMIT 1
+      FETCH NEXT 1 ROWS ONLY
   `, [mes_id, "matricula", "ano_lectivo_id"]);
 
   return result.length > 0;

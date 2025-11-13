@@ -93,117 +93,127 @@ export class DebtNegotiationService {
 
 
   // === 1. pagouOutubro ===
-  async pagouOutubro(codigo_inscricao: number): Promise<any> {
+  async pagouOutubro(codigo_inscricao: number): Promise<boolean> {
+    const result = await this.pagamentoRepo
+      .createQueryBuilder('p')
+      .select('pi.mes_temp_id')
+      .innerJoin('UMA_TB_PAGAMENTOSI', 'pi', 'pi.Codigo_Pagamento = p.Codigo')
+      .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Codigo = p.Codigo_PreInscricao')
+      .innerJoin('UMA_FACTURA', 'f', 'f.Codigo = p.codigo_factura')
+      .innerJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.CodigoFactura = f.Codigo')
+      .innerJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'ts.Codigo = fi.CodigoProduto')
+      .where('pre.Codigo = :codigo', { codigo: codigo_inscricao })
+      .andWhere('p.AnoLectivo = 1')
+      .andWhere('pi.mes_temp_id = 5')
+      .andWhere('f.estado != 3')
+      .andWhere('ts.TipoServico = :tipo', { tipo: 'Mensal' })
+      .andWhere('p.estado = 1')
+      .limit(1)
+      .getRawOne();
 
-    const result = await this.pagamentoRepo.query(`
-    SELECT "pi".mes_temp_id
-    FROM "DBUMA"."UMA_TB_PAGAMENTOS" p
-    INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
-    INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
-    INNER JOIN factura f ON f.Codigo = p.codigo_factura
-    INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
-    INNER JOIN tb_tipo_servicos ts ON ts.Codigo = fi.CodigoProduto
-    WHERE "pre".Codigo = ?
-      AND "p".AnoLectivo = 1
-      AND "pi".mes_temp_id = 5
-      AND "f".estado != 3
-      AND "ts".TipoServico = 'Mensal'
-      AND "p".estado = 1
-    LIMIT 1
-  `, [codigo_inscricao]);
-
-    return result[0] || null;
+    return !!result;
   }
   // === 2. dividaOutrosServicos ===
   async dividaOutrosServicos(codigo_matricula: number): Promise<DividaDto[]> {
     const dividas: DividaDto[] = [];
-    const aluno = await this.getAlunoPorMatricula(codigo_matricula);
-    const confirmacao = await this.confirmacao(codigo_matricula);
-    const pagamentoOutubro = await this.pagouOutubro(aluno.codigo_inscricao);
 
+    // 1. Primeiro pega o aluno
+    const aluno = await this.getAlunoPorMatricula(codigo_matricula);
+    if (!aluno?.codigo_inscricao) return [];
+
+    // 2. Depois as outras 2 em paralelo
+    const [confirmacao, pagamentoOutubro] = await Promise.all([
+      this.confirmacao(codigo_matricula),
+      this.pagouOutubro(aluno.codigo_inscricao),
+    ]);
 
     const cond1 = confirmacao?.ultimoAnoInscritoId === 1 && pagamentoOutubro;
-    const cond2 = confirmacao?.ultimoAnoInscritoId !== 1 && !(parseInt(confirmacao?.ultimoAnoInscritoDesig) <= 2019);
+    const cond2 = confirmacao?.ultimoAnoInscritoId !== 1 &&
+      !(parseInt(confirmacao?.ultimoAnoInscritoDesig || '0') <= 2019);
 
     if (!cond1 && !cond2) return [];
 
-    // Faturas pagas
-    const faturasPagas = await this.facturaRepo.query(`
-  SELECT DISTINCT ia.codigo_factura
-  FROM "DBUMA"."UMA_FACTURA" f
-  INNER JOIN tb_matriculas m ON m.Codigo = f.CodigoMatricula
-  INNER JOIN inscricao_avaliacoes ia ON ia.codigo_factura = f.Codigo
-  INNER JOIN tb_pagamentos p ON p.codigo_factura = f.Codigo
-  WHERE "ia".codigo_ano_lectivo = ?
-    AND "f".corrente = 1
-    AND "f".estado NOT IN (1, 3)
-    AND "m".Codigo = ?
-`, [confirmacao?.ultimoAnoInscritoId, codigo_matricula]);
+    const anoLectivoId = confirmacao?.ultimoAnoInscritoId;
 
+    // 2. Faturas pagas (usando createQueryBuilder)
+    const faturasPagas = await this.facturaRepo
+      .createQueryBuilder('f')
+      .select('DISTINCT ia.codigo_factura')
+      .innerJoin('UMA_TB_INSCRICAO_AVALIACOES', 'ia', 'ia.codigo_factura = f.Codigo')
+      .innerJoin('UMA_TB_MATRICULAS', 'm', 'm.Codigo = f.CodigoMatricula')
+      .innerJoin('UMA_TB_PAGAMENTOS', 'p', 'p.codigo_factura = f.Codigo')
+      .where('ia.codigo_ano_lectivo = :ano', { ano: anoLectivoId })
+      .andWhere('f.corrente = 1')
+      .andWhere('f.estado NOT IN (1, 3)')
+      .andWhere('m.Codigo = :matricula', { matricula: codigo_matricula })
+      .getRawMany();
 
-    const array = faturasPagas.map(f => f.ia_codigo_factura);
+    const faturasPagasIds = faturasPagas.map(f => f.ia_codigo_factura);
 
-    // Outros serviços
-    const outrosServicos = await this.avaliacaoRepo.query(`
-  SELECT 
-    f.Codigo,
-    ANY_VALUE(f.ValorAPagar)           AS apagar,
-    gc.Codigo                          AS codGradeCurricular,
-    ANY_VALUE(fi.preco)                AS valor,
-    ANY_VALUE(fi.Multa)                AS multa,
-    ANY_VALUE(fi.descontoProduto)      AS descontoProduto,
-    ANY_VALUE(fi.Total)                AS total,
-    ANY_VALUE(d.Designacao)            AS servico,
-    ANY_VALUE(al.Codigo)               AS cod_ano_lectivo,
-    ANY_VALUE(al.Designacao)           AS ano_lectivo,
-    ANY_VALUE(ts.Codigo)               AS cod_servico,
-    ANY_VALUE(fi.incidencia)           AS incidencia,
-    ANY_VALUE(fi.valor_iva)            AS valor_iva,
-    ANY_VALUE(fi.taxa_iva)             AS taxa_iva,
-    ANY_VALUE(tt.descricao)            AS taxa_descricao
-  FROM "DBUMA"."UMA_INSCRICAO_AVALIACOES" ia
-  INNER JOIN factura f               ON f.Codigo = ia.codigo_factura
-  INNER JOIN factura_items fi        ON fi.CodigoFactura = f.Codigo
-  INNER JOIN tb_ano_lectivo al       ON al.Codigo = f.ano_lectivo
-  INNER JOIN tb_tipo_servicos ts     ON ts.Codigo = fi.CodigoProduto
-  LEFT JOIN tipo_taxas tt            ON tt.id = ts.taxa_iva_id
-  LEFT JOIN tb_motivo_isencao mi     ON mi.Codigo = ts.motivo_isencao_iva_codigo
-  LEFT JOIN tb_grade_curricular gc   ON gc.Codigo = ts.codigo_grade_currilular
-  LEFT JOIN tb_disciplinas d         ON d.Codigo = gc.codigo_disciplina
-  WHERE "ia".codigo_matricula = ?
-    AND "ia".codigo_ano_lectivo = ?
-    AND "ia".estado != 'anulado'
-    AND "f".estado NOT IN (1, 3)
-    AND "f".corrente = 1
-    AND "f".Codigo NOT IN (${array.length ? array.map(() => '?').join(', ') : '0'})
-  GROUP BY gc.Codigo, "f".Codigo
-  ORDER BY gc.Codigo
-`, [
-      codigo_matricula,
-      confirmacao?.ultimoAnoInscritoId,
-      ...array
-    ]);
+    // 3. Outros serviços com JOIN + GROUP BY (Oracle-friendly)
+    const query = this.avaliacaoRepo
+      .createQueryBuilder('ia')
+      .select([
+        'f.Codigo AS codigo_factura',
+        'MAX(f.ValorAPagar) AS apagar',
+        'gc.Codigo AS codGradeCurricular',
+        'MAX(fi.preco) AS valor',
+        'MAX(fi.Multa) AS multa',
+        'MAX(fi.descontoProduto) AS descontoProduto',
+        'MAX(fi.Total) AS total',
+        'MAX(d.Designacao) AS servico',
+        'MAX(al.Codigo) AS cod_ano_lectivo',
+        'MAX(al.Designacao) AS ano_lectivo',
+        'MAX(ts.Codigo) AS cod_servico',
+        'MAX(fi.incidencia) AS incidencia',
+        'MAX(fi.valor_iva) AS valor_iva',
+        'MAX(fi.taxa_iva) AS taxa_iva',
+        'MAX(tt.descricao) AS taxa_descricao',
+      ])
+      .innerJoin('UMA_UMA_FACTURA', 'f', 'f.Codigo = ia.codigo_factura')
+      .innerJoin('UMA_UMA_FACTURA_ITEMS', 'fi', 'fi.CodigoFactura = f.Codigo')
+      .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = f.ano_lectivo')
+      .innerJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'ts.Codigo = fi.CodigoProduto')
+      .leftJoin('UMA_TIPO_TAXAS', 'tt', 'tt.id = ts.taxa_iva_id')
+      .leftJoin('UMA_TB_GRADE_CURRICULAR', 'gc', 'gc.Codigo = ts.codigo_grade_currilular')
+      .leftJoin('.UMA_TB_DISCIPLINAS', 'd', 'd.Codigo = gc.codigo_disciplina')
+      .where('ia.codigo_matricula = :matricula', { matricula: codigo_matricula })
+      .andWhere('ia.codigo_ano_lectivo = :ano', { ano: anoLectivoId })
+      .andWhere('ia.estado != :anulado', { anulado: 'anulado' })
+      .andWhere('f.estado NOT IN (1, 3)')
+      .andWhere('f.corrente = 1');
 
+    if (faturasPagasIds.length > 0) {
+      query.andWhere('f.Codigo NOT IN (:...excluidos)', { excluidos: faturasPagasIds });
+    }
 
+    const outrosServicos = await query
+      .groupBy('gc.Codigo, f.Codigo')
+      .orderBy('gc.Codigo')
+      .getRawMany();
+
+    // 4. Processa cada serviço
     for (const value of outrosServicos) {
-      const tipo_avaliacao = await this.avaliacaoRepo
-        .createQueryBuilder('ia')
-        .where('ia.codigo_matricula = :matricula', { matricula: codigo_matricula })
-        .andWhere('ia.codigo_grade = :grade', { grade: value.codGradeCurricular })
-        .andWhere('ia.codigo_factura = :factura', { factura: value.Codigo })
-        .getOne();
-
-      let servico = value.servico;
-      if (tipo_avaliacao) {
-        if (tipo_avaliacao.codigo_tipo_avaliacao === 7) servico = 'Rec. ' + value.servico;
-        else if (tipo_avaliacao.codigo_tipo_avaliacao === 22) servico = 'Melhoria. ' + value.servico;
-        else if (tipo_avaliacao.codigo_tipo_avaliacao === 11) servico = 'Exame Especial. ' + value.servico;
-      }
+      let servico = value.servico || '';
 
       if (value.codGradeCurricular) {
+        const tipoAvaliacao = await this.avaliacaoRepo.findOne({
+          where: {
+            codigo_matricula: codigo_matricula.toString(),
+            codigo_grade: value.codGradeCurricular,
+            codigo_factura: value.codigo_factura,
+          },
+          select: ['codigo_tipo_avaliacao'],
+        });
+
+        const codigo = Number(tipoAvaliacao?.codigo_tipo_avaliacao);
+        if (codigo === 7) servico = 'Rec. ' + servico;
+        else if (codigo === 22) servico = 'Melhoria. ' + servico;
+        else if (codigo === 11) servico = 'Exame Especial. ' + servico;
+
         dividas.push({
           codGradeCurricular: value.codGradeCurricular,
-          codFacturaOutrosServicos: value.Codigo,
+          codFacturaOutrosServicos: value.codigo_factura,
           valor: value.valor,
           multa: value.multa,
           total: value.total,
@@ -221,7 +231,7 @@ export class DebtNegotiationService {
           desconto: value.descontoProduto,
           incidencia: value.incidencia,
           valor_iva: value.valor_iva,
-          tipo_taxas: value.tipo_taxas,
+          tipo_taxas: value.taxa_iva,
           taxa_descricao: value.taxa_descricao,
         });
       }
@@ -429,26 +439,23 @@ export class DebtNegotiationService {
       return this.handlePosGraduacao(user, codigo_matricula);
     }
 
-    const matricula1 = await this.matriculaRepo.query(`
-  SELECT 
-    m.Codigo,
-    m.Codigo_Aluno,
-    m.estado_matricula,
-    pre.Codigo AS codigo_inscricao,
-    pre.AlunoCacuaco AS aluno_cacuaco,
-    pre.desconto,
-    pre.codigo_tipo_candidatura
-  FROM 
-    tb_matriculas m
-  INNER JOIN 
-    tb_admissao a ON a.codigo = m.Codigo_Aluno
-  INNER JOIN 
-    tb_preinscricao pre ON pre.Codigo = a.pre_incricao
-  WHERE 
-    pre.Codigo = ? 
-    OR m.Codigo = ?
-  LIMIT 1
-`, [preinscricaoId, codigo_matricula]);
+    const matricula1 = await this.matriculaRepo
+      .createQueryBuilder('m')
+      .select([
+        'm.Codigo',
+        'm.Codigo_Aluno',
+        'm.estado_matricula',
+        'pre.Codigo AS codigo_inscricao',
+        'pre.AlunoCacuaco AS aluno_cacuaco',
+        'pre.desconto',
+        'pre.codigo_tipo_candidatura',
+      ])
+      .innerJoin('UMA_TB_ADMISSAO', 'a', 'a.codigo = m.Codigo_Aluno')
+      .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Codigo = a.pre_incricao')
+      .where('pre.Codigo = :preinscricaoId', { preinscricaoId })
+      .orWhere('m.Codigo = :codigo_matricula', { codigo_matricula })
+      .limit(1)
+      .getRawOne();
 
     if (!matricula1) return [];
 
@@ -456,15 +463,16 @@ export class DebtNegotiationService {
 
 
 
-    const cursoResult = await this.cursoRepo.query(`
-  SELECT 
-    c.Designacao AS curso,
-    c.Codigo AS codigo_curso
-  FROM "DBUMA"."UMA_TB_CURSOS" c
-  INNER JOIN tb_preinscricao pre ON pre.Curso_Candidatura = c.Codigo
-  WHERE "pre".Codigo = ?
-  LIMIT 1
-`, [codigo_inscricao]);
+    const cursoResult = await this.cursoRepo
+      .createQueryBuilder('c')
+      .select([
+        'c.Designacao AS curso',
+        'c.Codigo AS codigo_curso',
+      ])
+      .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Curso_Candidatura = c.Codigo')
+      .where('pre.Codigo = :codigo_inscricao', { codigo_inscricao })
+      .limit(1)
+      .getRawOne();
 
     const curso = cursoResult[0] || null;
 
@@ -475,11 +483,11 @@ export class DebtNegotiationService {
     al.Designacao AS ano_designacao,
     al.Codigo AS maior
   FROM "DBUMA"."UMA_TB_INSCRICOES_ANO_ANTERIOR" ia
-  INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
+  INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = ia.codigo_ano_lectivo
   WHERE "ia".codigo_matricula = ?
     AND "ia".status = 1
   ORDER BY al.ordem DESC, "al".Designacao DESC
-  LIMIT 1
+    FETCH NEXT 1 ROWS ONLY
 `, [matricula1[0].codigo]);
 
     const maiorAno = maiorAnoResult[0] || null;
@@ -490,7 +498,7 @@ export class DebtNegotiationService {
     al.Designacao AS ano_designacao,
     ia.codigo_ano_lectivo AS ano_lectivo
   FROM "DBUMA"."UMA_TB_INSCRICOES_ANO_ANTERIOR" ia
-  INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
+  INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = ia.codigo_ano_lectivo
   WHERE "ia".codigo_matricula = ?
   ORDER BY ia.codigo_ano_lectivo ASC
 `, [matricula1[0].Codigo]);
@@ -544,9 +552,9 @@ export class DebtNegotiationService {
     ts.Preco AS valor,
     (ts.Preco * 0.1) AS multa
   FROM "DBUMA"."UMA_TB_TIPO_SERVICOS" ts
-  INNER JOIN propina_por_curso ppc ON ppc.codigo_servico = ts.Codigo
-  INNER JOIN meses m ON m.codigo = ppc.mes_id
-  INNER JOIN tb_ano_lectivo al ON al.Codigo = ts.codigo_ano_lectivo
+  INNER JOIN UMA_PROPINA_POR_CURSO ppc ON ppc.codigo_servico = ts.Codigo
+  INNER JOIN UMA_MESES m ON m.codigo = ppc.mes_id
+  INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = ts.codigo_ano_lectivo
   WHERE "ts".Codigo = ?
     AND "ts".cacuaco = ?
     AND "ts".codigo_ano_lectivo = ?
@@ -619,7 +627,7 @@ export class DebtNegotiationService {
     c.Codigo_Ano_lectivo,
     al.ordem
   FROM "DBUMA"."UMA_TB_CONFIRMACOES" c
-  INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
+  INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = c.Codigo_Ano_lectivo
   WHERE "c".Codigo_Matricula = ?
   GROUP BY c.Codigo_Ano_lectivo, "al".ordem
   ORDER BY al.ordem ASC
@@ -636,12 +644,12 @@ export class DebtNegotiationService {
     al.Codigo AS ultimoAnoInscritoId,
     al.Designacao AS ultimoAnoInscritoDesig
   FROM "DBUMA"."UMA_TB_CONFIRMACOES" c
-  INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
-  INNER JOIN tb_matriculas m ON m.Codigo = c.Codigo_Matricula
+  INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = c.Codigo_Ano_lectivo
+  INNER JOIN UMA_TB_MATRICULAS m ON m.Codigo = c.Codigo_Matricula
   WHERE "m".Codigo = ?
     AND "c".Codigo_Ano_lectivo = ?
   ORDER BY al.ordem DESC
-  LIMIT 1
+    FETCH NEXT 1 ROWS ONLY
 `, [codigo_matricula, value.Codigo_Ano_lectivo]);
 
         const confirmacao = confirmacaoResult[0] || null;
@@ -712,97 +720,103 @@ export class DebtNegotiationService {
   }
 
   // === 8. handlePosGraduacao ===
-  private async handlePosGraduacao(user: any, codigo_matricula: number): Promise<any[]> {
+  private async handlePosGraduacao(user: any, codigo_matricula: number): Promise<DividaDto[]> {
     if (!user || user?.codigo_tipo_candidatura === 1) return [];
 
-    const ciclo = user?.codigo_tipo_candidatura === 2
-      ? this.anoAtualPrincipal // cicloMestrado
-      : this.anoAtualPrincipal; // cicloDoutoramento
-
-
-    const matricula1Result = await this.matriculaRepo.query(`
-  SELECT 
-    m.Codigo,
-    pre.Codigo AS codigo_inscricao,
-    pre.AlunoCacuaco AS aluno_cacuaco,
-    pre.desconto
-  FROM "DBUMA"."UMA_TB_MATRICULAS" m
-  INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
-  INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
-  WHERE "pre".Codigo = ?
-  LIMIT 1
-`, [user.Codigo]);
-
-    const matricula1 = matricula1Result[0] || null;
-
-
-
-    const cursoResult = await this.cursoRepo.query(`
-  SELECT 
-    c.Designacao AS curso
-  FROM "DBUMA"."UMA_TB_CURSOS" c
-  INNER JOIN tb_preinscricao pre ON pre.Curso_Candidatura = c.Codigo
-  WHERE "pre".Codigo = ?
-  LIMIT 1
-`, [matricula1?.codigo_inscricao]);
-
-    const curso = cursoResult[0] || null;
-
+    const ciclo = user?.codigo_tipo_candidatura === 2 ? this.anoAtualPrincipal : this.anoAtualPrincipal;
     const anoCorrente = this.anoAtualPrincipal;
+
+    // 1. Busca matrícula e pré-inscrição (com createQueryBuilder)
+    const matricula1 = await this.matriculaRepo
+      .createQueryBuilder('m')
+      .select([
+        'm.Codigo',
+        'pre.Codigo AS codigo_inscricao',
+        'pre.AlunoCacuaco AS aluno_cacuaco',
+        'pre.desconto',
+      ])
+      .innerJoin('UMA_TB_ADMISSAO', 'a', 'a.codigo = m.Codigo_Aluno')
+      .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Codigo = a.pre_incricao')
+      .where('pre.Codigo = :preCodigo', { preCodigo: user.Codigo })
+      .limit(1)
+      .getRawOne();
+
+    if (!matricula1?.codigo_inscricao) return [];
+
+    // 2. Busca curso
+    const curso = await this.cursoRepo
+      .createQueryBuilder('c')
+      .select('c.Designacao AS curso')
+      .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Curso_Candidatura = c.Codigo')
+      .where('pre.Codigo = :codigo_inscricao', { codigo_inscricao: matricula1.codigo_inscricao })
+      .limit(1)
+      .getRawOne();
+
+    if (!curso?.curso) return [];
+
+    // 3. Ano letivo atual
     const anoActual = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
     if (!anoActual) return [];
 
+    // 4. Meses ativos para pós-graduação
     const meses = user?.codigo_tipo_candidatura === 2
-      ? await this.mesTempRepo.find({ where: { activo_posgraduacao: 1 }, "take": 24 })
+      ? await this.mesTempRepo.find({ where: { activo_posgraduacao: 1 }, take: 24 })
       : await this.mesTempRepo.find({ where: { activo_posgraduacao: 1 } });
 
     const mesesCiclo = meses.map(m => m.id);
 
+    // 5. Meses pagos
     const mesesPagos = user.anoLectivo >= 15
       ? await this.getMesesPagosPosGraduacaoFatura(matricula1.Codigo)
       : await this.getMesesPagosPosGraduacaoPreinscricao(matricula1.codigo_inscricao);
 
     const mesesIds = mesesPagos.map(m => m.codigo_mes);
-    const propina = await this.getPropinaPosGraduacao(curso.curso, matricula1.aluno_cacuaco, ciclo, user.anoLectivo);
 
-    const collection: any[] = [];
+    // 6. Propina
+    const propina = await this.getPropinaPosGraduacao(
+      curso.curso,
+      matricula1.aluno_cacuaco,
+      ciclo,
+      user.anoLectivo
+    );
 
-    if (propina) {
-      const mesesNaoPagos = await this.mesTempRepo
-        .createQueryBuilder('mt')
-        .where('mt.id IN (:...mesesCiclo)', { mesesCiclo })
-        .andWhere('mt.id NOT IN (:...mesesIds)', { mesesIds: mesesIds.length ? mesesIds : [0] })
-        .select('mt.designacao as mes_propina', 'mt.id as codigo_mes')
-        .getRawMany();
+    if (!propina) return [];
 
-      for (const mes of mesesNaoPagos) {
-        let total = propina.Preco;
-        let multa = 0;
-        let desconto = 0;
-        let taxa_desconto = 0;
+    // 7. Meses não pagos
+    const mesesNaoPagos = await this.mesTempRepo
+      .createQueryBuilder('mt')
+      .select([
+        'mt.designacao AS mes_propina',
+        'mt.id AS codigo_mes',
+      ])
+      .where('mt.id IN (:...mesesCiclo)', { mesesCiclo })
+      .andWhere(mesesIds.length ? 'mt.id NOT IN (:...mesesIds)' : '1 = 1', { mesesIds })
+      .getRawMany();
 
-        collection.push({
-          codGradeCurricular: '',
-          codFacturaOutrosServicos: '',
-          valor: propina.Preco,
-          multa: multa,
-          total: total,
-          servico: propina.Descricao,
-          mes_propina: mes.mes_propina,
-          mes_temp_id: null,
-          n_prestacao: mes.codigo_mes,
-          ano_lectivo: anoActual.Designacao,
-          taxa_multa: 0,
-          taxa_desconto: taxa_desconto,
-          bolsa: '',
-          codigo_propina: propina.Codigo,
-          codigo_anoLectivo: anoActual.Codigo,
-          desconto: desconto,
-          valor_iva: 0,
-          tipo_taxas: 0
-        });
-      }
-    }
+    // 8. Monta dívidas
+    const collection: DividaDto[] = mesesNaoPagos.map(mes => ({
+      codGradeCurricular: '',
+      codFacturaOutrosServicos: '',
+      valor: propina.Preco,
+      multa: 0,
+      total: propina.Preco,
+      servico: propina.Descricao,
+      mes_propina: mes.mes_propina,
+      mes_temp_id: null,
+      n_prestacao: mes.codigo_mes,
+      ano_lectivo: anoActual.Designacao,
+      taxa_multa: 0,
+      taxa_desconto: 0,
+      bolsa: '',
+      codigo_propina: propina.Codigo,
+      codigo_anoLectivo: anoActual.Codigo,
+      desconto: 0,
+      valor_iva: 0,
+      tipo_taxas: 0,
+      codidigo_servico: undefined,
+      incidencia: 0,
+      taxa_descricao: '',
+    }));
 
     return collection;
   }
@@ -813,10 +827,10 @@ export class DebtNegotiationService {
     SELECT DISTINCT pi.mes_temp_id AS codigo_mes
     FROM "DBUMA"."UMA_FACTURA" f
     INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
-    INNER JOIN tb_pagamentos p ON p.codigo_factura = f.Codigo
-     INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
-    INNER JOIN tb_ano_lectivo al ON al.Codigo = p.AnoLectivo
-    INNER JOIN tb_tipo_servicos ts ON ts.Codigo = pi.codigo_produto
+    INNER JOIN UMA_TB_PAGAMENTOS p ON p.codigo_factura = f.Codigo
+     INNER JOIN UMA_TB_PAGAMENTOSI pi ON pi.codigo_pagamento = p.Codigo
+    INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = p.AnoLectivo
+    INNER JOIN UMA_TB_TIPO_SERVICOS ts ON ts.Codigo = pi.codigo_produto
     WHERE "f".CodigoMatricula = ?
       AND "p".estado = 1
       AND "ts".TipoServico = 'Mensal'
@@ -829,10 +843,10 @@ export class DebtNegotiationService {
     const result = await this.pagamentoRepo.query(`
     SELECT DISTINCT pi.mes_temp_id AS codigo_mes
     FROM "DBUMA"."UMA_TB_PAGAMENTOS" p
-    INNER JOIN tb_pagamentosi pi ON pi.codigo_pagamento = p.Codigo
-    INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
-    INNER JOIN tb_tipo_servicos ts ON ts.Codigo = pi.codigo_produto
-    INNER JOIN tb_ano_lectivo al ON al.Codigo = p.AnoLectivo
+    INNER JOIN UMA_TB_PAGAMENTOSI pi ON pi.codigo_pagamento = p.Codigo
+    INNER JOIN UMA_TB_PREINSCRICAO pre ON pre.Codigo = p.Codigo_PreInscricao
+    INNER JOIN UMA_TB_TIPO_SERVICOS ts ON ts.Codigo = pi.codigo_produto
+    INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = p.AnoLectivo
     WHERE "pre".Codigo = ?
       AND "ts".TipoServico = 'Mensal'
       AND "p".estado = 1
@@ -857,7 +871,7 @@ export class DebtNegotiationService {
     const pagamentoOutubro = await this.pagouOutubro(aluno.codigo_inscricao);
     const dividasNovaVersao = await this.dividasNovaVersao(numero_matricula, aluno.codigo_inscricao);
     const outrosServicos = await this.dividaOutrosServicos(numero_matricula);
- 
+
 
     if (tipo === 2) {
       let total = dividasNovaVersao.length;
@@ -938,12 +952,12 @@ export class DebtNegotiationService {
     b.*,
     tb.designacao AS tipo_bolsa
   FROM "DBUMA"."UMA_TB_BOLSEIRO" b
-  INNER JOIN tb_tipo_bolsa tb ON tb.Codigo = b.codigo_tipo_bolsa
+  INNER JOIN UMA_TB_TIPO_BOLSAS tb ON tb.Codigo = b.codigo_tipo_bolsa
   WHERE "b".codigo_matricula = ?
     AND "b".codigo_anoLectivo = ?
     AND "b".semestre = ?
     AND "b".status = 0
-  LIMIT 1
+    FETCH NEXT 1 ROWS ONLY
 `, [codigo_matricula, codigo_anoLectivo, semestre_id]);
 
     return result[0] || null;
@@ -959,33 +973,34 @@ export class DebtNegotiationService {
     b.*,
     tb.designacao AS tipo_bolsa
   FROM "DBUMA"."UMA_TB_BOLSEIRO" b
-  INNER JOIN tb_tipo_bolsa tb ON tb.Codigo = b.codigo_tipo_bolsa
+  INNER JOIN UMA_TB_TIPO_BOLSAS tb ON tb.Codigo = b.codigo_tipo_bolsa
   WHERE "b".codigo_matricula = ?
     AND "b".codigo_anoLectivo = ?
     AND "b".semestre = ?
     AND "b".status = 0
-  LIMIT 1
+    FETCH NEXT 1 ROWS ONLY
 `, [codigo_matricula, codigo_anoLectivo, semestre_id]);
 
     return result[0] || null;
   }
 
   private async getAlunoPorMatricula(codigo_matricula: number): Promise<any> {
-    const result = await this.matriculaRepo.query(`
-    SELECT 
-      m.Codigo,
-      pre.Codigo AS codigo_inscricao,
-      pre.AlunoCacuaco,
-      pre.desconto,
-      pre.codigo_tipo_candidatura
-    FROM "DBUMA"."UMA_TB_MATRICULAS" m
-    INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
-    INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
-    WHERE "m".Codigo = ?
-    LIMIT 1
-  `, [codigo_matricula]);
+    const result = await this.matriculaRepo
+      .createQueryBuilder('m')
+      .select([
+        'm.Codigo',
+        'pre.Codigo AS codigo_inscricao',
+        'pre.AlunoCacuaco',
+        'pre.desconto',
+        'pre.codigo_tipo_candidatura',
+      ])
+      .innerJoin('UMA_TB_ADMISSAO', 'a', 'a.codigo = m.Codigo_Aluno')
+      .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Codigo = a.pre_incricao')
+      .where('m.Codigo = :codigo', { codigo: codigo_matricula })
+      .limit(1)
+      .getRawOne();
 
-    return result[0] || null;
+    return result || null;
   }
   private async confirmacao(codigo_matricula: number): Promise<any> {
     const result = await this.confirmacaoRepo.query(`
@@ -993,11 +1008,11 @@ export class DebtNegotiationService {
       al.Codigo AS ultimoAnoInscritoId,
       al.Designacao AS ultimoAnoInscritoDesig
     FROM "DBUMA"."UMA_TB_CONFIRMACOES" c
-    INNER JOIN tb_matriculas m ON m.Codigo = c.Codigo_Matricula
-    INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
+    INNER JOIN UMA_TB_MATRICULAS m ON m.Codigo = c.Codigo_Matricula
+    INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = c.Codigo_Ano_lectivo
     WHERE "m".Codigo = ?
     ORDER BY al.ordem DESC
-    LIMIT 1
+      FETCH NEXT 1 ROWS ONLY
   `, [codigo_matricula]);
 
     return result[0] || null;
@@ -1008,7 +1023,7 @@ export class DebtNegotiationService {
     SELECT Codigo, Designacao
     FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
     WHERE "estado" = 'Ativo'
-    LIMIT 1
+      FETCH NEXT 1 ROWS ONLY
   `);
 
     if (!anoCorrente[0]) return null;
@@ -1021,10 +1036,10 @@ export class DebtNegotiationService {
       c.Codigo_Ano_lectivo AS ano_lectivo_id,
       al.Designacao AS ano_lectivo_designacao
     FROM "DBUMA"."UMA_TB_CONFIRMACOES" c
-    INNER JOIN tb_ano_lectivo al ON al.Codigo = c.Codigo_Ano_lectivo
+    INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = c.Codigo_Ano_lectivo
     WHERE "c".Codigo_Matricula = ?
       AND "c".Codigo_Ano_lectivo = ?
-    LIMIT 1
+      FETCH NEXT 1 ROWS ONLY
   `, [codigo_matricula, anoId]);
 
     return confirmacao[0] || null;
@@ -1038,10 +1053,10 @@ export class DebtNegotiationService {
     const result = await this.pagamentosiRepo.query(`
     SELECT DISTINCT pi.mes_temp_id AS codigo_mes
     FROM "DBUMA"."UMA_TB_PAGAMENTOSI" pi
-    INNER JOIN tb_pagamentos p ON p.Codigo = pi.codigo_pagamento
-    INNER JOIN tb_preinscricao pre ON pre.Codigo = p.Codigo_PreInscricao
-    INNER JOIN factura f ON f.Codigo = p.codigo_factura
-    INNER JOIN factura_items fi ON fi.CodigoFactura = f.Codigo
+    INNER JOIN UMA_TB_PAGAMENTOS p ON p.Codigo = pi.codigo_pagamento
+    INNER JOIN UMA_TB_PREINSCRICAO pre ON pre.Codigo = p.Codigo_PreInscricao
+    INNER JOIN UMA_FACTURA f ON f.Codigo = p.codigo_factura
+    INNER JOIN UMA_FACTURA_ITEMS fi ON fi.CodigoFactura = f.Codigo
     WHERE "p".Codigo_PreInscricao = ?
       AND "p".AnoLectivo = ?
       AND "p".estado = 1
@@ -1138,13 +1153,13 @@ export class DebtNegotiationService {
       ts.Preco,
       ts.Codigo
     FROM "DBUMA"."UMA_TB_TIPO_SERVICOS" ts
-    INNER JOIN tb_ano_lectivo al ON al.Codigo = ts.codigo_ano_lectivo
+    INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = ts.codigo_ano_lectivo
     INNER JOIN tb_preinscricao pre ON pre.Codigo = ts.codigo_preinscricao
     WHERE "pre".Codigo = ?
       AND "ts".cacuaco = ?
       AND "al".Codigo = ?
       AND "ts".Descricao LIKE 'propina %'
-    LIMIT 1
+      FETCH NEXT 1 ROWS ONLY
   `, [codigo_inscricao, alunoCacuaco, "ano_lectivo_id"]);
 
     return result[0] || null;
@@ -1169,10 +1184,10 @@ export class DebtNegotiationService {
     m.Codigo_Curso AS curso_matricula,
     pre.Curso_Candidatura AS curso_preinscricao
   FROM "DBUMA"."UMA_TB_MATRICULAS" m
-  INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
-  INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
+  INNER JOIN UMA_TB_ADMISSAO a ON a.codigo = m.Codigo_Aluno
+  INNER JOIN UMA_TB_PREINSCRICAO pre ON pre.Codigo = a.pre_incricao
   WHERE "pre".Codigo = ?
-  LIMIT 1
+    FETCH NEXT 1 ROWS ONLY
 `, [candidatoId]);
 
       aluno = alunoResult[0] || null;
@@ -1185,10 +1200,10 @@ export class DebtNegotiationService {
     m.Codigo_Curso AS curso_matricula,
     pre.Curso_Candidatura AS curso_preinscricao
   FROM "DBUMA"."UMA_TB_MATRICULAS" m
-  INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
-  INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
+  INNER JOIN UMA_TB_ADMISSAO a ON a.codigo = m.Codigo_Aluno
+  INNER JOIN UMA_TB_PREINSCRICAO pre ON pre.Codigo = a.pre_incricao
   WHERE "m".Codigo = ?
-  LIMIT 1
+    FETCH NEXT 1 ROWS ONLY
 `, [matricula]);
 
       aluno = alunoResult[0] || null;
@@ -1200,11 +1215,11 @@ export class DebtNegotiationService {
     const ultimoAnoInscrito = await this.inscricaoAnteriorRepo.query(`
   SELECT "al".Codigo
   FROM "DBUMA"."UMA_TB_INSCRICOES_ANO_ANTERIOR" ia
-  INNER JOIN tb_ano_lectivo al ON al.Codigo = ia.codigo_ano_lectivo
+  INNER JOIN UMA_TB_ANO_LECTIVO al ON al.Codigo = ia.codigo_ano_lectivo
   WHERE "ia".codigo_matricula = ?
     AND "ia".status = 1
   ORDER BY al.ordem DESC
-  LIMIT 1
+    FETCH NEXT 1 ROWS ONLY
 `, [aluno.matricula]);
 
 
@@ -1215,8 +1230,8 @@ export class DebtNegotiationService {
     const cadeirasPendentes = await this.avaliacaoRepo.query(`
   SELECT COUNT(*) AS total
   FROM "DBUMA"."UMA_INSCRICAO_AVALIACOES" ia
-  INNER JOIN tb_grade_curricular gc ON gc.Codigo = ia.codigo_grade_curricular
-  INNER JOIN tb_cursos c ON c.Codigo = gc.codigo_curso
+  INNER JOIN UMA_TB_GRADE_CURRICULAR gc ON gc.Codigo = ia.codigo_grade_curricular
+  INNER JOIN UMA_TB_CURSOS c ON c.Codigo = gc.codigo_curso
   WHERE "ia".codigo_matricula = ?
     AND "ia".codigo_ano_lectivo = ?
     AND "ia".estado = 'pendente'
@@ -1233,38 +1248,43 @@ export class DebtNegotiationService {
   /**
    * Calcula o total da dívida de faturas do ano corrente (não pagas ou parcialmente pagas)
    */
-  async dividasFacturasAnoCorrente(preinscricaoId: number): Promise<number> {
+async dividasFacturasAnoCorrente(preinscricaoId: number): Promise<number> {
+  // 1. Busca ano letivo atual com segurança
+  const anoAtual = await this.anoLectivoRepo.findOne({ where: { Codigo: this.anoAtualPrincipal } });
+  if (!anoAtual) return 0;
 
-    const faturas = await this.facturaRepo.query(`
-  SELECT DISTINCT
-    f.Codigo AS codigo_factura,
-    f.DataFactura,
-    f.TotalPreco AS total,
-    f.ValorAPagar AS apagar,
-    f.Referencia AS referencia,
-    f.Desconto AS desconto,
-    f.TotalMulta,
-    al.Designacao AS ano,
-    f.codigo_descricao,
-    f.ValorEntregue,
-    f.estado AS estado_factura
-  FROM "DBUMA"."UMA_FACTURA" f
-  INNER JOIN tb_matriculas m ON m.Codigo = f.CodigoMatricula
-  INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
-  INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
-  INNER JOIN tb_ano_lectivo al ON al.Codigo = f.ano_lectivo
-  WHERE "pre".Codigo = ?
-    AND "f".corrente = 1
-    AND "f".estado != 3
-    AND "f".ano_lectivo = ?
-  ORDER BY f.Codigo ASC
-`, [preinscricaoId, this.anoAtualPrincipal]);
+  // 2. Usa GROUP BY + MAX() ao invés de DISTINCT
+  const faturas = await this.facturaRepo
+    .createQueryBuilder('f')
+    .select([
+      'f.Codigo AS codigo_factura',
+      'MAX(f.DataFactura) AS data_factura',
+      'MAX(f.TotalPreco) AS total',
+      'MAX(f.ValorAPagar) AS apagar',
+      'MAX(f.Referencia) AS referencia',
+      'MAX(f.Desconto) AS desconto',
+      'MAX(f.TotalMulta) AS total_multa',
+      'MAX(al.Designacao) AS ano',
+      'MAX(f.codigo_descricao) AS codigo_descricao',
+      'MAX(f.ValorEntregue) AS valor_entregue',
+      'MAX(f.estado) AS estado_factura',
+    ])
+    .innerJoin('UMA_TB_MATRICULAS', 'm', 'm.Codigo = f.CodigoMatricula')
+    .innerJoin('UMA_TB_ADMISSAO', 'a', 'a.codigo = m.Codigo_Aluno')
+    .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Codigo = a.pre_incricao')
+    .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = f.ano_lectivo')
+    .where('pre.Codigo = :preCodigo', { preCodigo: preinscricaoId })
+    .andWhere('f.corrente = 1')
+    .andWhere('f.estado != 3')
+    .andWhere('f.ano_lectivo = :anoLectivo', { anoLectivo: anoAtual.Codigo })
+    .groupBy('f.Codigo')
+    .orderBy('f.Codigo', 'ASC')
+    .getRawMany();
 
-    const totalEntregue = faturas.reduce((sum, f) => sum + (f.ValorEntregue || 0), 0);
-    const totalAPagar = faturas.reduce((sum, f) => sum + (f.apagar || 0), 0);
+  // 3. Calcula totais com segurança
+  const totalEntregue = faturas.reduce((sum, f) => sum + (Number(f.valor_entregue) || 0), 0);
+  const totalAPagar = faturas.reduce((sum, f) => sum + (Number(f.apagar) || 0), 0);
 
-    const totalDivida = totalEntregue < totalAPagar ? totalAPagar - totalEntregue : 0;
-
-    return totalDivida;
-  }
+  return totalEntregue < totalAPagar ? totalAPagar - totalEntregue : 0;
+}
 }

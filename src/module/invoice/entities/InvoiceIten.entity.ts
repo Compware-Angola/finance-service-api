@@ -1,19 +1,22 @@
+import { BaseEntity } from 'src/common/base-entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
+  PrimaryColumn,
+  BeforeInsert,
 } from 'typeorm';
 
 @Entity({ name: 'factura_items', "schema": 'DBUMA' })
-export class InvoiceItem {
-  @PrimaryGeneratedColumn({ name: 'codigo', "type": 'int' })
-  codigo: number;
+export class InvoiceItem  extends BaseEntity{
+@PrimaryColumn({ name: 'codigo', type: 'varchar2', length: 20 })
+  codigo: string;
 
-  @Column({ name: 'CodigoProduto', "type": 'int', "default": 0 })
-  codigoProduto: number;
+  @Column({ name: 'CodigoProduto', "type": 'varchar' })
+  CodigoProduto: string;
 
-  @Column({ name: 'CodigoFactura', "type": 'int' })
-  codigoFactura: number;
+  @Column({ name: 'CodigoFactura', "type": 'varchar' })
+  CodigoFactura: string;
 
   // DOUBLE → NUMBER(15,2)
   @Column({ name: 'Quantidade', "type": 'number', "precision": 15, "scale": 2, "nullable": true })
@@ -66,4 +69,37 @@ export class InvoiceItem {
 
   @Column({ name: 'valor_a_transportar', "type": 'number', "precision": 15, "scale": 2, "default": 0 })
   valorATransportar: number;
+@BeforeInsert()  
+  async generateCodigo() {
+    if (!this.codigo) {
+      const repo = (this.constructor as any).repo;
+      if (!repo) throw new Error('Repositório não configurado');
+
+      console.log('GERANDO CÓDIGO DO ITEM...');
+
+      const last = await repo
+        .createQueryBuilder('i')
+        .select('i.codigo', 'i_codigo')  
+        .where("REGEXP_LIKE(i.codigo, '^[0-9]+$')")
+        .orderBy('TO_NUMBER(i.codigo)', 'DESC')
+        .limit(1)
+        .getRawOne();
+
+      console.log('ÚLTIMO ITEM ENCONTRADO:', last);
+
+      let nextNumber = 1;
+      if (last && last.i_codigo) {
+        const lastNum = Number(last.i_codigo);
+        console.log('Último número ITEM:', lastNum);
+        if (!isNaN(lastNum)) {
+          nextNumber = lastNum + 1;
+        }
+      } else {
+        console.log('Nenhum item encontrado, começando do 1');
+      }
+
+      this.codigo = nextNumber.toString().padStart(6, '0'); // ← 000001
+      console.log('CÓDIGO GERADO PARA ITEM:', this.codigo);
+    }
+  }
 }

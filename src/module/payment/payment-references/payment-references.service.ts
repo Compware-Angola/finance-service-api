@@ -24,8 +24,6 @@ export class PaymentReferencesService {
   constructor(
     @InjectQueue('payment_reference_service')
     private readonly paymentReferenceQueue: Queue,
-
-    // UPDATED INJECTION
     @InjectRepository(MesTemp)
     private readonly mesTempRepository: Repository<MesTemp>,
     @InjectRepository(PaymentReferences)
@@ -37,6 +35,7 @@ export class PaymentReferencesService {
 
     private readonly academicYearRepository: Repository<AcademicYear>,
     private readonly invoiceService: InvoiceService) {
+      PaymentReferences.setRepository(this.paymentReferencesRepository)
 
     this.appyPayUtil = new AppyPayUtil()
   }
@@ -301,13 +300,12 @@ async createMonthlyPaymentReferences(
 
           // Usa o método com retry + transação interna (ele já lida com duplicados)
           await this.registerPaymentReference(finalPayload);
-          // Ou, se preferires, chama diretamente com o manager:
-          // await this.registerPaymentReference(finalPayload, transactionalEntityManager);
+        
 
           // ---- Criação do Item da Fatura ----
           const invoiceItemData = {
-            codigoProduto: item.CodigoProduto,
-            codigoFactura: invoice.Codigo,
+            CodigoProduto: item.CodigoProduto.toString(),
+            CodigoFactura: invoice.Codigo,
             quantidade: item.Quantidade,
             total: item.Total,
             obs: `Mensalidade de ${mes.designacao}`,

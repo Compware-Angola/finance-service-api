@@ -75,14 +75,14 @@ export class PropinaAlunoService {
       FROM "DBUMA"."UMA_TB_CURSOS" c
       INNER JOIN tb_preinscricao p ON c.Codigo = p.Curso_Candidatura
       WHERE "p".Codigo = ?
-      LIMIT 1
+        FETCH NEXT 1 ROWS ONLY
     `, [codigo_inscricao]);
     return result[0] || null;
   }
 
   private async getCursoById(codigo_curso: number) {
     const result = await this.dataSource.query(`
-      SELECT Designacao AS curso FROM "DBUMA"."UMA_TB_CURSOS" WHERE Codigo = ? LIMIT 1
+      SELECT Designacao AS curso FROM "DBUMA"."UMA_TB_CURSOS" WHERE Codigo = ?   FETCH NEXT 1 ROWS ONLY
     `, [codigo_curso]);
     return result[0] || null;
   }
@@ -104,7 +104,7 @@ export class PropinaAlunoService {
       WHERE "ts".Descricao LIKE ?
         AND "ts".cacuaco = ?
         AND "ts".codigo_ano_lectivo = ?
-      LIMIT 1
+        FETCH NEXT 1 ROWS ONLY
     `, [`propina ${nomeCurso}%`, "cacuaco", ano_lectivo]);
 
     return result[0] || null;
@@ -115,7 +115,7 @@ export class PropinaAlunoService {
       SELECT "codigo_curso_pagamento, "data_fim""
       FROM "DBUMA"."UMA_CURSO_PAGAMENTO_EXCEPCAO"
       WHERE "codigo_matricula" = ?
-      LIMIT 1
+        FETCH NEXT 1 ROWS ONLY
     `, [matricula]);
     return result[0] || null;
   }
@@ -128,7 +128,7 @@ async cicloMestrado(){
     SELECT Codigo, Designacao
     FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
     WHERE Designacao = 'Ciclo Mestrado'
-    LIMIT 1
+      FETCH NEXT 1 ROWS ONLY
   `);
   return result[0] || null;
 }
@@ -138,7 +138,7 @@ async cicloDoutoramento(){
     SELECT Codigo, Designacao
     FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
     WHERE Designacao = 'Ciclo Doutoramento'
-    LIMIT 1
+      FETCH NEXT 1 ROWS ONLY
   `);
   return result[0] || null;
 }

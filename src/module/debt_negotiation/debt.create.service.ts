@@ -22,7 +22,7 @@ import { AnoLectivoUtil } from '../util/current-academic-year';
 
 @Injectable()
 export class CreateDebtNegotiationService {
-  private anoAtualPrincipal: number;
+  private anoAtualPrincipal: any;
 
   constructor(
     private readonly anoLectivoUtil: AnoLectivoUtil,
@@ -44,7 +44,7 @@ export class CreateDebtNegotiationService {
 
   async createDebtNegotiation(
     dto: CreateDebtNegotiationDto,
-    codigo_matricula: number,
+    codigo_matricula: any,
   ) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -188,15 +188,15 @@ export class CreateDebtNegotiationService {
 
       // 11. Criar negociação
       const negociacao = queryRunner.manager.create(DebtNegotiation, {
-        valor_divida: parseFloat(valorApagar.toFixed(2)),
-        primeiroValorApagar,
-        codigo_matricula: aluno.matricula,
-        codigo_ano_lectivo: anoLectivo.Codigo,
-        codigo_fatura: invoice.Codigo,
-        valorRestante,
-        qtd_prestacoes: qtd_meses,
-        tipo_negociacao_id,
-        valor_prestacao_mensal: parseFloat(valorPM.toFixed(2)),
+        valor_divida: parseFloat(valorApagar.toFixed(2)).toString(),
+        primeiroValorApagar: primeiroValorApagar.toString(),
+        codigo_matricula: aluno.matricula.toString(),
+        codigo_ano_lectivo: anoLectivo.Codigo.toString(),
+        codigo_fatura: invoice.Codigo.toString(), // ← string!
+        valorRestante: valorRestante.toString(),
+        qtd_prestacoes: qtd_meses.toString(),
+        tipo_negociacao_id: tipo_negociacao_id.toString(),
+        valor_prestacao_mensal: parseFloat(valorPM.toFixed(2)).toString(),
       });
 
       const aaa = await queryRunner.manager.save(negociacao);
@@ -233,7 +233,7 @@ export class CreateDebtNegotiationService {
       INNER JOIN tb_admissao a ON a.codigo = m.Codigo_Aluno
       INNER JOIN tb_preinscricao pre ON pre.Codigo = a.pre_incricao
       WHERE "m".Codigo = ?
-      LIMIT 1
+        FETCH NEXT 1 ROWS ONLY
     `,
       [codigo_matricula],
     );

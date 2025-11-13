@@ -1,18 +1,19 @@
+// payment-references.entity.ts
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  BeforeInsert,
 } from 'typeorm';
+import { BaseEntity } from 'src/common/base-entity';
 
-@Entity({ name: 'pagamento_por_referencias', "schema": 'DBUMA' })
-export class PaymentReferences {
-  // BIGINT → NUMBER(19,0)
-  @PrimaryGeneratedColumn({ type: 'number', "name":'id'})
-  id: number;
+@Entity({ name: 'pagamento_por_referencias', schema: 'DBUMA' })
+export class PaymentReferences extends BaseEntity {
+  @PrimaryColumn({ name: 'id', type: 'varchar2', length: 20 })  // ← STRING!
+  id: string;
 
-  // BIGINT → NUMBER(19,0)
   @Column({
     name: 'PAYMENT_ID',
     type: 'number',
@@ -25,7 +26,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'SOURCE_ID',
-    type: 'varchar',
+    type: 'varchar2',
     length: 50,
     nullable: false,
     unique: true,
@@ -35,7 +36,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'factura_codigo',
-    type: 'int',
+    type: 'number',
     nullable: false,
     comment: 'Código da Factura do Mutue',
   })
@@ -43,7 +44,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'ENTITY_ID',
-    type: 'varchar',
+    type: 'varchar2',
     length: 50,
     nullable: false,
     comment: 'Identificador da UMA no BE (número informado nos ATM’s ou Express)',
@@ -52,7 +53,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'REFERENCE',
-    type: 'varchar',
+    type: 'varchar2',
     length: 100,
     nullable: false,
     unique: true,
@@ -62,7 +63,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'REFERENCE_ID',
-    type: 'varchar',
+    type: 'varchar2',
     length: 250,
     nullable: true,
   })
@@ -70,13 +71,12 @@ export class PaymentReferences {
 
   @Column({
     name: 'MERCHANT_TRANSACTION_ID',
-    type: 'varchar',
+    type: 'varchar2',
     length: 250,
     nullable: true,
   })
   merchantTransactionId?: string;
 
-  // DOUBLE → NUMBER(15,2)
   @Column({
     name: 'AMOUNT',
     type: 'number',
@@ -87,7 +87,6 @@ export class PaymentReferences {
   })
   amount: number;
 
-  // DATETIME → TIMESTAMP
   @Column({
     name: 'START_DATE',
     type: 'timestamp',
@@ -106,14 +105,13 @@ export class PaymentReferences {
 
   @Column({
     name: 'Status',
-    type: 'varchar',
+    type: 'varchar2',
     length: 50,
     nullable: false,
     comment: 'Estado da referência (ACTIVE, INACTIVE, CANCELED, PAID, ERROR)',
   })
   status: string;
 
-  // TEXT → CLOB
   @Column({
     name: 'webhook',
     type: 'clob',
@@ -122,18 +120,48 @@ export class PaymentReferences {
   })
   webhook?: string;
 
-  // CreateDateColumn simplificado (TypeORM usa TIMESTAMP automaticamente no Oracle)
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamp',
   })
   createdAt: Date;
 
-  // UpdateDateColumn simplificado
   @UpdateDateColumn({
     name: 'updated_at',
     type: 'timestamp',
     nullable: true,
   })
   updatedAt: Date;
+
+  // GERA O ID SEQUENCIAL
+  @BeforeInsert()
+  async generateId() {
+    if (!this.id) {
+      const repo = (this.constructor as any).repo;
+      if (!repo) throw new Error('Repositório não configurado. Use setRepository()');
+
+      console.log('GERANDO ID DA REFERÊNCIA...');
+
+      const last = await repo
+        .createQueryBuilder('r')
+        .select('r.id', 'r_id')
+        .where("REGEXP_LIKE(r.id, '^[0-9]+$')")
+        .orderBy('TO_NUMBER(r.id)', 'DESC')
+        .limit(1)
+        .getRawOne();
+
+      console.log('ÚLTIMA REFERÊNCIA ENCONTRADA:', last);
+
+      let nextId = 90000; // ← Começa do 90000
+      if (last && last.r_id) {
+        const lastNum = Number(last.r_id);
+        if (!isNaN(lastNum)) {
+          nextId = lastNum + 1;
+        }
+      }
+
+      this.id = nextId.toString();
+      console.log('ID GERADO PARA REFERÊNCIA:', this.id);
+    }
+  }
 }

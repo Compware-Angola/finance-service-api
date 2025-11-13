@@ -9,7 +9,7 @@ import {
 
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+
 export class InvoiceItemDto {
   @ApiProperty({
     description: 'Código do produto ou serviço associado ao item da fatura.',

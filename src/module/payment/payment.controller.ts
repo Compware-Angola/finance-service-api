@@ -27,8 +27,8 @@ export class PaymentController {
   })
   @ApiResponse({ status: 200, "description": 'Lista de pagamentos filtrada e paginada.' })
   async findByAnoLectivoAndPreInscricao(
-    @Param('academicYear', ParseIntPipe) academicYear: number,
-    @Param('preInscritionCode', ParseIntPipe) preInscritionCode: number,
+    @Param('academicYear', ParseIntPipe) academicYear: string,
+    @Param('preInscritionCode', ParseIntPipe) preInscritionCode: string,
     @Query() paginationQuery: PaginationQueryDto,
   ): Promise<PagedResult<Payment>> {
     return this.paymentService.findInvoicesAndItemsDetailedFlat(

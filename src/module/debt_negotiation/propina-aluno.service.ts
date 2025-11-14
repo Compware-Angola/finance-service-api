@@ -104,11 +104,11 @@ const mapped = result.map(r => ({
 
 private async getPropinaByCurso(
   nomeCurso: string,
-  cacuaco: string,
+  cacuaco: string,        // ← STRING!
   ano_lectivo: number,
 ): Promise<PropinaResult | null> {
   const result = await this.dataSource.query(`
-    SELECT 
+    SELECT
       ts."Descricao",
       ts."Preco",
       ts."TipoServico",
@@ -120,12 +120,9 @@ private async getPropinaByCurso(
       AND ts."cacuaco" = :2
       AND ts."codigo_ano_lectivo" = :3
     FETCH NEXT 1 ROWS ONLY
-  `,[`propina ${nomeCurso}%`, cacuaco, ano_lectivo]);
+  `, [`Propina ${nomeCurso}%`, cacuaco, ano_lectivo]);
 
-
-  console.log(result,"OKOKOK",cacuaco,ano_lectivo,nomeCurso);
-  
-
+  console.log(result, "OKOKOK", cacuaco, ano_lectivo, nomeCurso);
   return result[0] || null;
 }
 

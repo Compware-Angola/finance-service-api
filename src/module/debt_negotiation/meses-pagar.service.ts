@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { MesTemp } from './entities/mes-temp.entity';
 import { TbPreinscricao } from './entities/tb-preinscricao.entity';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 
 interface MesPagar {
   codigo: number;
@@ -33,10 +34,15 @@ export class MesesPagarService {
   ): Promise<MesPagar[]> {
     const anoLectivoId = await this.getAnoLectivoByCandidatura(user, codigo_anoLectivo);
     const mesesTemp = await this.getMesesTemp(tipo, user, anoLectivoId, mes_id);
-    const isencaoMulta = await this.getIsencaoMulta(candidatoId);
+    console.log("M",mesesTemp);
+    
+   // const isencaoMulta = await this.getIsencaoMulta(candidatoId);
 
     const mesesApagar: MesPagar[] = [];
-    for (const [index, mes] of mesesTemp.entries()) {
+    for (const [index, aa] of mesesTemp.entries()) {
+      const mes =toLowerCaseKeys(aa)
+      console.log(mes);
+      
       const prestacoesIsentasMulta = await this.checkIsencaoMultaRaw(matricula, mes.id_mes, anoLectivoId);
 
       let taxa = 0;
@@ -89,7 +95,7 @@ export class MesesPagarService {
   private async getPercentagemByCodigo(codigo: number): Promise<number> {
     const result = await this.dataSource.query(
       `SELECT "percentagem" FROM "DBUMA"."UMA_TB_PARAMETROS_MULTA" WHERE "codigo" = :codigo FETCH NEXT 1 ROWS ONLY`,
-     [ { codigo }]
+     [  codigo ]
     );
     return result[0]?.percentagem ?? 0;
   }
@@ -105,8 +111,8 @@ export class MesesPagarService {
   }
 
   private async getAnoLectivoByCandidatura(user: any, codigo_anoLectivo: number): Promise<number> {
-    if (user?.codigo_tipo_candidatura === 1) return codigo_anoLectivo;
-    if (user?.codigo_tipo_candidatura === 2) return (await this.cicloMestrado())?.Codigo || 0;
+    if (Number(user?.codigo_tipo_candidatura) === 1) return codigo_anoLectivo;
+    if (Number(user?.codigo_tipo_candidatura) === 2) return (await this.cicloMestrado())?.Codigo || 0;
     return (await this.cicloDoutoramento())?.Codigo || 0;
   }
 
@@ -128,7 +134,7 @@ export class MesesPagarService {
       .where('mt.ano_lectivo = :anoLectivoId', { anoLectivoId })
       .andWhere('mt.isencao = 0');
 
-    if (user?.codigo_tipo_candidatura === 1) {
+    if (Number(user?.codigo_tipo_candidatura) === 1) {
       query.andWhere('mt.activo = 1');
     } else {
       query.andWhere('mt.activo_posgraduacao = 1');
@@ -173,23 +179,24 @@ async cicloMestrado() {
   `);
   return result[0] || null;
 }
-  async checkIsencaoMultaRaw(
-    matricula: number,
-    mes_id: number,
-    ano_lectivo_id: number,
-  ): Promise<boolean> {
-    const result = await this.dataSource.query(
-      `
+async checkIsencaoMultaRaw(
+  matricula: number,
+  mes_id: string | number,
+  ano_lectivo_id: string | number,
+): Promise<boolean> {
+  const result = await this.dataSource.query(
+    `
       SELECT 1
       FROM "DBUMA"."UMA_TB_ISENCOE_MULTA"
-      WHERE "mes_temp_id" = :mes_id
-        AND "codigo_matricula" = :matricula
+      WHERE "mes_temp_id" = :1
+        AND "codigo_matricula" = :2
         AND "estado_isensao" = 'Activo'
-        AND codigo_anoLectivo = :ano_lectivo_id
+        AND "codigo_anoLectivo" = :3
       FETCH NEXT 1 ROWS ONLY
     `,
-    [  { mes_id, matricula, ano_lectivo_id }]
-    );
-    return result.length > 0;
-  }
+    [mes_id, matricula, ano_lectivo_id]
+  );
+
+  return result.length > 0;
+}
 }

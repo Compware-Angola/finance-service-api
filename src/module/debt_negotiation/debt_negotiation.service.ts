@@ -1000,47 +1000,47 @@ console.log(aluno,pagamentoOutubro,dividasNovaVersao,outrosServicos,"AAA");
   }
 
   // === MÉTODOS AUXILIARES ===
-  async BolsaPorSemestre1(
-    codigo_matricula: number,
-    codigo_anoLectivo: number,
-    semestre_id: number = 1,
-  ): Promise<any> {
-    const result = await this.bolseiroRepo.query(`
-  SELECT 
-    b.*,
-    tb.designacao AS tipo_bolsa
-  FROM "."UMA_TB_BOLSEIRO" b
-  INNER JOIN UMA_TB_TIPO_BOLSAS tb ON tb.Codigo = b.codigo_tipo_bolsa
-  WHERE "b".codigo_matricula = ?
-    AND "b".codigo_anoLectivo = ?
-    AND "b".semestre = ?
-    AND "b".status = 0
+async BolsaPorSemestre1(
+  codigo_matricula: number,
+  codigo_anoLectivo: number,
+  semestre_id: number = 1,
+): Promise<any> {
+  const result = await this.bolseiroRepo.query(`
+    SELECT
+      b.*,
+      tb.designacao AS tipo_bolsa
+    FROM "DBUMA"."UMA_TB_BOLSEIROS" b
+    INNER JOIN "DBUMA"."UMA_TB_TIPO_BOLSAS" tb ON "tb"."codigo" = b.codigo_tipo_bolsa
+    WHERE "b".codigo_matricula = :1
+      AND "b".codigo_anoLectivo = :2
+      AND "b".semestre = :3
+      AND "b".status = 0
     FETCH NEXT 1 ROWS ONLY
-`, [codigo_matricula, codigo_anoLectivo, semestre_id]);
+  `, [codigo_matricula, codigo_anoLectivo, semestre_id]);
 
-    return result[0] || null;
-  }
+  return result[0] || null;
+}
 
-  async BolsaPorSemestre2(
-    codigo_matricula: number,
-    codigo_anoLectivo: number,
-    semestre_id: number = 2,
-  ): Promise<any> {
-    const result = await this.bolseiroRepo.query(`
-  SELECT 
-    b.*,
-    tb.designacao AS tipo_bolsa
-  FROM "."UMA_TB_BOLSEIRO" b
-  INNER JOIN UMA_TB_TIPO_BOLSAS tb ON tb.Codigo = b.codigo_tipo_bolsa
-  WHERE "b".codigo_matricula = ?
-    AND "b".codigo_anoLectivo = ?
-    AND "b".semestre = ?
-    AND "b".status = 0
+async BolsaPorSemestre2(
+  codigo_matricula: number,
+  codigo_anoLectivo: number,
+  semestre_id: number = 2,
+): Promise<any> {
+  const result = await this.bolseiroRepo.query(`
+    SELECT
+      b.*,
+      tb.designacao AS tipo_bolsa
+    FROM "DBUMA"."UMA_TB_BOLSEIROS" b
+    INNER JOIN "DBUMA"."UMA_TB_TIPO_BOLSAS" tb ON "tb"."codigo" = b.codigo_tipo_bolsa
+    WHERE "b".codigo_matricula = :1
+      AND "b".codigo_anoLectivo = :2
+      AND "b".semestre = :3
+      AND "b".status = 0
     FETCH NEXT 1 ROWS ONLY
-`, [codigo_matricula, codigo_anoLectivo, semestre_id]);
+  `, [codigo_matricula, codigo_anoLectivo, semestre_id]);
 
-    return result[0] || null;
-  }
+  return result[0] || null;
+}
 
 private async getAlunoPorMatricula(codigo_matricula: number): Promise<{
   codigo: number;

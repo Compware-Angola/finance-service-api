@@ -27,6 +27,7 @@ import { AnoLectivoUtil } from '../util/current-academic-year';
 import { MesesPagarService } from './meses-pagar.service';
 import { PropinaAlunoService } from './propina-aluno.service';
 import { sumValues } from '../util/currency.util';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 
 export interface DividaDto {
   codGradeCurricular: string | null;
@@ -265,7 +266,7 @@ async dividaOutrosServicos(codigo_matricula: number): Promise<DividaDto[]> {
  
     const mesesPagos = await this.mesesPagosPorAnoPropina(confirmacao?.ano_lectivo_id, aluno?.codigoInscricao);
     const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao?.ano_lectivo_id, mesesPagos, aluno, codigo_matricula);
-    const propina = await this.propinaAlunoService.propinaAluno(aluno.codigoInscricao, aluno.alunoCacuaco, confirmacao?.ano_lectivo_id, codigo_matricula, aluno);
+    const propina = await this.propinaAlunoService.propinaAluno(aluno.codigoInscricao, aluno.alunoCacuaco.toString(), confirmacao?.ano_lectivo_id, codigo_matricula, aluno);
     if (!propina) return [];
 
     const bolseiro1 = await this.BolsaPorSemestre1(codigo_matricula, confirmacao?.ano_lectivo_id, 1);
@@ -443,7 +444,8 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
 
   // 1. Busca usuário
   user = await this.preinscricaoRepo.findOne({ where: { Codigo: preinscricaoId } });
-  if (!user || user.codigo_tipo_candidatura !== 1) {
+
+  if (!user || Number(user.codigo_tipo_candidatura) !== 1) {
     return this.handlePosGraduacao(user, codigo_matricula);
   }
 
@@ -459,61 +461,74 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
       'pre.desconto AS desconto',
       'pre.codigo_tipo_candidatura AS codigo_tipo_candidatura',
     ])
-    .innerJoin('UMA_TB_ADMISSAO', 'a', 'a.codigo = m.Codigo_Aluno')
-    .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Codigo = a.pre_incricao')
+    .innerJoin('UMA_TB_ADMISSAO', 'a', '"a"."codigo" = m.Codigo_Aluno')
+    .innerJoin('UMA_TB_PREINSCRICAO', 'pre', '"pre"."Codigo" = a.pre_incricao')
     .where('pre.Codigo = :preinscricaoId', { preinscricaoId })
     .orWhere('m.Codigo = :codigo_matricula', { codigo_matricula })
     .limit(1)
     .getRawOne();
 
+
   if (!matriculaRaw) return [];
-  const matricula = matriculaRaw;
+
+
+const matricula = toLowerCaseKeys(matriculaRaw);
   codigo_inscricao = matricula.codigo_inscricao;
+  console.log(codigo_inscricao,"WWWT",matricula);
+  
+  
 
   // 3. Curso
   const cursoRaw = await this.cursoRepo
     .createQueryBuilder('c')
     .select([
-      'c."Designacao" AS curso',
-      'c."Codigo" AS codigo_curso',
+      'c.Designacao AS curso',
+      'c.Codigo AS codigo_curso',
     ])
-    .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Curso_Candidatura = c.Codigo')
+    .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Curso_Candidatura = "c"."Codigo"')
     .where('pre.Codigo = :codigo_inscricao', { codigo_inscricao })
     .limit(1)
     .getRawOne();
 
-  const curso = cursoRaw || null;
+  const curso = toLowerCaseKeys(cursoRaw) || null;
   const anoCorrente = this.anoAtualPrincipal;
   const anoAtual = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
+  console.log(curso,"TESTE##",anoAtual);
+  
   if (!anoAtual) return [];
 
   // 4. Maior ano anterior (QueryBuilder)
   const maiorAnoRaw = await this.dataSource
     .createQueryBuilder()
-    .select('al."Designacao"', 'ano_designacao')
+    .select('al.Designacao', 'ano_designacao')
     .addSelect('al.Codigo', 'maior')
     .from('DBUMA.UMA_TB_INSCRICOES_ANO_ANTERIOR', 'ia')
-    .innerJoin('DBUMA.UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = ia.codigo_ano_lectivo')
+    .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = ia.codigo_ano_lectivo')
     .where('ia.codigo_matricula = :matricula', { matricula: matricula.codigo })
     .andWhere('ia.status = 1')
     .orderBy('al.ordem', 'DESC')
-    .addOrderBy('al."Designacao"', 'DESC')
+    .addOrderBy('al.Designacao', 'DESC')
     .limit(1)
     .getRawOne();
 
-  const maiorAno = maiorAnoRaw || null;
+  const maiorAno = toLowerCaseKeys(maiorAnoRaw) || null;
+
+  console.log(maiorAno,"ANOOO",maiorAnoRaw);
+  
 
   // 5. Todos os anos anteriores
   const anosAnterioresRaw = await this.dataSource
     .createQueryBuilder()
-    .select('al."Designacao"', 'ano_designacao')
+    .select('al.Designacao', 'ano_designacao')
     .addSelect('ia.codigo_ano_lectivo', 'ano_lectivo')
-    .from('DBUMA.UMA_TB_INSCRICOES_ANO_ANTERIOR', 'ia')
-    .innerJoin('DBUMA.UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = ia.codigo_ano_lectivo')
+    .from('UMA_TB_INSCRICOES_ANO_ANTERIOR', 'ia')
+    .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = ia.codigo_ano_lectivo')
     .where('ia.codigo_matricula = :matricula', { matricula: matricula.codigo })
     .orderBy('ia.codigo_ano_lectivo', 'ASC')
     .getRawMany();
-
+    console.log(anosAnterioresRaw,"ANOS ANT");
+    
+ 
   const collection: any[] = [];
   const diplomado = await this.matriculaRepo.findOne({
     where: { Codigo: matricula.codigo, estado_matricula: 'diplomado' },
@@ -530,12 +545,16 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
   }
 
   // === DÍVIDAS ANTIGAS (2020+) ===
-  for (const ano of anosAnterioresRaw) {
+  for (const aa of anosAnterioresRaw) {
+    const ano =toLowerCaseKeys(aa)
+
     const bolseiro = await this.bolseiroRepo.findOne({
       where: { codigo_matricula: matricula.codigo, ano: ano.ano_designacao },
     });
 
     const mesesPagos = await this.mesesPagosPorAnoPropina(ano.ano_lectivo, codigo_inscricao);
+    console.log(mesesPagos,"QQWW",ano);
+    
     const mesesIds = mesesPagos.map(m => m.codigo_mes);
     const mesesIsentos: any = await this.getPrestacoesAnosAnterioresPorAnoLectivo(ano.ano_lectivo);
     const mesesIsentosIds = mesesIsentos.map(m => m.codigo);
@@ -558,16 +577,16 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
         'ts.Descricao AS servico',
         'm.mes AS mes_propina',
         'm.codigo AS codigo_mes',
-        'al."Designacao" AS ano',
+        'al.Designacao AS ano',
         'al.Codigo AS codigo_anoLectivo',
         'ppc.codigo_servico AS codigo_propina',
         '(ts.Preco * 1.1) AS total',
         'ts.Preco AS valor',
         '(ts.Preco * 0.1) AS multa',
       ])
-      .innerJoin('DBUMA.UMA_PROPINA_POR_CURSO', 'ppc', 'ppc.codigo_servico = ts.Codigo')
-      .innerJoin('DBUMA.UMA_MESES', 'm', 'm.codigo = ppc.mes_id')
-      .innerJoin('DBUMA.UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = ts.codigo_ano_lectivo')
+      .innerJoin('UMA_PROPINA_POR_CURSO', 'ppc', 'ppc.codigo_servico = ts.Codigo')
+      .innerJoin('UMA_MESES', 'm', 'm.codigo = ppc.mes_id')
+      .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = ts.codigo_ano_lectivo')
       .where('ts.Codigo = :propinaCodigo', { propinaCodigo: propina.Codigo })
       .andWhere('ts.cacuaco = :cacuaco', { cacuaco: matricula.aluno_cacuaco })
       .andWhere('ts.codigo_ano_lectivo = :ano', { ano: ano.ano_lectivo });
@@ -646,11 +665,14 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
     .select('c.Codigo_Ano_lectivo', 'codigo_ano_lectivo')
     .addSelect('al.ordem', 'ordem')
     .from('DBUMA.UMA_TB_CONFIRMACOES', 'c')
-    .innerJoin('DBUMA.UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = c.Codigo_Ano_lectivo')
+    .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = c.Codigo_Ano_lectivo')
     .where('c.Codigo_Matricula = :matricula', { matricula: codigo_matricula })
     .groupBy('c.Codigo_Ano_lectivo, al.ordem')
     .orderBy('al.ordem', 'ASC')
     .getRawMany();
+
+    console.log(anosInscritosRaw,"#///");
+    
 
   if (!diplomado) {
     for (const ano of anosInscritosRaw) {
@@ -659,15 +681,17 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
       const confirmacaoRaw = await this.dataSource
         .createQueryBuilder()
         .select('al.Codigo', 'ultimoAnoInscritoId')
-        .addSelect('al."Designacao"', 'ultimoAnoInscritoDesig')
+        .addSelect('al.Designacao', 'ultimoAnoInscritoDesig')
         .from('DBUMA.UMA_TB_CONFIRMACOES', 'c')
-        .innerJoin('DBUMA.UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = c.Codigo_Ano_lectivo')
-        .innerJoin('DBUMA.UMA_TB_MATRICULAS', 'm', 'm.Codigo = c.Codigo_Matricula')
+        .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = c.Codigo_Ano_lectivo')
+        .innerJoin('UMA_TB_MATRICULAS', 'm', 'm.Codigo = c.Codigo_Matricula')
         .where('m.Codigo = :matricula', { matricula: codigo_matricula })
         .andWhere('c.Codigo_Ano_lectivo = :ano', { ano: ano.codigo_ano_lectivo })
         .orderBy('al.ordem', 'DESC')
         .limit(1)
         .getRawOne();
+        console.log(confirmacaoRaw,"$$");
+        
 
       const confirmacao = confirmacaoRaw || null;
       const cond1 = confirmacao?.ultimoAnoInscritoId === 1 && pagamentoOutubro;
@@ -676,7 +700,11 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
       if (!cond1 && !cond2) continue;
 
       const mesesPagos = await this.mesesPagosPorAnoPropina(confirmacao.ultimoAnoInscritoId, codigo_inscricao);
+      console.log(mesesPagos,"MES PAGO");
+      
       const mesesNaoPagos = await this.getPrestacoesPorAnoLectivo(confirmacao.ultimoAnoInscritoId, mesesPagos, user, codigo_matricula);
+      console.log(mesesNaoPagos,"MES NAO PAGO");
+      
       const propina = await this.propinaAlunoService.propinaAluno(
         codigo_inscricao,
         aluno.AlunoCacuaco,
@@ -684,6 +712,9 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
         codigo_matricula,
         user
       );
+
+      console.log(propina,"ALUNOPROPINA");
+      
 
       if (!propina) continue;
 
@@ -698,7 +729,7 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
       );
 
       for (const mes of mesesNaoPagos) {
-        const mesTaxa = taxaMultaMeses.find(m => m.codigo === mes.id);
+        const mesTaxa = taxaMultaMeses.find(m => m.codigo === mes.m_id);
         if (!mesTaxa) continue;
 
         let desconto = 0, total = 0, multa = 0, taxa_desconto = 0, bolsa = '';
@@ -767,8 +798,7 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
 
     // 2. Busca curso
 
-    console.log("ggggggggggggggggggggg");
-    
+
     const curso = await this.cursoRepo
       .createQueryBuilder('c')
       .select('c.Designacao AS curso')
@@ -897,6 +927,7 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
     const pagamentoOutubro = await this.pagouOutubro(aluno?.codigoInscricao);
     const dividasNovaVersao = await this.dividasNovaVersao(numero_matricula, aluno.codigoInscricao);
     const outrosServicos = await this.dividaOutrosServicos(numero_matricula);
+console.log(aluno,pagamentoOutubro,dividasNovaVersao,outrosServicos,"AAA");
 
 
     if (tipo === 2) {
@@ -925,6 +956,7 @@ async dividasNovaVersao(codigo_matricula: number, preinscricaoId: number): Promi
 
     let dividas = await this.DividasTodosAnos(enrrolmentId, 1) as DividaDto[];
 
+ 
     if (tipo === 2) {
       const propinaCorrente = await this.dividasPropinaAnoCorrente(enrrolmentId, codigo_inscricao);
       dividas = [...dividas, ...propinaCorrente];
@@ -1032,9 +1064,7 @@ private async getAlunoPorMatricula(codigo_matricula: number): Promise<{
     .getRawOne();
 
   if (!raw) return null;
-  console.log(raw,"TTTTTTTTTTTTTTTTTTTTT");
-  
-
+ 
   return {
     codigo: Number(raw.M_CODIGO),
     codigoInscricao: Number(raw.PRE_CODIGO),
@@ -1111,7 +1141,7 @@ private async mesesPagosPorAnoPropina(
 
   async getPrestacoesPorAnoLectivo(
     codigo_anoLectivo: number,
-    arrayMesesPagos: number[] = [],
+    arrayMesesPagos: any[] = [],
     user: any,
     matricula: number,
   ): Promise<any> {
@@ -1119,7 +1149,8 @@ private async mesesPagosPorAnoPropina(
     const anoLectivoId = await this.getAnoLectivoByCandidatura(user, codigo_anoLectivo);
     const isencaoIds = await this.getIsencaoIds(matricula, anoLectivoId.toString());
 
-
+ console.log(anoLectivoId,isencaoIds,"======");
+ 
 
     return this.getPrestacoes(
       anoLectivoId,
@@ -1134,8 +1165,8 @@ private async mesesPagosPorAnoPropina(
 
 
   private async getAnoLectivoByCandidatura(user: any, ano_lectivo: number): Promise<number> {
-    if (user.codigo_tipo_candidatura === 1) return ano_lectivo;
-    if (user.codigo_tipo_candidatura === 2) {
+    if (Number(user.codigo_tipo_candidatura) === 1) return ano_lectivo;
+    if (Number(user.codigo_tipo_candidatura) === 2) {
       const mestrado = await this.mesesPagarService.cicloMestrado();
       return mestrado?.codigo ?? ano_lectivo;
     }
@@ -1143,8 +1174,7 @@ private async mesesPagosPorAnoPropina(
     return doutoramento?.codigo ?? ano_lectivo;
   }
 private async getIsencaoIds(matricula: number, anoLectivo: string): Promise<number[]> {
-  console.log(matricula, anoLectivo);
-  
+
   const raw = await this.dataSource
     .createQueryBuilder()
    .select('TO_NUMBER("mes_temp_id")', 'mes_temp_id')
@@ -1155,6 +1185,9 @@ private async getIsencaoIds(matricula: number, anoLectivo: string): Promise<numb
     .andWhere('"estado_isensao" = :estado_isensao', { estado_isensao: 'Activo' })
     .andWhere('"codigo_anoLectivo" = :codigo_anoLectivo', { codigo_anoLectivo: anoLectivo }) // ✅ corrigido aqui
     .getRawMany();
+      console.log(matricula, anoLectivo,raw);
+  
+
 
   return raw.map(r => Number(r.mes_temp_id));
 }
@@ -1162,21 +1195,41 @@ private async getPrestacoes(
   anoLectivoId: number,
   tipoCandidatura: number,
   isencaoIds: number[],
-  mesesPagos: number[],
+  mesesPagos: string[],
 ): Promise<any> {
-  const activoField = tipoCandidatura === 1 ? 'activo' : 'activo_posgraduacao';
+  // FILTRA E CONVERTE
+  const cleanIds = (arr: (number | string)[]) =>
+    arr
+      .filter(id => id != null && id !== 'None' && id !== '')
+      .map(id => Number(id))
+      .filter(id => !isNaN(id));
 
-  const qb = this.mesTempRepo.createQueryBuilder('m')
-    .select(['m.id', 'm.designacao', 'm.data_limite', 'm.data_final', 'm.prestacao'])
-    .where('m.ano_lectivo = :anoLectivo', { anoLectivo: anoLectivoId })
+  const isencaoIdsNum = cleanIds(isencaoIds);
+  const mesesPagosNum = cleanIds(mesesPagos);
+
+  console.log(mesesPagosNum,"@@@");
+  
+
+  const activoField = Number(tipoCandidatura) === 1 ? 'activo' : 'activo_posgraduacao';
+
+  const qb = this.mesTempRepo
+    .createQueryBuilder('m')
+    .select([
+      'm.id',
+      'm.designacao',
+      'm.data_limite',
+      'm.data_final',
+      'm.prestacao',
+    ])
+    .where('m.ano_lectivo = :anoLectivo', { anoLectivo: anoLectivoId.toString() })
     .andWhere(`m.${activoField} = 1`);
 
-  if (isencaoIds.length > 0) {
-    qb.andWhere('m.id NOT IN (:...isencaoIds)', { isencaoIds });
+  if (isencaoIdsNum.length > 0) {
+    qb.andWhere('m.id NOT IN (:...isencaoIds)', { isencaoIds: isencaoIdsNum });
   }
 
-  if (mesesPagos.length > 0) {
-    qb.andWhere('m.id NOT IN (:...mesesPagos)', { mesesPagos });
+  if (mesesPagosNum.length > 0) {
+    qb.andWhere('m.id NOT IN (:...mesesPagos)', { mesesPagos: mesesPagosNum });
   }
 
   qb.orderBy('m.id', 'ASC');

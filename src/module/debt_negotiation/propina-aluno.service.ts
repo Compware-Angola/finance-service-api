@@ -21,7 +21,7 @@ export class PropinaAlunoService {
 
   async propinaAluno(
     codigo_inscricao: number,
-    aluno_cacuaco: number,
+    aluno_cacuaco: string,
     ano_lectivo: number,
     matricula:number,
     user:any
@@ -42,6 +42,8 @@ export class PropinaAlunoService {
 
     // 4. Verifica exceção de pagamento
     const temExcecao = await this.checkExcecao(matricula);
+    console.log(temExcecao,"EXCE");
+    
     let propina: PropinaResult | null = null;
 
     if (temExcecao && temExcecao.data_fim >= new Date().toISOString().split('T')[0]) {
@@ -55,6 +57,9 @@ export class PropinaAlunoService {
       }
     } else {
       propina = await this.getPropinaByCurso(curso.curso, aluno_cacuaco, anoLectivoId);
+
+      console.log(propina,"####UUU");
+      
     }
 
     this.cache.set(cacheKey, propina);
@@ -62,8 +67,8 @@ export class PropinaAlunoService {
   }
 
   private async getAnoLectivoByCandidatura(user: any, ano_lectivo: number): Promise<number> {
-    if (user.codigo_tipo_candidatura === 1) return ano_lectivo;
-    if (user.codigo_tipo_candidatura === 2) {
+    if (Number(user.codigo_tipo_candidatura) === 1) return ano_lectivo;
+    if (Number(user.codigo_tipo_candidatura) === 2) {
       const mestrado = await this.cicloMestrado();
       return mestrado?.Codigo ?? ano_lectivo;
     }
@@ -99,7 +104,7 @@ const mapped = result.map(r => ({
 
 private async getPropinaByCurso(
   nomeCurso: string,
-  cacuaco: number,
+  cacuaco: string,
   ano_lectivo: number,
 ): Promise<PropinaResult | null> {
   const result = await this.dataSource.query(`
@@ -116,6 +121,10 @@ private async getPropinaByCurso(
       AND ts."codigo_ano_lectivo" = :3
     FETCH NEXT 1 ROWS ONLY
   `,[`propina ${nomeCurso}%`, cacuaco, ano_lectivo]);
+
+
+  console.log(result,"OKOKOK",cacuaco,ano_lectivo,nomeCurso);
+  
 
   return result[0] || null;
 }

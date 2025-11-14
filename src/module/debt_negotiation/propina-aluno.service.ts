@@ -120,8 +120,6 @@ private async getPropinaByCurso(
   return result[0] || null;
 }
 
-
-
 private async checkExcecao(matricula: number) {
   const result = await this.dataSource.query(`
     SELECT "codigo_curso_pagamento", "data_fim"

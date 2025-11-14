@@ -921,29 +921,36 @@ const matricula = toLowerCaseKeys(matriculaRaw);
   }
 
   // === 12. DividasTodosAnos ===
-  async DividasTodosAnos(numero_matricula: number, tipo: 1 | 2): Promise<DividaDto[] | number> {
-    const aluno = await this.getAlunoPorMatricula(numero_matricula);
-    if(!aluno) return []
-    const pagamentoOutubro = await this.pagouOutubro(aluno?.codigoInscricao);
-    const dividasNovaVersao = await this.dividasNovaVersao(numero_matricula, aluno.codigoInscricao);
-    const outrosServicos = await this.dividaOutrosServicos(numero_matricula);
-console.log(aluno,pagamentoOutubro,dividasNovaVersao,outrosServicos,"AAA");
+async DividasTodosAnos(numero_matricula: number, tipo: 1 | 2): Promise<DividaDto[] | number> {
+  const aluno = await this.getAlunoPorMatricula(numero_matricula);
+  if (!aluno) return tipo === 2 ? 0 : [];
 
+  const pagamentoOutubroPromise = this.pagouOutubro(aluno.codigoInscricao);
+  const dividasNovaVersaoPromise = this.dividasNovaVersao(numero_matricula, aluno.codigoInscricao);
 
-    if (tipo === 2) {
-      let total = dividasNovaVersao.length;
-      if (pagamentoOutubro) {
-        total = dividasNovaVersao.length;
-      } else {
-        total += outrosServicos.length;
-      }
-      return total;
-    }
-
-    let dividas = [...dividasNovaVersao, ...outrosServicos];
-    if (pagamentoOutubro) dividas = dividasNovaVersao;
-    return dividas;
+  let outrosServicosPromise: Promise<DividaDto[]> | null = null;
+  if (tipo !== 2) {
+    outrosServicosPromise = this.dividaOutrosServicos(numero_matricula);
   }
+
+  const [pagamentoOutubro, dividasNovaVersao, outrosServicos] = await Promise.all([
+    pagamentoOutubroPromise,
+    dividasNovaVersaoPromise,
+    outrosServicosPromise ?? Promise.resolve([])
+  ]);
+
+  if (tipo === 2) {
+    let total = dividasNovaVersao.length;
+    if (!pagamentoOutubro) total += outrosServicos.length;
+    return total;
+  }
+
+  let dividas = [...dividasNovaVersao, ...outrosServicos];
+  if (pagamentoOutubro) dividas = dividasNovaVersao;
+
+  return dividas;
+}
+
 
   // === 13. index ===
   async getDebt(enrrolmentId: number, codigo_inscricao: number, tipo: number) {

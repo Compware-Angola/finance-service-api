@@ -51,7 +51,8 @@ export class PaymentService {
             .innerJoin('factura_items', aliasItem, `${aliasFactura}.Codigo = ${aliasItem}.CodigoFactura`)
             .innerJoin('tb_tipo_servicos', aliasProduto, `${aliasItem}.CodigoProduto = ${aliasProduto}.Codigo`)
             .where(`${aliasPayment}.AnoLectivo = :anoLectivo`, { anoLectivo })
-            .andWhere(`${aliasPayment}.Codigo_PreInscricao = :codigoPreInscricao`, { codigoPreInscricao });
+            .andWhere(`${aliasPayment}.Codigo_PreInscricao = :codigoPreInscricao`, { codigoPreInscricao })
+            .andWhere(`${aliasPayment}.status_pagamento = :status`, { status: 'concluido' });
 
 
         // --- 2. Obter a contagem total de linhas ---

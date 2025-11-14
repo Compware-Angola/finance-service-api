@@ -116,7 +116,7 @@ export class PaymentReferencesService {
           codigoAnoLectivo: invoice.anoLectivo,
           estado: item.estado,
           valorPago: item.valorPago,
-          valorATransportar: item.valorATransportar,
+          valorATransportar: item.valorATransportar?.toString(),
         }))
       );
 
@@ -289,7 +289,7 @@ async createMonthlyPaymentReferences(
           codigoAnoLectivo: invoice.anoLectivo,
           estado: 0,
           valorPago: item.valorPago,
-          valorATransportar: item.valorATransportar,
+          valorATransportar: item.valorATransportar?.toString(),
         };
 
         const invoiceItem = transactionalEntityManager.create(

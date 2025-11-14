@@ -143,7 +143,7 @@ if (itens?.length) {
       codigoAnoLectivo: savedInvoice.anoLectivo,
       estado: item.estado ?? 0,
       valorPago: item.valorPago ?? 0,
-      valorATransportar: item.valorATransportar ?? 0,
+      valorATransportar: item.valorATransportar?.toString() ?? '0',
     }),
   );
 
@@ -411,7 +411,7 @@ function groupInvoices(rows: any[]): any[] {
   const invoiceMap = new Map<string, any>();
 
   rows.forEach(row => {
-    const codigo = row.f_codigo; 
+    const codigo = row.f_codigo;
 
     if (!invoiceMap.has(codigo)) {
       invoiceMap.set(codigo, {
@@ -448,15 +448,13 @@ function groupInvoices(rows: any[]): any[] {
         codigo_preinscricao: row.f_codigo_preinscricao,
         numSequenciaFactura: row.f_num_sequencia_factura,
         tipo_documento_factura_id: row.f_tipo_documento_factura_id,
-
-        // DADOS DO ALUNO – MINÚSCULO NO ROW
+        // DADOS DO ALUNO
         NomeCompletoAluno: row.nome_completo_aluno,
         BI_Aluno: row.bi_aluno,
         EmailAluno: row.email_aluno,
         Contactos_Telefonicos: row.contactos_telefonicos,
         Data_Nascimento: row.data_nascimento,
-
-        // ITENS E REFERÊNCIAS
+        // ITENS E PAGAMENTOS
         itens: [],
         referencias_pagamento: []
       });
@@ -464,9 +462,13 @@ function groupInvoices(rows: any[]): any[] {
 
     const invoice = invoiceMap.get(codigo);
 
-    // ADICIONAR ITEM DA FATURA
+    // ADICIONAR ITEM (verifica por MES + CODIGO_PRODUTO)
     if (row.fi_codigo != null) {
-      const itemExists = invoice.itens.some((i: any) => i.codigo === row.fi_codigo);
+      const itemKey = `${row.fi_mes}-${row.fi_codigo_produto}-${row.fi_codigo_ano_lectivo}`;
+      const itemExists = invoice.itens.some((i: any) => 
+        `${i.Mes}-${i.CodigoProduto}-${i.codigo_anoLectivo}` === itemKey
+      );
+
       if (!itemExists) {
         invoice.itens.push({
           codigo: row.fi_codigo,

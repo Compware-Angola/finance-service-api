@@ -12,7 +12,7 @@ export class InvoiceItem  extends BaseEntity{
 @PrimaryColumn({ name: 'codigo', type: 'varchar2', length: 20 })
   codigo: string;
 
-  @Column({ name: 'CodigoProduto', "type": 'varchar' })
+  @Column({ name: 'CodigoProduto', "type": 'varchar2' })
   CodigoProduto: string;
 
   @Column({ name: 'CodigoFactura', "type": 'varchar' })
@@ -67,8 +67,8 @@ export class InvoiceItem  extends BaseEntity{
   @Column({ name: 'valor_pago', "type": 'number', "precision": 15, "scale": 2, "default": 0 })
   valorPago: number;
 
-  @Column({ name: 'valor_a_transportar', "type": 'number', "precision": 15, "scale": 2, "default": 0 })
-  valorATransportar: number;
+  @Column({ name: 'valor_a_transportar', "type": 'varchar'})
+  valorATransportar: string;
 @BeforeInsert()  
   async generateCodigo() {
     if (!this.codigo) {

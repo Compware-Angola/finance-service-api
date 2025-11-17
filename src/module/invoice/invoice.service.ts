@@ -295,6 +295,7 @@ const dataQuery = this.invoiceRepository
     '"p"."Contactos_Telefonicos" AS "contactos_telefonicos"',
     '"p"."Data_Nascimento" AS "data_nascimento"',
     '"fi"."codigo" AS "fi_codigo"',
+    '"fi"."CodigoFactura" AS "fi_CodigoFactura"',
     '"fi"."CodigoProduto" AS "fi_codigo_produto"',
     '"fi"."Quantidade" AS "fi_quantidade"',
     '"fi"."Total" AS "fi_total"',
@@ -335,8 +336,6 @@ const dataQuery = this.invoiceRepository
   // .limit(limit)
 
   const rawResults = await dataQuery.getRawMany();
-  console.log(rawResults);
-  
 
   const paginatedInvoices = groupInvoices(rawResults);
 
@@ -454,22 +453,15 @@ function groupInvoices(rows: any[]): any[] {
         ValorEntregue: row.f_valor_entregue,
         ValorAPagarExtenso: row.f_valor_a_pagar_extenso,
         Descricao: row.f_descricao,
-        ValorEntregueMltCX: row.f_valor_entregue_mlt_cx,
-        codigo_descricao: row.f_codigo_descricao,
         NextFactura: row.f_next_factura,
         next: row.f_next,
         texto_hash: row.f_texto_hash,
         dataVencimento: row.f_data_vencimento,
         polo_id: row.f_polo_id,
-        obs: row.f_obs,
         hashValor: row.f_hash_valor,
-        contaCorrente: row.f_conta_corrente,
-        faturaReference: row.f_fatura_reference,
         canal: row.f_canal,
         ano_lectivo: row.f_ano_lectivo,
         estado: Number(row.f_estado),
-        corrente: row.f_corrente,
-        codigo_preinscricao: row.f_codigo_preinscricao,
         numSequenciaFactura: row.f_num_sequencia_factura,
         tipo_documento_factura_id: row.f_tipo_documento_factura_id,
         // DADOS DO ALUNO
@@ -485,11 +477,13 @@ function groupInvoices(rows: any[]): any[] {
     }
 
     const invoice = invoiceMap.get(codigo);
+    console.log(row);
+    
 
-    // ADICIONAR ITEM (verifica por MES + CODIGO_PRODUTO)
-    if (row.fi_codigo != null) {
+    // ADICIONAR ITEM somente se fi_CodigoFactura == f_codigo
+    if (row.f_codigo != null && row.fi_CodigoFactura === row.f_codigo) {
       const itemKey = `${row.fi_mes}-${row.fi_codigo_produto}-${row.fi_codigo_ano_lectivo}`;
-      const itemExists = invoice.itens.some((i: any) => 
+      const itemExists = invoice.itens.some((i: any) =>
         `${i.Mes}-${i.CodigoProduto}-${i.codigo_anoLectivo}` === itemKey
       );
 
@@ -497,24 +491,13 @@ function groupInvoices(rows: any[]): any[] {
         invoice.itens.push({
           codigo: row.fi_codigo,
           CodigoProduto: row.fi_codigo_produto,
-          CodigoFactura: row.fi_codigo_factura,
+          CodigoFactura: row.fi_CodigoFactura,
           Quantidade: row.fi_quantidade,
           Total: row.fi_total,
           OBS: row.fi_obs,
-          taxa_iva: row.fi_taxa_iva,
-          valor_iva: row.fi_valor_iva,
-          preco: row.fi_preco,
-          retencao: row.fi_retencao,
-          incidencia: row.fi_incidencia,
-          valor_desconto: row.fi_valor_desconto,
-          descontoProduto: row.fi_desconto_produto,
           Mes: row.fi_mes,
           Multa: row.fi_multa,
-          mes_temp_id: row.fi_mes_temp_id,
           codigo_anoLectivo: row.fi_codigo_ano_lectivo,
-          estado: row.fi_estado,
-          valor_pago: row.fi_valor_pago,
-          valor_a_transportar: row.fi_valor_a_transportar,
           DescricaoServico: row.ts_descricao,
           MesDesignacao: row.mes_designacao
         });
@@ -527,19 +510,11 @@ function groupInvoices(rows: any[]): any[] {
       if (!refExists) {
         invoice.referencias_pagamento.push({
           id: row.ppr_id,
-          PAYMENT_ID: row.ppr_payment_id,
-          SOURCE_ID: row.ppr_source_id,
-          ENTITY_ID: row.ppr_entity_id,
           REFERENCE: row.ppr_reference,
-          REFERENCE_ID: row.ppr_reference_id,
-          MERCHANT_TRANSACTION_ID: row.ppr_merchant_transaction_id,
           AMOUNT: row.ppr_amount,
           START_DATE: row.ppr_start_date,
           END_DATE: row.ppr_end_date,
-          Status: row.ppr_status,
-          webhook: row.ppr_webhook,
-          created_at: row.ppr_created_at,
-          updated_at: row.ppr_updated_at
+          Status: row.ppr_status
         });
       }
     }

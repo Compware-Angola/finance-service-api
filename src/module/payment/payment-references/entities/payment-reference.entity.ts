@@ -133,35 +133,5 @@ export class PaymentReferences extends BaseEntity {
   })
   updatedAt: Date;
 
-  // GERA O ID SEQUENCIAL
-  @BeforeInsert()
-  async generateId() {
-    if (!this.id) {
-      const repo = (this.constructor as any).repo;
-      if (!repo) throw new Error('Repositório não configurado. Use setRepository()');
 
-      console.log('GERANDO ID DA REFERÊNCIA...');
-
-      const last = await repo
-        .createQueryBuilder('r')
-        .select('r.id', 'r_id')
-        .where("REGEXP_LIKE(r.id, '^[0-9]+$')")
-        .orderBy('TO_NUMBER(r.id)', 'DESC')
-        .limit(1)
-        .getRawOne();
-
-      console.log('ÚLTIMA REFERÊNCIA ENCONTRADA:', last);
-
-      let nextId = 90000; // ← Começa do 90000
-      if (last && last.r_id) {
-        const lastNum = Number(last.r_id);
-        if (!isNaN(lastNum)) {
-          nextId = lastNum + 1;
-        }
-      }
-
-      this.id = nextId.toString();
-      console.log('ID GERADO PARA REFERÊNCIA:', this.id);
-    }
-  }
 }

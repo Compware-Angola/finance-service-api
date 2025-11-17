@@ -69,37 +69,5 @@ export class InvoiceItem  extends BaseEntity{
 
   @Column({ name: 'valor_a_transportar', "type": 'varchar'})
   valorATransportar: string;
-@BeforeInsert()  
-  async generateCodigo() {
-    if (!this.codigo) {
-      const repo = (this.constructor as any).repo;
-      if (!repo) throw new Error('Repositório não configurado');
 
-      console.log('GERANDO CÓDIGO DO ITEM...');
-
-      const last = await repo
-        .createQueryBuilder('i')
-        .select('i.codigo', 'i_codigo')  
-        .where("REGEXP_LIKE(i.codigo, '^[0-9]+$')")
-        .orderBy('TO_NUMBER(i.codigo)', 'DESC')
-        .limit(1)
-        .getRawOne();
-
-      console.log('ÚLTIMO ITEM ENCONTRADO:', last);
-
-      let nextNumber = 1;
-      if (last && last.i_codigo) {
-        const lastNum = Number(last.i_codigo);
-        console.log('Último número ITEM:', lastNum);
-        if (!isNaN(lastNum)) {
-          nextNumber = lastNum + 1;
-        }
-      } else {
-        console.log('Nenhum item encontrado, começando do 1');
-      }
-
-      this.codigo = nextNumber.toString().padStart(6, '0'); // ← 000001
-      console.log('CÓDIGO GERADO PARA ITEM:', this.codigo);
-    }
-  }
 }

@@ -36,8 +36,7 @@ export class MesesPagarService {
     const mesesTemp = await this.getMesesTemp(tipo, user, anoLectivoId, mes_id);
     console.log("M",mesesTemp);
     
-   // const isencaoMulta = await this.getIsencaoMulta(candidatoId);
-
+ 
     const mesesApagar: MesPagar[] = [];
     for (const [index, aa] of mesesTemp.entries()) {
       const mes =toLowerCaseKeys(aa)

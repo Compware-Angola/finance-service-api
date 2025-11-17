@@ -106,38 +106,6 @@ poloId: number;
   numSequenciaFactura: number | null;
 
   @Column({ name: 'tipo_documento_factura_id', "type": 'int', "nullable": true })
-  tipoDocumentoFacturaId: number | null;@BeforeInsert()
-async generateCodigo() {
-  if (!this.Codigo) {
-    const repo = (this.constructor as any).repo;
-    if (!repo) throw new Error('Repositório não configurado');
+  tipoDocumentoFacturaId: number | null;
 
-    console.log('GERANDO CÓDIGO DA FATURA...');
-
-    const last = await repo
-      .createQueryBuilder('i')
-      .select('i.Codigo', 'i_Codigo')  // ← ALIAS EXATO!
-      .where("REGEXP_LIKE(i.Codigo, '^[0-9]+$')")
-      .orderBy('TO_NUMBER(i.Codigo)', 'DESC')
-      .limit(1)
-      .getRawOne();
-
-    console.log('ÚLTIMA FATURA ENCONTRADA:', last);
-
-    let nextNumber = 1;
-    if (last && last.i_Codigo) {
-      const lastNum = Number(last.i_Codigo);
-      console.log('Último número:', lastNum);
-      if (!isNaN(lastNum)) {
-        nextNumber = lastNum + 1;
-        console.log('Próximo número:', nextNumber);
-      }
-    } else {
-      console.log('Nenhuma fatura encontrada, começando do 1');
-    }
-
-    this.Codigo = nextNumber.toString();
-    console.log('CÓDIGO GERADO:', this.Codigo);
-  }
-}
 }

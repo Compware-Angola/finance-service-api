@@ -60,6 +60,23 @@ async create(
 
   return await manager.transaction(async (em) => {
     const { itens, ...invoiceData } = createInvoiceDto;
+    // 1. GERAR CÓDIGO SEQUENCIAL
+    const lastInvoice = await em
+      .createQueryBuilder(Invoice, 'i')
+      .select('i.Codigo', 'i_Codigo')
+      .where("REGEXP_LIKE(i.Codigo, '^[0-9]+$')")
+      .orderBy('TO_NUMBER(i.Codigo)', 'DESC')
+      .limit(1)
+      .getRawOne();
+
+    let nextNumber = 1;
+    if (lastInvoice?.i_Codigo) {
+      const lastNum = Number(lastInvoice.i_Codigo);
+      if (!isNaN(lastNum)) nextNumber = lastNum + 1;
+    }
+
+    const codigoGerado = nextNumber.toString();
+    console.log('CÓDIGO GERADO PARA FATURA:', codigoGerado);
 
     // 🔹 Referência (usa parâmetro ou gera nova)
     const referencia: string =
@@ -106,6 +123,7 @@ async create(
     // 5. Criar entidade Invoice
     const invoiceToCreate = em.create(this.invoiceRepository.target, {
       ...invoiceData,
+      Codigo: codigoGerado,
       DataFactura: new Date(),
       poloId,
       numSequenciaFactura: hashData.numSequenciaFactura,
@@ -123,9 +141,32 @@ async create(
 
     // 6. Itens da fatura (se existirem)
 if (itens?.length) {
-  const invoiceItems = itens.map((item) =>
-    em.create(this.invoiceItemRepository.target, {
-      CodigoProduto: item.CodigoProduto.toString(),  
+  const invoiceItems: InvoiceItem[] = [];
+
+  // 1. Buscar o último código usado (uma vez)
+  const ultimoItem = await em
+    .createQueryBuilder(InvoiceItem, 'i')
+    .select('i.codigo', 'i_codigo')
+    .where("REGEXP_LIKE(i.codigo, '^[0-9]+$')")
+    .orderBy('TO_NUMBER(i.codigo)', 'DESC')
+    .limit(1)
+    .getRawOne();
+
+  let ultimoNumero = 0;
+  if (ultimoItem?.i_codigo) {
+    ultimoNumero = Number(ultimoItem.i_codigo);
+  }
+
+  // 2. Gerar códigos sequenciais para cada item
+  for (let i = 0; i < itens.length; i++) {
+    const item = itens[i];
+    ultimoNumero += 1; // Incrementa a cada item
+    const codigoGerado = ultimoNumero.toString().padStart(6, '0');
+    console.log(`CÓDIGO GERADO PARA ITEM ${i + 1}:`, codigoGerado);
+
+    const invoiceItem = em.create(this.invoiceItemRepository.target, {
+      codigo: codigoGerado, // ← AQUI!
+      CodigoProduto: item.CodigoProduto.toString(),
       CodigoFactura: savedInvoice.Codigo,
       quantidade: item.Quantidade,
       total: item.Total,
@@ -144,9 +185,12 @@ if (itens?.length) {
       estado: item.estado ?? 0,
       valorPago: item.valorPago ?? 0,
       valorATransportar: item.valorATransportar?.toString() ?? '0',
-    }),
-  );
+    });
 
+    invoiceItems.push(invoiceItem);
+  }
+
+  // 3. Salvar todos os itens de uma vez
   await em.save(invoiceItems);
 }
 

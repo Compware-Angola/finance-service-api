@@ -265,8 +265,8 @@ const dataQuery = this.invoiceRepository
     '"f"."Codigo" AS "f_codigo"',
     '"f"."DataFactura" AS "f_data_factura"',
     '"f"."TotalPreco" AS "f_total_preco"',
-    // ← MANTÉM O TO_NUMBER só no SELECT (aqui pode, porque já filtrou antes)
-    'TO_NUMBER(TRIM("f"."CodigoMatricula")) AS "f_codigo_matricula"',
+    // Aqui pode manter o TO_NUMBER só no SELECT (é seguro agora)
+    'TO_NUMBER("f"."CodigoMatricula") AS "f_codigo_matricula"',
     '"f"."Referencia" AS "f_referencia"',
     '"f"."Desconto" AS "f_desconto"',
     '"f"."Troco" AS "f_troco"',
@@ -285,7 +285,7 @@ const dataQuery = this.invoiceRepository
     '"f"."polo_id" AS "f_polo_id"',
     '"f"."hashValor" AS "f_hash_valor"',
     '"f"."canal" AS "f_canal"',
-    'TO_NUMBER(TRIM("f"."ano_lectivo")) AS "f_ano_lectivo"',
+    'TO_NUMBER("f"."ano_lectivo") AS "f_ano_lectivo"',
     'NVL(TO_CHAR("f"."estado"), \'0\') AS "f_estado"',
     '"f"."numSequenciaFactura" AS "f_num_sequencia_factura"',
     '"f"."tipo_documento_factura_id" AS "f_tipo_documento_factura_id"',
@@ -313,32 +313,26 @@ const dataQuery = this.invoiceRepository
   .leftJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.CodigoFactura = f.Codigo')
   .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
   .leftJoin('UMA_MES_TEMP', 'mt', 'fi.mes_temp_id = mt.id')
-  .leftJoin('UMA_TB_MATRICULAS', 'm', 'TRIM(f.CodigoMatricula) = TRIM(m.Codigo)')
+  .leftJoin('UMA_TB_MATRICULAS', 'm', '"m"."Codigo" = f.CodigoMatricula')         
   .leftJoin('UMA_TB_ADMISSAO', 'a', 'm.Codigo_Aluno = a.codigo')
   .leftJoin('UMA_TB_PREINSCRICAO', 'p', 'a.pre_incricao = p.Codigo')
   .leftJoin('UMA_PAGAMENTO_POR_REFERENCIAS', 'ppr', 'ppr.factura_codigo = f.Codigo AND ppr.Status != \'Expired\'')
 
-  // ===== FILTROS 100% SEGUROS (NUNCA MAIS ORA-01722) =====
-  .where('TRIM(f.CodigoMatricula) IS NOT NULL')
-  .andWhere('REGEXP_LIKE(TRIM(f.CodigoMatricula), \'^[0-9]+$\')')
-  .andWhere('TRIM(f.CodigoMatricula) = :codigoMatricula', { 
+  // FILTROS SIMPLES E RÁPIDOS (exatamente como você quer)
+  .where('"f"."CodigoMatricula" = :codigoMatricula', { 
     codigoMatricula: codigoMatricula.toString() 
   })
-
-  .andWhere('TRIM(f.ano_lectivo) IS NOT NULL')
-  .andWhere('REGEXP_LIKE(TRIM(f.ano_lectivo), \'^[0-9]+$\')')
-  .andWhere('TRIM(f.ano_lectivo) = :academicYear', { 
+  .andWhere('"f"."ano_lectivo" = :academicYear', { 
     academicYear: academicYear.toString() 
   })
+  .andWhere('NVL(TO_CHAR("f"."estado"), \'0\') != \'3\'')
 
-  .andWhere('NVL(TO_CHAR(f.estado), \'0\') != \'3\'')
-  
-  // ===== ORDENAÇÃO E PAGINAÇÃO =====
   .orderBy('"f"."Codigo"', 'DESC')
   .addOrderBy('"fi"."codigo"', 'ASC')
   .addOrderBy('"ppr"."id"', 'ASC')
-  .offset(skip)
-  .limit(limit);
+// REMOVA O LIMIT AQUI SE QUISER TODAS AS FATURAS
+  // .offset(skip)
+  // .limit(limit)
 
   const rawResults = await dataQuery.getRawMany();
   console.log(rawResults);

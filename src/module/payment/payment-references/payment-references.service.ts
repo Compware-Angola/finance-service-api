@@ -307,56 +307,80 @@ async registerPaymentReference(dto: RegisterPaymentReferenceDto) {
     };
   }
 
-  async renewPaymentReference(invoiceId: number, newAmount?: number) {
 
+async renewPaymentReference(invoiceId: number): Promise<any> {
+  return await this.paymentReferencesRepository.manager.transaction(
+    async (transactionalEntityManager: EntityManager) => {
+      // 1. Buscar fatura dentro da transação (lock pessimista opcional se quiseres evitar race conditions)
+      const invoice = await this.invoiceService.findOne(invoiceId);
+      if (!invoice) {
+        throw new NotFoundException('Fatura não encontrada.');
+      }
 
+      // 2. Gera dueDate e referenceNumber em paralelo
+      const [dueDate, referenceNumber] = await Promise.all([
+        generateDueDate(3),
+        generateReferenceNumber(),
+      ]);
 
-    const invoice = await this.invoiceService.findOne(invoiceId);
-    if (!invoice) {
-      throw new NotFoundException('Fatura não encontrada.');
-    }
-    // 🕒 Gera dueDate e referenceNumber em paralelo (melhor desempenho)
-    const [dueDate, referenceNumber] = await Promise.all([
-      generateDueDate(3),
-      generateReferenceNumber(),
-    ]);
-
-    // 📦 Monta payload para AppyPay
-    const payload = this.buildAppyPayPayload(
-      {
-        amount: newAmount || invoice.TotalPreco,
-        currency: 'AOA',
-        description: invoice.Descricao || 'Renovação de referência de pagamento',
-
-      },
-      dueDate,
-      referenceNumber,
-    );
-
-    // 🚀 Cria a referência no AppyPay
-    const appyResponse = await this.appyPayUtil.createPaymentReference(payload);
-
-    const status = appyResponse?.responseStatus;
-
-    if (!status?.successful || !status?.reference?.referenceNumber) {
-      console.error('❌ Falha ao gerar referência no AppyPay:', appyResponse);
-      throw new BadGatewayException(
-        'Falha ao gerar referência de pagamento. A fatura não será criada.'
+      // 3. Payload para AppyPay
+      const payload = this.buildAppyPayPayload(
+        {
+          amount: invoice.TotalPreco,
+          currency: 'AOA',
+          description: invoice.Descricao || 'Renovação de referência de pagamento',
+        },
+        dueDate,
+        referenceNumber,
       );
-    }
 
-    const updatedInvoice = await this.invoiceService.updateReferenceNumber(
-      invoiceId,
-      referenceNumber,
-      dueDate,
-      newAmount || invoice.TotalPreco,
-    );
-    return updatedInvoice;
+      // 4. Chamada externa ao AppyPay
+      const appyResponse = await this.appyPayUtil.createPaymentReference(payload);
+
+      const status = appyResponse?.responseStatus;
+      if (!status?.successful || !status?.reference?.referenceNumber) {
+        console.error('❌ Falha ao gerar referência no AppyPay:', appyResponse);
+        throw new BadGatewayException(
+          'Falha ao gerar referência de pagamento via AppyPay.',
+        );
+      }
+
+      // 5. Código aleatório para merchantTransactionId
+      const merchantTransactionId = await this.generateRandomCode();
+
+      // 6. Payload final para registro local
+      const finalPayload: RegisterPaymentReferenceDto = {
+        paymentId: undefined,
+        facturaCodigo: invoice.Codigo, 
+        entityId: status?.reference?.entity || '10065',
+        reference: referenceNumber,
+        referenceId: appyResponse.id,
+        merchantTransactionId,
+        amount: Number(invoice.TotalPreco),
+        startDate: new Date().toISOString(),
+        endDate: new Date(dueDate).toISOString(),
+        status: status?.status,
+        webhook: 'https://api.seusistema.com/webhook/pagamento-be',
+      };
+
+      // 7. Registro com retry automático de sourceId duplicado
+      // (usa o método que já tem transação interna + loop de retry)
+      const registered = await this.registerPaymentReference(
+        finalPayload,
+       
+      );
 
 
-    // RENOVAR REFERÊNCIA NO SISTEMA
-
-  }
+      return {
+        message: 'Referência de pagamento renovada com sucesso ✅',
+        reference: registered,
+        appyPayId: appyResponse.id,
+        newReferenceNumber: referenceNumber,
+        newDueDate: dueDate,
+      };
+    },
+  );
+}
   // ------------------------ NEWS ------------------------
 
   async queueCreatePaymentReferences(

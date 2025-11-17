@@ -253,106 +253,91 @@ async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<Pag
   const total = Number(totalResult?.total || 0);
   const totalPages = Math.ceil(total / limit);
 
+  console.log(totalResult);
+  
+
   if (total === 0) {
     return { data: [], total, page, limit, totalPages };
   }
 
   // 2. CONSULTA PAGINADA – TUDO COM ASPAS DUPLAS
-  const dataQuery = this.invoiceRepository
-    .createQueryBuilder('f')
-    .select([
-      '"f"."Codigo" AS "f_codigo"',
-      '"f"."DataFactura" AS "f_data_factura"',
-      '"f"."TotalPreco" AS "f_total_preco"',
-      'NVL(TO_NUMBER(TRIM("f"."CodigoMatricula")), 0) AS "f_codigo_matricula"',
-      '"f"."Referencia" AS "f_referencia"',
-      '"f"."Desconto" AS "f_desconto"',
-      '"f"."Troco" AS "f_troco"',
-      '"f"."totalIVA" AS "f_total_iva"',
-      '"f"."TotalMulta" AS "f_total_multa"',
-      '"f"."total_incidencia" AS "f_total_incidencia"',
-      '"f"."total_retencao" AS "f_total_retencao"',
-      '"f"."ValorAPagar" AS "f_valor_a_pagar"',
-      '"f"."ValorEntregue" AS "f_valor_entregue"',
-      '"f"."ValorAPagarExtenso" AS "f_valor_a_pagar_extenso"',
-      '"f"."Descricao" AS "f_descricao"',
-      '"f"."ValorEntregueMltCX" AS "f_valor_entregue_mlt_cx"',
-      '"f"."codigo_descricao" AS "f_codigo_descricao"',
-      '"f"."NextFactura" AS "f_next_factura"',
-      '"f"."next" AS "f_next"',
-      '"f"."texto_hash" AS "f_texto_hash"',
-      '"f"."dataVencimento" AS "f_data_vencimento"',
-      '"f"."polo_id" AS "f_polo_id"',
-      '"f"."obs" AS "f_obs"',
-      '"f"."hashValor" AS "f_hash_valor"',
-      '"f"."contaCorrente" AS "f_conta_corrente"',
-      '"f"."faturaReference" AS "f_fatura_reference"',
-      '"f"."canal" AS "f_canal"',
-      'NVL(TO_NUMBER(TRIM("f"."ano_lectivo")), 0) AS "f_ano_lectivo"',
-      'NVL(TO_CHAR("f"."estado"), \'0\') AS "f_estado"',
-      '"f"."corrente" AS "f_corrente"',
-      '"f"."codigo_preinscricao" AS "f_codigo_preinscricao"',
-      '"f"."numSequenciaFactura" AS "f_num_sequencia_factura"',
-      '"f"."tipo_documento_factura_id" AS "f_tipo_documento_factura_id"',
-      '"p"."Nome_Completo" AS "nome_completo_aluno"',
-      '"p"."Bilhete_Identidade" AS "bi_aluno"',
-      '"p"."Email" AS "email_aluno"',
-      '"p"."Contactos_Telefonicos" AS "contactos_telefonicos"',
-      '"p"."Data_Nascimento" AS "data_nascimento"',
-      '"fi"."codigo" AS "fi_codigo"',
-      '"fi"."CodigoProduto" AS "fi_codigo_produto"',
-      '"fi"."CodigoFactura" AS "fi_codigo_factura"',
-      '"fi"."Quantidade" AS "fi_quantidade"',
-      '"fi"."Total" AS "fi_total"',
-      '"fi"."OBS" AS "fi_obs"',
-      '"fi"."taxa_iva" AS "fi_taxa_iva"',
-      '"fi"."valor_iva" AS "fi_valor_iva"',
-      '"fi"."preco" AS "fi_preco"',
-      '"fi"."retencao" AS "fi_retencao"',
-      '"fi"."incidencia" AS "fi_incidencia"',
-      '"fi"."valor_desconto" AS "fi_valor_desconto"',
-      '"fi"."descontoProduto" AS "fi_desconto_produto"',
-      '"fi"."Mes" AS "fi_mes"',
-      '"fi"."Multa" AS "fi_multa"',
-      '"fi"."mes_temp_id" AS "fi_mes_temp_id"',
-      '"fi"."codigo_anoLectivo" AS "fi_codigo_ano_lectivo"',
-      '"fi"."estado" AS "fi_estado"',
-      '"fi"."valor_pago" AS "fi_valor_pago"',
-      '"fi"."valor_a_transportar" AS "fi_valor_a_transportar"',
-      '"ts"."Descricao" AS "ts_descricao"',
-      '"mt"."designacao" AS "mes_designacao"',
-      '"ppr"."id" AS "ppr_id"',
-      '"ppr"."PAYMENT_ID" AS "ppr_payment_id"',
-      '"ppr"."SOURCE_ID" AS "ppr_source_id"',
-      '"ppr"."ENTITY_ID" AS "ppr_entity_id"',
-      '"ppr"."REFERENCE" AS "ppr_reference"',
-      '"ppr"."REFERENCE_ID" AS "ppr_reference_id"',
-      '"ppr"."MERCHANT_TRANSACTION_ID" AS "ppr_merchant_transaction_id"',
-      '"ppr"."AMOUNT" AS "ppr_amount"',
-      '"ppr"."START_DATE" AS "ppr_start_date"',
-      '"ppr"."END_DATE" AS "ppr_end_date"',
-      '"ppr"."Status" AS "ppr_status"',
-      '"ppr"."webhook" AS "ppr_webhook"',
-      '"ppr"."created_at" AS "ppr_created_at"',
-      '"ppr"."updated_at" AS "ppr_updated_at"',
-    ])
-    .leftJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.CodigoFactura = f.Codigo')
-    .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
-    .leftJoin('UMA_MES_TEMP', 'mt', 'fi.mes_temp_id = mt.id')
-    .leftJoin('UMA_TB_MATRICULAS', 'm', 'f.CodigoMatricula = m.Codigo')
-    .leftJoin('UMA_TB_ADMISSAO', 'a', 'm.Codigo_Aluno = a.codigo')
-    .leftJoin('UMA_TB_PREINSCRICAO', 'p', 'a.pre_incricao = p.Codigo')
-    .leftJoin('UMA_PAGAMENTO_POR_REFERENCIAS', 'ppr', 'ppr.factura_codigo = f.Codigo AND ppr.Status != \'Expired\'')
-    .where('REGEXP_LIKE(TRIM(f.CodigoMatricula), \'^[0-9]+$\')')
-    .andWhere('REGEXP_LIKE(TRIM(f.ano_lectivo), \'^[0-9]+$\')')
-    .andWhere('NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0) = :codigoMatricula', { codigoMatricula })
-    .andWhere('NVL(TO_NUMBER(TRIM(f.ano_lectivo)), 0) = :academicYear', { academicYear })
-    .andWhere('NVL(TO_CHAR(f.estado), \'0\') != \'3\'')
-    .orderBy('"f"."Codigo"', 'DESC')
-    .addOrderBy('"fi"."codigo"', 'ASC')
-    .addOrderBy('"ppr"."id"', 'ASC')
-    .offset(skip)
-    .limit(limit);
+const dataQuery = this.invoiceRepository
+  .createQueryBuilder('f')
+  .select([
+    '"f"."Codigo" AS "f_codigo"',
+    '"f"."DataFactura" AS "f_data_factura"',
+    '"f"."TotalPreco" AS "f_total_preco"',
+    'TO_NUMBER(TRIM("f"."CodigoMatricula")) AS "f_codigo_matricula"',
+    '"f"."Referencia" AS "f_referencia"',
+    '"f"."Desconto" AS "f_desconto"',
+    '"f"."Troco" AS "f_troco"',
+    '"f"."totalIVA" AS "f_total_iva"',
+    '"f"."TotalMulta" AS "f_total_multa"',
+    '"f"."total_incidencia" AS "f_total_incidencia"',
+    '"f"."total_retencao" AS "f_total_retencao"',
+    '"f"."ValorAPagar" AS "f_valor_a_pagar"',
+    '"f"."ValorEntregue" AS "f_valor_entregue"',
+    '"f"."ValorAPagarExtenso" AS "f_valor_a_pagar_extenso"',
+    '"f"."Descricao" AS "f_descricao"',
+    '"f"."NextFactura" AS "f_next_factura"',
+    '"f"."next" AS "f_next"',
+    '"f"."texto_hash" AS "f_texto_hash"',
+    '"f"."dataVencimento" AS "f_data_vencimento"',
+    '"f"."polo_id" AS "f_polo_id"',
+    '"f"."hashValor" AS "f_hash_valor"',
+    '"f"."canal" AS "f_canal"',
+    'TO_NUMBER(TRIM("f"."ano_lectivo")) AS "f_ano_lectivo"',
+    'NVL(TO_CHAR("f"."estado"), \'0\') AS "f_estado"',
+    '"f"."numSequenciaFactura" AS "f_num_sequencia_factura"',
+    '"f"."tipo_documento_factura_id" AS "f_tipo_documento_factura_id"',
+    '"p"."Nome_Completo" AS "nome_completo_aluno"',
+    '"p"."Bilhete_Identidade" AS "bi_aluno"',
+    '"p"."Email" AS "email_aluno"',
+    '"p"."Contactos_Telefonicos" AS "contactos_telefonicos"',
+    '"p"."Data_Nascimento" AS "data_nascimento"',
+    // Itens da fatura
+    '"fi"."codigo" AS "fi_codigo"',
+    '"fi"."CodigoProduto" AS "fi_codigo_produto"',
+    '"fi"."Quantidade" AS "fi_quantidade"',
+    '"fi"."Total" AS "fi_total"',
+    '"fi"."OBS" AS "fi_obs"',
+    '"fi"."Mes" AS "fi_mes"',
+    '"fi"."Multa" AS "fi_multa"',
+    '"ts"."Descricao" AS "ts_descricao"',
+    '"mt"."designacao" AS "mes_designacao"',
+    // Pagamentos por referência
+    '"ppr"."id" AS "ppr_id"',
+    '"ppr"."REFERENCE" AS "ppr_reference"',
+    '"ppr"."AMOUNT" AS "ppr_amount"',
+    '"ppr"."Status" AS "ppr_status"',
+    '"ppr"."START_DATE" AS "ppr_start_date"',
+    '"ppr"."END_DATE" AS "ppr_end_date"',
+  ])
+  .leftJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.CodigoFactura = f.Codigo')
+  .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
+  .leftJoin('UMA_MES_TEMP', 'mt', 'fi.mes_temp_id = mt.id')
+  .leftJoin('UMA_TB_MATRICULAS', 'm', 'TRIM(f.CodigoMatricula) = TRIM(m.Codigo)')
+  .leftJoin('UMA_TB_ADMISSAO', 'a', 'm.Codigo_Aluno = a.codigo')
+  .leftJoin('UMA_TB_PREINSCRICAO', 'p', 'a.pre_incricao = p.Codigo')
+  .leftJoin('UMA_PAGAMENTO_POR_REFERENCIAS', 'ppr', 
+    'ppr.factura_codigo = f.Codigo AND ppr.Status != \'Expired\'')
+
+  // FILTROS IMUNES A ORA-01722
+  .where(`TRIM(f.CodigoMatricula) IS NOT NULL`)
+  .andWhere(`REGEXP_LIKE(TRIM(f.CodigoMatricula), '^[0-9]+$')`)
+  .andWhere(`TO_NUMBER(TRIM(f.CodigoMatricula)) = :codigoMatricula`, { codigoMatricula })
+
+  .andWhere(`TRIM(f.ano_lectivo) IS NOT NULL`)
+  .andWhere(`REGEXP_LIKE(TRIM(f.ano_lectivo), '^[0-9]+$')`)
+  .andWhere(`TO_NUMBER(TRIM(f.ano_lectivo)) = :academicYear`, { academicYear })
+
+  .andWhere(`NVL(TO_CHAR(f.estado), '0') != '3'`)
+
+  .orderBy('"f"."Codigo"', 'DESC')
+  .addOrderBy('"fi"."codigo"', 'ASC')
+  .addOrderBy('"ppr"."id"', 'ASC')
+  .offset(skip)
+  .limit(limit);
 
   const rawResults = await dataQuery.getRawMany();
   console.log(rawResults);

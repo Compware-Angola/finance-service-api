@@ -214,6 +214,8 @@ async dividaOutrosServicos(codigo_matricula: number): Promise<DividaDto[]> {
 
   // 5. Processa cada serviço
   for (const raw of outrosServicosRaw) {
+    console.log(raw);
+    
     const codGradeCurricular = raw.GC_CODIGO;
     let servico = raw.D_DESIGNACAO || '';
 

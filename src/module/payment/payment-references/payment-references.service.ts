@@ -236,7 +236,7 @@ async createMonthlyPaymentReferences(
 
           // ---- Geração paralela de vencimento e referência ----
           const [dueDate, referenceNumber] = await Promise.all([
-            generateDueDate(15, new Date(date_inicial)),
+            generateDueDate(30),
             generateReferenceNumber(),
           ]);
 

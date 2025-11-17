@@ -509,21 +509,8 @@ async renewPaymentReference(invoiceId: number): Promise<any> {
   }
   private async generateNextSourceId(): Promise<string> {
     try {
-      const result = await this.paymentReferencesRepository
-        .createQueryBuilder()
-        .select('SOURCE_ID') // ← NOME DA COLUNA NO BANCO
-        .where("SOURCE_ID LIKE :pattern", { pattern: '%REF1' })
-        .orderBy('CAST(SUBSTRING(SOURCE_ID, 1, LENGTH(SOURCE_ID) - 4) AS UNSIGNED)', 'DESC')
-        .limit(1)
-        .getRawOne();
-
-      if (result?.SOURCE_ID) {
-        const match = result.SOURCE_ID.match(/^(\d+)REF1$/);
-        if (match) {
-          const next = parseInt(match[1], 10) + 1;
-          return `${next}REF1`;
-        }
-      }
+     const random = Math.floor(100000 + Math.random() * 900000);
+      return `${random}REF1-T`;
     } catch (error) {
       console.warn('Erro ao buscar último SOURCE_ID:', error.message);
     }

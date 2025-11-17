@@ -186,6 +186,7 @@ async registerPaymentReference(dto: RegisterPaymentReferenceDto) {
     },
   );
 }
+  
 
 async createMonthlyPaymentReferences(
   createPaymentReferenceDto: CreatePaymentReferenceDto,
@@ -282,10 +283,10 @@ async createMonthlyPaymentReferences(
           );
 
           // ---- Geração de código aleatório para merchantTransactionId ----
-          const merchantTransactionId = await this.generateRandomCode();
+         const merchantTransactionId = await this.generateRandomCode();
 
           // ---- Registro da referência (usa o método com retry que já tens) ----
-          /*
+        
           const finalPayload: RegisterPaymentReferenceDto = {
             paymentId: undefined,
             facturaCodigo: invoice.Codigo,
@@ -304,7 +305,6 @@ async createMonthlyPaymentReferences(
           await this.registerPaymentReference(finalPayload);
           // Ou, se preferires, chama diretamente com o manager:
           // await this.registerPaymentReference(finalPayload, transactionalEntityManager);
-*/
           // ---- Criação do Item da Fatura ----
           const invoiceItemData = {
             codigoProduto: item.CodigoProduto,

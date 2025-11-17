@@ -259,14 +259,13 @@ async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<Pag
   if (total === 0) {
     return { data: [], total, page, limit, totalPages };
   }
-
-  // 2. CONSULTA PAGINADA – TUDO COM ASPAS DUPLAS
 const dataQuery = this.invoiceRepository
   .createQueryBuilder('f')
   .select([
     '"f"."Codigo" AS "f_codigo"',
     '"f"."DataFactura" AS "f_data_factura"',
     '"f"."TotalPreco" AS "f_total_preco"',
+    // ← MANTÉM O TO_NUMBER só no SELECT (aqui pode, porque já filtrou antes)
     'TO_NUMBER(TRIM("f"."CodigoMatricula")) AS "f_codigo_matricula"',
     '"f"."Referencia" AS "f_referencia"',
     '"f"."Desconto" AS "f_desconto"',
@@ -295,7 +294,6 @@ const dataQuery = this.invoiceRepository
     '"p"."Email" AS "email_aluno"',
     '"p"."Contactos_Telefonicos" AS "contactos_telefonicos"',
     '"p"."Data_Nascimento" AS "data_nascimento"',
-    // Itens da fatura
     '"fi"."codigo" AS "fi_codigo"',
     '"fi"."CodigoProduto" AS "fi_codigo_produto"',
     '"fi"."Quantidade" AS "fi_quantidade"',
@@ -305,7 +303,6 @@ const dataQuery = this.invoiceRepository
     '"fi"."Multa" AS "fi_multa"',
     '"ts"."Descricao" AS "ts_descricao"',
     '"mt"."designacao" AS "mes_designacao"',
-    // Pagamentos por referência
     '"ppr"."id" AS "ppr_id"',
     '"ppr"."REFERENCE" AS "ppr_reference"',
     '"ppr"."AMOUNT" AS "ppr_amount"',
@@ -319,20 +316,24 @@ const dataQuery = this.invoiceRepository
   .leftJoin('UMA_TB_MATRICULAS', 'm', 'TRIM(f.CodigoMatricula) = TRIM(m.Codigo)')
   .leftJoin('UMA_TB_ADMISSAO', 'a', 'm.Codigo_Aluno = a.codigo')
   .leftJoin('UMA_TB_PREINSCRICAO', 'p', 'a.pre_incricao = p.Codigo')
-  .leftJoin('UMA_PAGAMENTO_POR_REFERENCIAS', 'ppr', 
-    'ppr.factura_codigo = f.Codigo AND ppr.Status != \'Expired\'')
+  .leftJoin('UMA_PAGAMENTO_POR_REFERENCIAS', 'ppr', 'ppr.factura_codigo = f.Codigo AND ppr.Status != \'Expired\'')
 
-  // FILTROS IMUNES A ORA-01722
-  .where(`TRIM(f.CodigoMatricula) IS NOT NULL`)
-  .andWhere(`REGEXP_LIKE(TRIM(f.CodigoMatricula), '^[0-9]+$')`)
-  .andWhere(`TO_NUMBER(TRIM(f.CodigoMatricula)) = :codigoMatricula`, { codigoMatricula })
+  // ===== FILTROS 100% SEGUROS (NUNCA MAIS ORA-01722) =====
+  .where('TRIM(f.CodigoMatricula) IS NOT NULL')
+  .andWhere('REGEXP_LIKE(TRIM(f.CodigoMatricula), \'^[0-9]+$\')')
+  .andWhere('TRIM(f.CodigoMatricula) = :codigoMatricula', { 
+    codigoMatricula: codigoMatricula.toString() 
+  })
 
-  .andWhere(`TRIM(f.ano_lectivo) IS NOT NULL`)
-  .andWhere(`REGEXP_LIKE(TRIM(f.ano_lectivo), '^[0-9]+$')`)
-  .andWhere(`TO_NUMBER(TRIM(f.ano_lectivo)) = :academicYear`, { academicYear })
+  .andWhere('TRIM(f.ano_lectivo) IS NOT NULL')
+  .andWhere('REGEXP_LIKE(TRIM(f.ano_lectivo), \'^[0-9]+$\')')
+  .andWhere('TRIM(f.ano_lectivo) = :academicYear', { 
+    academicYear: academicYear.toString() 
+  })
 
-  .andWhere(`NVL(TO_CHAR(f.estado), '0') != '3'`)
-
+  .andWhere('NVL(TO_CHAR(f.estado), \'0\') != \'3\'')
+  
+  // ===== ORDENAÇÃO E PAGINAÇÃO =====
   .orderBy('"f"."Codigo"', 'DESC')
   .addOrderBy('"fi"."codigo"', 'ASC')
   .addOrderBy('"ppr"."id"', 'ASC')

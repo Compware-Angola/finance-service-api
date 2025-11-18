@@ -1219,7 +1219,7 @@ export class DebtNegotiationService {
     const cadeirasPendentes = await this.avaliacaoRepo.query(`
   SELECT COUNT(*) AS total
   FROM inscricao_avaliacoes ia
-  INNER JOIN tb_grade_curricular gc ON gc.Codigo = ia.codigo_grade_curricular
+  INNER JOIN tb_grade_curricular gc ON gc.Codigo = ia.codigo_grade
   INNER JOIN tb_cursos c ON c.Codigo = gc.codigo_curso
   WHERE ia.codigo_matricula = ?
     AND ia.codigo_ano_lectivo = ?

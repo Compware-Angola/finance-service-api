@@ -4,7 +4,7 @@ import { TbPagamento } from './tb-pagamento.entity';
 import { InscricaoAvaliacao } from './inscricao-avaliacao.entity';
 import { TbAnoLectivo } from './tb-ano-lectivo.entity';
 
-@Entity({ name: 'UMA_FACTURA', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_FACTURA', })
 export class Factura {
   @PrimaryGeneratedColumn()
   Codigo: number;

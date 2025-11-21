@@ -2,7 +2,7 @@
 
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity({ name: 'UMA_MESES_CALENDARIO', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_MESES_CALENDARIO', })
 export class MesCalendario {
   @PrimaryGeneratedColumn({ type: 'int', "unsigned": true })
   id: number;

@@ -7,7 +7,7 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity({ name: 'UMA_EMPRESAS', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_EMPRESAS', })
 @Index('FK_empresas_paises', ['pais_id'])
 @Index('FK_empresas_status', ['statu_id'])
 @Index('FK_empresas_tipos_clientes', ['tipo_cliente_id'])

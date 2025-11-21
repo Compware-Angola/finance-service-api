@@ -1,7 +1,7 @@
 import { Entity, PrimaryColumn, Column, BeforeInsert, BeforeUpdate } from 'typeorm';
 import { BaseEntity } from 'src/common/base-entity';
 
-@Entity({ name: 'UMA_NEGOCIACAO_DIVIDAS', schema: 'DBUMA' })
+@Entity({ name: 'UMA_NEGOCIACAO_DIVIDAS', })
 export class DebtNegotiation extends BaseEntity {
   @PrimaryColumn({ name: 'id', type: 'varchar2', length: 20 })
   id: string;

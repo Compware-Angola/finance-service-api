@@ -93,7 +93,7 @@ export class MesesPagarService {
 
   private async getPercentagemByCodigo(codigo: number): Promise<number> {
     const result = await this.dataSource.query(
-      `SELECT "percentagem" FROM "DBUMA"."UMA_TB_PARAMETROS_MULTA" WHERE "codigo" = :codigo FETCH NEXT 1 ROWS ONLY`,
+      `SELECT "percentagem" FROM "UMA_TB_PARAMETROS_MULTA" WHERE "codigo" = :codigo FETCH NEXT 1 ROWS ONLY`,
      [  codigo ]
     );
     return result[0]?.percentagem ?? 0;
@@ -161,7 +161,7 @@ export class MesesPagarService {
 async cicloDoutoramento() {
 const result = await this.dataSource.query(`
   SELECT "Codigo", "Designacao"
-  FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
+  FROM "UMA_TB_ANO_LECTIVO"
   WHERE "Designacao" = 'Ciclo Doutoramento'
   FETCH NEXT 1 ROWS ONLY
 `);
@@ -172,7 +172,7 @@ const result = await this.dataSource.query(`
 async cicloMestrado() {
   const result = await this.dataSource.query(`
     SELECT "Codigo", "Designacao"
-    FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
+    FROM "UMA_TB_ANO_LECTIVO"
     WHERE "Designacao" = 'Ciclo Mestrado'
     FETCH NEXT 1 ROWS ONLY
   `);
@@ -186,7 +186,7 @@ async checkIsencaoMultaRaw(
   const result = await this.dataSource.query(
     `
       SELECT 1
-      FROM "DBUMA"."UMA_TB_ISENCOE_MULTA"
+      FROM "UMA_TB_ISENCOE_MULTA"
       WHERE "mes_temp_id" = :1
         AND "codigo_matricula" = :2
         AND "estado_isensao" = 'Activo'

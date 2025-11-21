@@ -2,7 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 't
 
 @Entity({
   name: 'UMA_TB_ANO_LECTIVO',  // sem UMA_ (namingStrategy adiciona)
-  schema: 'DBUMA',         // <--- SCHEMA CORRETO (owner das tabelas)
+         // <--- SCHEMA CORRETO (owner das tabelas)
 })
 export class AcademicYear {
   @PrimaryGeneratedColumn({ name: 'Codigo', "type": 'int', "unsigned": true })

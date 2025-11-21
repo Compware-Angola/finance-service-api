@@ -1,6 +1,6 @@
 import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
-@Entity({ name: 'UMA_MES_TEMP', "schema": 'DBUMA' })
+@Entity({ name: 'UMA_MES_TEMP', })
 export class MesTemp {
   @PrimaryGeneratedColumn({ type: 'int', "unsigned": true })
   id: number;

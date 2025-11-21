@@ -79,8 +79,8 @@ export class PropinaAlunoService {
 private async getCursoByPreinscricao(preinscricaoId: string): Promise<{ curso: string; codigo_curso: number } | null> {
   const query = `
     SELECT c."Designacao" AS curso, c."Codigo" AS codigo_curso
-    FROM "DBUMA"."UMA_TB_CURSOS" c
-    INNER JOIN "DBUMA"."UMA_TB_PREINSCRICAO" p
+    FROM "UMA_TB_CURSOS" c
+    INNER JOIN "UMA_TB_PREINSCRICAO" p
       ON c."Codigo" = p."Curso_Candidatura"
     WHERE p."Codigo" = :1
     FETCH NEXT 1 ROWS ONLY
@@ -97,7 +97,7 @@ const mapped = result.map(r => ({
 
   private async getCursoById(codigo_curso: number) {
     const result = await this.dataSource.query(`
-      SELECT Designacao AS curso FROM "DBUMA"."UMA_TB_CURSOS" WHERE Codigo = ?   FETCH NEXT 1 ROWS ONLY
+      SELECT Designacao AS curso FROM "UMA_TB_CURSOS" WHERE Codigo = ?   FETCH NEXT 1 ROWS ONLY
     `, [codigo_curso]);
     return result[0] || null;
   }
@@ -114,8 +114,8 @@ private async getPropinaByCurso(
       ts."TipoServico",
       ts."Codigo",
       tt."taxa"
-    FROM "DBUMA"."UMA_TB_TIPO_SERVICOS" ts
-    LEFT JOIN "DBUMA"."UMA_TIPO_TAXAS" tt ON tt."id" = ts."taxa_iva_id"
+    FROM "UMA_TB_TIPO_SERVICOS" ts
+    LEFT JOIN "UMA_TIPO_TAXAS" tt ON tt."id" = ts."taxa_iva_id"
     WHERE ts."Descricao" LIKE :1
       AND ts."cacuaco" = :2
       AND ts."codigo_ano_lectivo" = :3
@@ -129,7 +129,7 @@ private async getPropinaByCurso(
 private async checkExcecao(matricula: number) {
   const result = await this.dataSource.query(`
     SELECT "codigo_curso_pagamento", "data_fim"
-    FROM "DBUMA"."UMA_CURSO_PAGAMENTO_EXCEPCAO"
+    FROM "UMA_CURSO_PAGAMENTO_EXCEPCAO"
     WHERE "codigo_matricula" = :1
     FETCH NEXT 1 ROWS ONLY
   `, [matricula]);
@@ -145,7 +145,7 @@ private async checkExcecao(matricula: number) {
 async cicloDoutoramento() {
 const result = await this.dataSource.query(`
   SELECT "Codigo", "Designacao"
-  FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
+  FROM "UMA_TB_ANO_LECTIVO"
   WHERE "Designacao" = 'Ciclo Doutoramento'
   FETCH NEXT 1 ROWS ONLY
 `);
@@ -156,7 +156,7 @@ const result = await this.dataSource.query(`
 async cicloMestrado() {
   const result = await this.dataSource.query(`
     SELECT "Codigo", "Designacao"
-    FROM "DBUMA"."UMA_TB_ANO_LECTIVO"
+    FROM "UMA_TB_ANO_LECTIVO"
     WHERE "Designacao" = 'Ciclo Mestrado'
     FETCH NEXT 1 ROWS ONLY
   `);

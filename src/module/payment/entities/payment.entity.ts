@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { BaseEntity } from 'src/common/base-entity';
 
-@Entity({ name: 'UMA_TB_PAGAMENTOS', schema: 'DBUMA' })
+@Entity({ name: 'UMA_TB_PAGAMENTOS', })
 export class Payment extends BaseEntity {
   @PrimaryColumn({ name: 'Codigo', type: 'varchar2', length: 20 }) 
   Codigo: string;

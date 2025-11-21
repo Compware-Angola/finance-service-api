@@ -513,7 +513,7 @@ const matricula = toLowerCaseKeys(matriculaRaw);
     .createQueryBuilder()
     .select('al.Designacao', 'ano_designacao')
     .addSelect('al.Codigo', 'maior')
-    .from('DBUMA.UMA_TB_INSCRICOES_ANO_ANTERIOR', 'ia')
+    .from('UMA_TB_INSCRICOES_ANO_ANTERIOR', 'ia')
     .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = ia.codigo_ano_lectivo')
     .where('ia.codigo_matricula = :matricula', { matricula: matricula.codigo })
     .andWhere('ia.status = 1')
@@ -674,7 +674,7 @@ const matricula = toLowerCaseKeys(matriculaRaw);
     .createQueryBuilder()
     .select('c.Codigo_Ano_lectivo', 'codigo_ano_lectivo')
     .addSelect('al.ordem', 'ordem')
-    .from('DBUMA.UMA_TB_CONFIRMACOES', 'c')
+    .from('UMA_TB_CONFIRMACOES', 'c')
     .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = c.Codigo_Ano_lectivo')
     .where('c.Codigo_Matricula = :matricula', { matricula: codigo_matricula })
     .groupBy('c.Codigo_Ano_lectivo, al.ordem')
@@ -691,7 +691,7 @@ const matricula = toLowerCaseKeys(matriculaRaw);
         .createQueryBuilder()
         .select('al.Codigo', 'ultimoAnoInscritoId')
         .addSelect('al.Designacao', 'ultimoAnoInscritoDesig')
-        .from('DBUMA.UMA_TB_CONFIRMACOES', 'c')
+        .from('UMA_TB_CONFIRMACOES', 'c')
         .innerJoin('UMA_TB_ANO_LECTIVO', 'al', 'al.Codigo = c.Codigo_Ano_lectivo')
         .innerJoin('UMA_TB_MATRICULAS', 'm', 'm.Codigo = c.Codigo_Matricula')
         .where('m.Codigo = :matricula', { matricula: codigo_matricula })
@@ -1021,8 +1021,8 @@ async BolsaPorSemestre1(
     SELECT
       b.*,
       tb.designacao AS tipo_bolsa
-    FROM "DBUMA"."UMA_TB_BOLSEIROS" b
-    INNER JOIN "DBUMA"."UMA_TB_TIPO_BOLSAS" tb ON "tb"."codigo" = b.codigo_tipo_bolsa
+    FROM "UMA_TB_BOLSEIROS" b
+    INNER JOIN "UMA_TB_TIPO_BOLSAS" tb ON "tb"."codigo" = b.codigo_tipo_bolsa
     WHERE "b".codigo_matricula = :1
       AND "b".codigo_anoLectivo = :2
       AND "b".semestre = :3
@@ -1042,8 +1042,8 @@ async BolsaPorSemestre2(
     SELECT
       b.*,
       tb.designacao AS tipo_bolsa
-    FROM "DBUMA"."UMA_TB_BOLSEIROS" b
-    INNER JOIN "DBUMA"."UMA_TB_TIPO_BOLSAS" tb ON "tb"."codigo" = b.codigo_tipo_bolsa
+    FROM "UMA_TB_BOLSEIROS" b
+    INNER JOIN "UMA_TB_TIPO_BOLSAS" tb ON "tb"."codigo" = b.codigo_tipo_bolsa
     WHERE "b".codigo_matricula = :1
       AND "b".codigo_anoLectivo = :2
       AND "b".semestre = :3
@@ -1188,7 +1188,7 @@ private async getIsencaoIds(
   // Query segura: compara matricula como string e só converte mes_temp_id se for número
   const sql = `
     SELECT TRIM("mes_temp_id") AS mes_temp_id
-    FROM "DBUMA"."UMA_TB_ISENCOES"
+    FROM "UMA_TB_ISENCOES"
     WHERE "codigo_matricula" = :1
       AND "estado_isensao" = :2
       AND "codigo_anoLectivo" = :3

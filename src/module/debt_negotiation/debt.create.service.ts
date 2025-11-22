@@ -68,6 +68,8 @@ export class CreateDebtNegotiationService {
           codigo_ano_lectivo: this.anoAtualPrincipal,
         },
       });
+
+  
       if (HasNegotiation) {
         throw new BadRequestException(
           `Aluno ${aluno.matricula} já possui negociação no ano letivo ${anoLectivo.Designacao}`,

@@ -16,7 +16,7 @@ import { DefaultNamingStrategy } from 'typeorm';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    TypeOrmModule.forRootAsync({
+TypeOrmModule.forRootAsync({
   imports: [ConfigModule],
   inject: [ConfigService],
   useFactory: (config: ConfigService) => {
@@ -30,14 +30,14 @@ import { DefaultNamingStrategy } from 'typeorm';
       password: config.get<string>('DB_PASSWORD'),
       sid: config.get<string>('DB_SID'),
 
-  
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: false,
-      logging: ['query', 'error'], 
+      logging: ['query', 'error'],
 
-      extra: isSSL
-        ? { ssl: { rejectUnauthorized: true } }
-        : {},
+      extra: {
+        disableInsertDefaultValues: true,
+        ...(isSSL ? { ssl: { rejectUnauthorized: true } } : {}),
+      },
     };
   },
 }),

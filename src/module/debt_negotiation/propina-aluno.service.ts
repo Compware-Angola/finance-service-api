@@ -36,13 +36,12 @@ export class PropinaAlunoService {
 
     // 3. Busca curso da pré-inscrição
     const curso = await this.getCursoByPreinscricao(codigo_inscricao.toString());
-    console.log(curso,"WWWWWWWWWWWWWWWWW");
-    
+
     if (!curso) return null;
 
     // 4. Verifica exceção de pagamento
     const temExcecao = await this.checkExcecao(matricula);
-    console.log(temExcecao,"EXCE");
+  
     
     let propina: PropinaResult | null = null;
 
@@ -122,7 +121,7 @@ private async getPropinaByCurso(
     FETCH NEXT 1 ROWS ONLY
   `, [`Propina ${nomeCurso}%`, cacuaco, ano_lectivo]);
 
-  console.log(result, "OKOKOK", cacuaco, ano_lectivo, nomeCurso);
+
   return result[0] || null;
 }
 

@@ -8,7 +8,7 @@ import { CreateInvoiceDto } from '../../invoice/dto/create-invoice.dto'
 import { AppyPayWebhookDto } from '../../webhook/dto/appypay-webhook.dto'
 import { InjectRepository } from '@nestjs/typeorm'
 import { PaymentReferences } from './entities/payment-reference.entity'
-import { EntityManager, Repository } from 'typeorm'
+import { DeepPartial, EntityManager, Repository } from 'typeorm'
 import { RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
 import { InvoiceItem } from '../../invoice/entities/InvoiceIten.entity'
 import { MesTemp } from './entities/mes-temp.entity'
@@ -41,25 +41,19 @@ export class PaymentReferencesService {
   }
 
   async create(createPaymentReferenceDto: CreatePaymentReferenceDto) {
-
     const { itens, ...payments } = createPaymentReferenceDto;
 
-    // 🕒 Gera dueDate e referenceNumber em paralelo (melhor desempenho)
+    // 🕒 Gera dueDate e referenceNumber em paralelo
     const [dueDate, referenceNumber] = await Promise.all([
       generateDueDate(3),
       generateReferenceNumber(),
     ]);
 
     // 📦 Monta payload para AppyPay
-    const payload = this.buildAppyPayPayload(
-      payments,
-      dueDate,
-      referenceNumber,
-    );
+    const payload = this.buildAppyPayPayload(payments, dueDate, referenceNumber);
 
     // 🚀 Cria a referência no AppyPay
     const appyResponse = await this.appyPayUtil.createPaymentReference(payload);
-
     const status = appyResponse?.responseStatus;
 
     if (!status?.successful || !status?.reference?.referenceNumber) {
@@ -82,128 +76,166 @@ export class PaymentReferencesService {
       canal: 3,
       CodigoMatricula: payments.enrollment?.CodigoMatricula,
       codigo_preinscricao: payments.enrollment?.codigo_preinscricao,
-
+      itens, // Passa os itens para a criação da fatura
     };
 
-    // 🧠 Cria fatura e armazena no banco
-    const [invoice] = await Promise.all([
-      this.invoiceService.create(
+    // 🔄 Transaction - cria fatura e itens juntos
+    const manager = this.invoiceItemRepository.manager; // garante EntityManager
+
+    return await manager.transaction(async (em) => {
+      // 🧠 Cria fatura dentro da transação
+      const invoice = await this.invoiceService.create(
         createInvoiceDto,
         referenceNumber,
         dueDate,
-      ),
-    ]);
-
-
-    if (itens && itens.length > 0) {
-      const invoiceItems = this.invoiceItemRepository.create(
-        itens.map(item => ({
-          codigoProduto: item.CodigoProduto,
-          codigoFactura: invoice.Codigo,
-          quantidade: item.Quantidade,
-          total: item.Total,
-          obs: item.obs,
-          taxaIva: item.taxaIva,
-          valorIva: item.valorIva,
-          preco: item.preco,
-          retencao: item.retencao,
-          incidencia: item.incidencia,
-          valorDesconto: item.valorDesconto,
-          descontoProduto: item.descontoProduto,
-          mes: item.mes,
-          multa: item.multa,
-          mesTempId: item.mesTempId,
-          codigoAnoLectivo: invoice.anoLectivo,
-          estado: item.estado,
-          valorPago: item.valorPago,
-          valorATransportar: item.valorATransportar?.toString(),
-        }))
+        em, // <-- EntityManager da transação
       );
 
-      await this.invoiceItemRepository.save(invoiceItems);
-    }
+      // ✅ Criação de itens da fatura dentro da mesma transação
+      if (itens?.length) {
+        const invoiceItems: InvoiceItem[] = [];
 
-
-    // ✅ Retorno final
-    const entity = status.reference.entity;
-    return {
-      message: 'Referência AppyPay e fatura criadas com sucesso ✅',
-      referenceNumber,
-      dueDate,
-      entity,
-      invoiceNumber: invoice.numSequenciaFactura,
-      nextInvoice: invoice.NextFactura,
-    };
-  }
-
-async registerPaymentReference(
-  dto: RegisterPaymentReferenceDto,
-  manager?: EntityManager
-): Promise<PaymentReferences> {
-  const mgr = manager || this.paymentReferencesRepository.manager;
-
-  return await mgr.transaction(async (trx) => {
-    let attempts = 0;
-    const MAX_ATTEMPTS = 5;
-
-    while (attempts < MAX_ATTEMPTS) {
-      try {
-        // 1. GERAR ID SEQUENCIAL (começa em 90000)
-        const ultimoId = await trx
-          .createQueryBuilder(PaymentReferences, 'r')
-          .select('r.id', 'r_id')
-          .where("REGEXP_LIKE(r.id, '^[0-9]+$')")
-          .orderBy('TO_NUMBER(r.id)', 'DESC')
+        // 1️⃣ Buscar último código usado
+        const ultimoItem = await em
+          .createQueryBuilder(InvoiceItem, 'i')
+          .select('i.codigo', 'i_codigo')
+          .where("REGEXP_LIKE(i.codigo, '^[0-9]+$')")
+          .orderBy('TO_NUMBER(i.codigo)', 'DESC')
           .limit(1)
           .getRawOne();
 
-        let nextId = 90000;
-        if (ultimoId?.r_id) {
-          const lastNum = Number(ultimoId.r_id);
-          if (!isNaN(lastNum) && lastNum >= 90000) {
-            nextId = lastNum + 1;
-          }
+        let ultimoNumero = ultimoItem?.i_codigo ? Number(ultimoItem.i_codigo) : 0;
+
+        // 2️⃣ Gerar itens sequenciais
+        for (let i = 0; i < itens.length; i++) {
+          const item = itens[i];
+          ultimoNumero += 1;
+          const codigoGerado = ultimoNumero;
+
+          const invoiceItem = em.create(this.invoiceItemRepository.target, {
+            codigo: codigoGerado,
+            CodigoProduto: item.CodigoProduto,
+            CodigoFactura: invoice.Codigo,
+            quantidade: item.Quantidade,
+            total: item.Total,
+            obs: item.obs || `Item fatura ${invoice.Codigo}`,
+            taxaIva: item.taxaIva,
+            valorIva: item.valorIva,
+            preco: item.preco,
+            retencao: item.retencao,
+            incidencia: item.incidencia,
+            valorDesconto: item.valorDesconto,
+            descontoProduto: item.descontoProduto,
+            mes: item.mes,
+            multa: item.multa,
+            mesTempId: item.mesTempId,
+            codigoAnoLectivo: invoice.anoLectivo,
+            estado: item.estado ?? 0,
+            valorPago: item.valorPago ?? 0,
+            valorATransportar: item.valorATransportar?.toString() ?? '0',
+          });
+
+          invoiceItems.push(invoiceItem);
         }
 
-        const idGerado = nextId.toString();
-        console.log('ID GERADO PARA REFERÊNCIA:', idGerado);
-
-        // 2. GERAR SOURCE_ID ÚNICO
-        const sourceId = await this.generateNextSourceId(); // ← seu método existente
-
-        // 3. Criar entidade com id e sourceId
-        const entity = trx.create(PaymentReferences, {
-          ...dto,
-          id: idGerado,           // ← AQUI!
-          sourceId,               // ← AQUI!
-          startDate: dto.startDate ? new Date(dto.startDate) : new Date(),
-          endDate: dto.endDate ? new Date(dto.endDate) : new Date(),
-        });
-
-        // 4. Salvar
-        const saved = await trx.save(entity);
-        console.log('REFERÊNCIA CRIADA COM SUCESSO:', saved.id);
-        return saved;
-
-      } catch (error: any) {
-        attempts++;
-        const isUniqueError =
-          error.message?.includes('unique constraint') ||
-          error.message?.includes('ORA-00001');
-
-        if (isUniqueError && attempts < MAX_ATTEMPTS) {
-          console.warn(`Conflito de unicidade (tentativa ${attempts})`);
-          continue; // tenta novamente com novo sourceId
-        }
-
-        console.error('Erro ao salvar PaymentReferences:', error);
-        throw error;
+        // 3️⃣ Salvar todos os itens de uma vez
+        await em.save(invoiceItems);
       }
-    }
 
-    throw new Error('Falha ao gerar referência única após várias tentativas');
-  });
-}
+      // ✅ Retorno final
+      const entity = status.reference.entity;
+      return {
+        message: 'Referência AppyPay e fatura criadas com sucesso ✅',
+        referenceNumber,
+        dueDate,
+        entity,
+        invoiceNumber: invoice.numSequenciaFactura,
+        nextInvoice: invoice.NextFactura,
+      };
+    });
+  }
+
+
+  async registerPaymentReference(
+    dto: RegisterPaymentReferenceDto,
+    manager?: EntityManager
+  ): Promise<PaymentReferences> {
+    const mgr = manager || this.paymentReferencesRepository.manager;
+
+    return await mgr.transaction(async (trx) => {
+      let attempts = 0;
+      const MAX_ATTEMPTS = 5;
+
+      while (attempts < MAX_ATTEMPTS) {
+        try {
+          // 1. GERAR ID SEQUENCIAL (começa em 90000)
+          const ultimoId = await trx
+            .createQueryBuilder(PaymentReferences, 'r')
+            .select('r.id', 'r_id')
+            .where("REGEXP_LIKE(r.id, '^[0-9]+$')")
+            .orderBy('TO_NUMBER(r.id)', 'DESC')
+            .limit(1)
+            .getRawOne();
+
+          console.log(ultimoId);
+
+
+          let nextId = 90000;
+          if (ultimoId?.r_id) {
+            const lastNum = Number(ultimoId.r_id);
+            if (!isNaN(lastNum) && lastNum >= 90000) {
+              nextId = lastNum + 1;
+            }
+          }
+
+          const idGerado = nextId;
+
+          const sourceId = await this.generateNextSourceId();
+
+          const entity = trx.create(PaymentReferences, {
+            id: idGerado, // se id for string na entidade
+            sourceId: sourceId ?? '',
+            startDate: dto.startDate ? new Date(dto.startDate) : new Date(),
+            endDate: dto.endDate ? new Date(dto.endDate) : new Date(),
+
+            paymentId: dto.paymentId ?? null,
+            facturaCodigo: dto.facturaCodigo,
+            entityId: dto.entityId,
+            reference: dto.reference,
+            referenceId: dto.referenceId,
+            merchantTransactionId: dto.merchantTransactionId,
+            amount: dto.amount ?? 0,
+            status: dto.status ?? 'Pending',
+            webhook: dto.webhook ?? '',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } as DeepPartial<PaymentReferences>);
+
+
+          // 4. Salvar
+          const saved = await trx.save(entity);
+          console.log('REFERÊNCIA CRIADA COM SUCESSO:', saved.id);
+          return saved;
+
+        } catch (error: any) {
+          attempts++;
+          const isUniqueError =
+            error.message?.includes('unique constraint') ||
+            error.message?.includes('ORA-00001');
+
+          if (isUniqueError && attempts < MAX_ATTEMPTS) {
+            console.warn(`Conflito de unicidade (tentativa ${attempts})`);
+            continue; // tenta novamente com novo sourceId
+          }
+
+          console.error('Erro ao salvar PaymentReferences:', error);
+          throw error;
+        }
+      }
+
+      throw new Error('Falha ao gerar referência única após várias tentativas');
+    });
+  }
 
   async createMonthlyPaymentReferences(
     createPaymentReferenceDto: CreatePaymentReferenceDto,
@@ -320,27 +352,27 @@ async registerPaymentReference(
           // PASSA O MANAGER → usa mesma conexão!
           await this.registerPaymentReference(finalPayload, transactionalEntityManager);
           // GERA O CÓDIGO DO ITEM AQUI, COM O MESMO MANAGER
-  const ultimoItem = await transactionalEntityManager
-    .createQueryBuilder(InvoiceItem, 'i')
-    .select('i.codigo', 'i_codigo')
-    .where("REGEXP_LIKE(i.codigo, '^[0-9]+$')")
-    .orderBy('TO_NUMBER(i.codigo)', 'DESC')
-    .limit(1)
-    .getRawOne();
+          const ultimoItem = await transactionalEntityManager
+            .createQueryBuilder(InvoiceItem, 'i')
+            .select('i.codigo', 'i_codigo')
+            .where("REGEXP_LIKE(i.codigo, '^[0-9]+$')")
+            .orderBy('TO_NUMBER(i.codigo)', 'DESC')
+            .limit(1)
+            .getRawOne();
 
-  let nextNumber = 1;
-  if (ultimoItem?.i_codigo) {
-    const lastNum = Number(ultimoItem.i_codigo);
-    if (!isNaN(lastNum)) nextNumber = lastNum + 1;
-  }
+          let nextNumber = 1;
+          if (ultimoItem?.i_codigo) {
+            const lastNum = Number(ultimoItem.i_codigo);
+            if (!isNaN(lastNum)) nextNumber = lastNum + 1;
+          }
 
-  const codigoItemGerado = nextNumber.toString().padStart(6, '0');
-  console.log('CÓDIGO GERADO PARA ITEM:', codigoItemGerado);
+          const codigoItemGerado = nextNumber;
+          console.log('CÓDIGO GERADO PARA ITEM:', codigoItemGerado);
 
           // ---- Criação do Item da Fatura ----
           const invoiceItemData = {
             codigo: codigoItemGerado,
-            CodigoProduto: item.CodigoProduto.toString(),
+            CodigoProduto: item.CodigoProduto,
             CodigoFactura: invoice.Codigo,
             quantidade: item.Quantidade,
             total: item.Total,
@@ -437,10 +469,11 @@ async registerPaymentReference(
 
         // 7. Merchant Transaction ID
         const merchantTransactionId = await this.generateRandomCode();
+        const paymentId = await this.generatePaymentId()
 
         // 8. Registro local
         const finalPayload: RegisterPaymentReferenceDto = {
-          paymentId: undefined,
+          paymentId,
           facturaCodigo: invoice.Codigo,
           entityId: status?.reference?.entity || '10065',
           reference: referenceNumber,
@@ -578,18 +611,19 @@ async registerPaymentReference(
       // CREATE INDEX IDX_SOURCE_ID_NUM ON pagamento_por_referencias (
       //   TO_NUMBER(REGEXP_REPLACE(SOURCE_ID, 'REF1$', ''))
       // );
-      /*
-        const result = await this.paymentReferencesRepository
-          .createQueryBuilder()
-          .select('MAX(TO_NUMBER(REGEXP_REPLACE(SOURCE_ID, \'REF1$\', \'\')))', 'max_num')
-          .where("SOURCE_ID LIKE '%REF1'")
-          .getRawOne();
-    
-        const maxNum = result?.max_num ? parseInt(result.max_num, 10) : 0;
-        return `${maxNum + 1}REF1`;
-        */
-      const random = Math.floor(100000 + Math.random() * 900000);
-      return `${random}REF1`;
+
+      const result = await this.paymentReferencesRepository
+        .createQueryBuilder()
+        .select('MAX(TO_NUMBER(REGEXP_REPLACE(SOURCE_ID, \'REF1$\', \'\')))', 'max_num')
+        .where("SOURCE_ID LIKE '%REF1'")
+        .getRawOne();
+
+      const maxNum = result?.max_num ? parseInt(result.max_num, 10) : 0;
+
+      // 2️⃣ Incrementa +1 para gerar o próximo
+      const nextId = maxNum + 1;
+      return `${nextId}REF1`;
+
 
     } catch (error) {
       console.warn('Erro ao gerar SOURCE_ID:', error.message);
@@ -606,4 +640,15 @@ async registerPaymentReference(
     }
     return result;
   }
+  private async generatePaymentId(length: number = 12): Promise<number> {
+    const chars = '0123456789';
+    let paymentId = '';
+    for (let i = 0; i < length; i++) {
+      const randomIndex = Math.floor(Math.random() * chars.length);
+      paymentId += chars.charAt(randomIndex);
+    }
+    return Number(paymentId);
+  }
+
+
 }

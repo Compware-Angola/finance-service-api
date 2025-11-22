@@ -1,52 +1,52 @@
-import { Entity, PrimaryColumn, Column, BeforeInsert, BeforeUpdate } from 'typeorm';
+import { Entity, PrimaryColumn, Column, BeforeInsert } from 'typeorm';
 import { BaseEntity } from 'src/common/base-entity';
 
-@Entity({ name: 'UMA_NEGOCIACAO_DIVIDAS', })
+@Entity({ name: 'UMA_NEGOCIACAO_DIVIDAS' })
 export class DebtNegotiation extends BaseEntity {
-  @PrimaryColumn({ name: 'id', type: 'varchar2', length: 20 })
-  id: string;
+  @PrimaryColumn({ name: 'id', type: 'number' })
+  id: number;
 
-  @Column({ name: 'codigo_matricula', type: 'varchar2', length: 20 })
-  codigo_matricula: string;
+  @Column({ name: 'codigo_matricula', type: 'number' })
+  codigo_matricula: number;
 
-  @Column({ name: 'valor_divida', type: 'varchar2', length: 20, nullable: true })
-  valor_divida: string;
+  @Column({ name: 'valor_divida', type: 'number', nullable: true })
+  valor_divida: number;
 
-  @Column({ name: 'qtd_prestacoes', type: 'varchar2', length: 5 })
-  qtd_prestacoes: string;
+  @Column({ name: 'qtd_prestacoes', type: 'number' })
+  qtd_prestacoes: number;
 
-  @Column({ name: 'id_mes_inicial', type: 'varchar2', length: 5, nullable: true })
-  id_mes_inicial: string;
+  @Column({ name: 'id_mes_inicial', type: 'number', nullable: true })
+  id_mes_inicial: number;
 
-  @Column({ name: 'id_mes_final', type: 'varchar2', length: 5, nullable: true })
-  id_mes_final: string;
+  @Column({ name: 'id_mes_final', type: 'number', nullable: true })
+  id_mes_final: number;
 
-  @Column({ name: 'primeiroValorApagar', type: 'varchar2', length: 20, nullable: true })
-  primeiroValorApagar: string;
+  @Column({ name: 'primeiroValorApagar', type: 'number', nullable: true })
+  primeiroValorApagar: number;
 
-  @Column({ name: 'codigo_ano_lectivo', type: 'varchar2', length: 10 })
-  codigo_ano_lectivo: string;
+  @Column({ name: 'codigo_ano_lectivo', type: 'number' })
+  codigo_ano_lectivo: number;
 
-  @Column({ name: 'mesesQuitar', type: 'varchar2', length: 20, nullable: true })
-  mesesQuitar: string;
+  @Column({ name: 'mesesQuitar', type: 'number', nullable: true })
+  mesesQuitar: number;
 
-  @Column({ name: 'valorRestante', type: 'varchar2', length: 20, nullable: true })
-  valorRestante: string;
+  @Column({ name: 'valorRestante', type: 'number', nullable: true })
+  valorRestante: number;
 
-  @Column({ name: 'valorPrestacoes', type: 'varchar2', length: 20, nullable: true })
-  valorPrestacoes: string;
+  @Column({ name: 'valorPrestacoes', type: 'number', nullable: true })
+  valorPrestacoes: number;
 
   @Column({ name: 'mesesParImpar', type: 'varchar2', length: 10, nullable: true })
   mesesParImpar: string;
 
-  @Column({ name: 'codigo_fatura', type: 'varchar2', length: 20 })
-  codigo_fatura: string;
+  @Column({ name: 'codigo_fatura', type: 'number' })
+  codigo_fatura: number;
 
-  @Column({ name: 'tipo_negociacao_id', type: 'varchar2', length: 10 })
-  tipo_negociacao_id: string;
+  @Column({ name: 'tipo_negociacao_id', type: 'number' })
+  tipo_negociacao_id: number;
 
-  @Column({ name: 'estado', type: 'varchar2', length: 20, nullable: true })
-  estado: string;
+  @Column({ name: 'estado', type: 'number', nullable: true })
+  estado: number;
 
   // ===== GERA O ID SEQUENCIAL AUTOMATICAMENTE =====
   @BeforeInsert()
@@ -65,36 +65,14 @@ export class DebtNegotiation extends BaseEntity {
         .limit(1)
         .getRawOne();
 
-      console.log('ÚLTIMA NEGOCIAÇÃO ENCONTRADA:', last);
-
       let nextId = 1000;
       if (last && last.n_id) {
         const lastNum = Number(last.n_id);
         if (!isNaN(lastNum)) nextId = lastNum + 1;
       }
 
-      this.id = nextId.toString();
+      this.id = nextId;
       console.log('ID GERADO:', this.id);
     }
-  }
-
-  // ===== GARANTE QUE TODOS OS VALORES SERÃO STRINGS =====
-  @BeforeInsert()
-  @BeforeUpdate()
-  convertToString() {
-    this.codigo_matricula = this.codigo_matricula?.toString();
-    this.valor_divida = this.valor_divida?.toString();
-    this.qtd_prestacoes = this.qtd_prestacoes?.toString();
-    this.id_mes_inicial = this.id_mes_inicial?.toString();
-    this.id_mes_final = this.id_mes_final?.toString();
-    this.primeiroValorApagar = this.primeiroValorApagar?.toString();
-    this.codigo_ano_lectivo = this.codigo_ano_lectivo?.toString();
-    this.mesesQuitar = this.mesesQuitar?.toString();
-    this.valorRestante = this.valorRestante?.toString();
-    this.valorPrestacoes = this.valorPrestacoes?.toString();
-    this.mesesParImpar = this.mesesParImpar?.toString();
-    this.codigo_fatura = this.codigo_fatura?.toString();
-    this.tipo_negociacao_id = this.tipo_negociacao_id?.toString();
-    this.estado = this.estado?.toString();
   }
 }

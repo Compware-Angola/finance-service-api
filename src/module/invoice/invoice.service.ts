@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { DeepPartial, EntityManager, IsNull, Repository } from 'typeorm';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { Invoice } from './entities/invoice.entity';
@@ -75,8 +75,8 @@ async create(
       if (!isNaN(lastNum)) nextNumber = lastNum + 1;
     }
 
-    const codigoGerado = nextNumber.toString();
-    console.log('CÓDIGO GERADO PARA FATURA:', codigoGerado);
+    const codigoGerado = nextNumber;
+  
 
     // 🔹 Referência (usa parâmetro ou gera nova)
     const referencia: string =
@@ -120,22 +120,46 @@ async create(
      
     );
 
-    // 5. Criar entidade Invoice
-    const invoiceToCreate = em.create(this.invoiceRepository.target, {
-      ...invoiceData,
-      Codigo: codigoGerado,
-      DataFactura: new Date(),
-      poloId,
-      numSequenciaFactura: hashData.numSequenciaFactura,
-      NextFactura: hashData.numeracaoFactura,
-      next: hashData.numeracaoFactura,
-      Referencia: referencia,
-      hashValor: hashData.hashValor,
-      textoHash: hashData.plaintext,
-      dataVencimento: dueDate,
-      tipoDocumentoFacturaId: tipoDocumentoId,
-      anoLectivo: anoLetivoId,
-    });
+const invoiceToCreate = em.create(
+  this.invoiceRepository.target,
+  {
+    Codigo:codigoGerado,
+    DataFactura: new Date(),
+    TotalPreco: invoiceData.TotalPreco,
+    CodigoMatricula: invoiceData.CodigoMatricula!,
+    Referencia: referencia,
+    Desconto: invoiceData.Desconto ?? 0,
+    totalIVA: invoiceData.totalIVA ?? 0,
+    TotalMulta: invoiceData.TotalMulta ?? 0,
+    ValorAPagar: invoiceData.ValorAPagar ?? invoiceData.TotalPreco,
+    Descricao: invoiceData.Descricao ?? 'Pagamento de Mensalidade',
+    codigoDescricao: invoiceData.codigo_descricao ?? 101,
+    NextFactura: hashData.numeracaoFactura,
+    next: hashData.numeracaoFactura,
+    textoHash: hashData.plaintext,
+    //hashValor: hashData.hashValor, reduzi porque nao aceita todo ele
+    hashValor: hashData.hashValor.slice(0, 255),
+    dataVencimento: dueDate,
+    poloId: invoiceData.polo_id,
+    canal: invoiceData.canal ?? 3,
+    anoLectivo: anoLetivoId,
+    estado: 0,
+    numSequenciaFactura: hashData.numSequenciaFactura,
+    tipoDocumentoFacturaId: tipoDocumentoId,
+    Troco: 0,
+    ValorEntregue: 0,
+    ValorAPagarExtenso: '',
+    obs: '',
+    contaCorrente: '',
+    corrente: 0,
+    codigoPreinscricao: invoiceData.codigo_preinscricao ?? null,
+    totalIncidencia: invoiceData.total_incidencia ?? null,
+    totalRetencao: invoiceData.total_retencao ?? null,
+    ValorEntregueMltCX: 0,
+    faturaReference: '',
+  } as DeepPartial<Invoice>, 
+);
+
 
     const savedInvoice = await em.save(invoiceToCreate);
 
@@ -161,12 +185,12 @@ if (itens?.length) {
   for (let i = 0; i < itens.length; i++) {
     const item = itens[i];
     ultimoNumero += 1; // Incrementa a cada item
-    const codigoGerado = ultimoNumero.toString().padStart(6, '0');
+    const codigoGerado = ultimoNumero;
     console.log(`CÓDIGO GERADO PARA ITEM ${i + 1}:`, codigoGerado);
 
     const invoiceItem = em.create(this.invoiceItemRepository.target, {
-      codigo: codigoGerado, // ← AQUI!
-      CodigoProduto: item.CodigoProduto.toString(),
+      codigo: codigoGerado,
+      CodigoProduto: item.CodigoProduto,
       CodigoFactura: savedInvoice.Codigo,
       quantidade: item.Quantidade,
       total: item.Total,
@@ -482,7 +506,7 @@ function groupInvoices(rows: any[]): any[] {
     
 
     // ADICIONAR ITEM somente se fi_CodigoFactura == f_codigo
-    if (row.f_codigo != null && row.fi_CodigoFactura === row.f_codigo) {
+    if (row.f_codigo != undefined && row.fi_CodigoFactura === row.f_codigo) {
       const itemKey = `${row.fi_mes}-${row.fi_codigo_produto}-${row.fi_codigo_ano_lectivo}`;
       const itemExists = invoice.itens.some((i: any) =>
         `${i.Mes}-${i.CodigoProduto}-${i.codigo_anoLectivo}` === itemKey
@@ -507,7 +531,7 @@ function groupInvoices(rows: any[]): any[] {
     }
 
     // ADICIONAR REFERÊNCIA DE PAGAMENTO
-    if (row.ppr_id != null) {
+    if (row.ppr_id != undefined) {
       const refExists = invoice.referencias_pagamento.some((r: any) => r.id === row.ppr_id);
       if (!refExists) {
         invoice.referencias_pagamento.push({

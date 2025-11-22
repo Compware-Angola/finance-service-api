@@ -11,8 +11,8 @@ import { BaseEntity } from 'src/common/base-entity';
 
 @Entity({ name: 'UMA_PAGAMENTO_POR_REFERENCIAS', })
 export class PaymentReferences extends BaseEntity {
-  @PrimaryColumn({ name: 'id', type: 'varchar2', length: 20 })  
-  id: string;
+  @PrimaryColumn({ name: 'id', type: 'number',  })  
+  id: number;
 
   @Column({
     name: 'PAYMENT_ID',

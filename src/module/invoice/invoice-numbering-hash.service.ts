@@ -10,9 +10,9 @@ import { generateDueDate } from '../util/generate-due-date';
 
 // Interfaces
 interface FacturaAnterior {
-  DataFactura: string | Date;
-  hashValor: string;
-  numSequenciaFactura: number;
+  i_DataFactura: string | Date;
+  i_hashValor: string;
+  i_numSequenciaFactura: number;
 }
 
 interface InvoiceHashData {
@@ -72,19 +72,20 @@ export class InvoiceNumberingAndHashService {
         .limit(1)
         .getRawOne() as FacturaAnterior | undefined;
 
+  
       const ultimaFatura = ultimaFaturaResults;
 
-      const data_factura = ultimaFatura?.DataFactura
-        ? DateTime.fromJSDate(new Date(ultimaFatura.DataFactura))
+      const data_factura = ultimaFatura?.i_DataFactura
+        ? DateTime.fromJSDate(new Date(ultimaFatura.i_DataFactura))
         : DateTime.now();
 
-      const hashAnterior = ultimaFatura?.hashValor ?? '0';
+      const hashAnterior = ultimaFatura?.i_hashValor ?? '0';
       const datactual = DateTime.now();
       const diff = datactual.diff(data_factura, 'years').years;
 
       const numSequenciaFactura =
-        diff < 1 && ultimaFatura?.numSequenciaFactura != null
-          ? ultimaFatura.numSequenciaFactura + 1
+        diff < 1 && ultimaFatura?.i_numSequenciaFactura != null
+          ? ultimaFatura.i_numSequenciaFactura + 1
           : 1;
 
       const numeracaoFactura = `${tipo_factura_sigla} UMA ${ano_designacao}/${numSequenciaFactura}`;

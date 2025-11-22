@@ -10,7 +10,7 @@ export class InscricaoAvaliacao {
   codigo_matricula: string;
 
   @Column({ name: 'codigo_factura' })
-  codigo_factura: string;
+  codigo_factura: number;
 
   @Column({ name: 'codigo_grade' })
   codigo_grade: string;

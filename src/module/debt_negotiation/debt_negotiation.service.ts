@@ -536,9 +536,7 @@ const matricula = toLowerCaseKeys(matriculaRaw);
     .where('ia.codigo_matricula = :matricula', { matricula: matricula.codigo })
     .orderBy('ia.codigo_ano_lectivo', 'ASC')
     .getRawMany();
-    console.log(anosAnterioresRaw,"TESTE TESTE TESTE");
-    
-
+  
  
   const collection: any[] = [];
   const diplomado = await this.matriculaRepo.findOne({
@@ -1243,11 +1241,11 @@ private async getPrestacoes(
     ])
     .where('m.ano_lectivo = :anoLectivo', { anoLectivo: anoLectivoId.toString() })
     .andWhere(`m.${activoField} = 1`)
-   .andWhere(`
+.andWhere(`
   (
-    (m.data_limite IS NOT NULL AND m.data_limite <> ' ' AND TO_DATE(m.data_limite, 'YYYY-MM-DD') < SYSDATE)
+    (m.data_limite IS NOT NULL AND TRUNC(m.data_limite) < TRUNC(SYSDATE))
     OR
-    (m.data_final IS NOT NULL AND m.data_final <> ' ' AND TO_DATE(m.data_final, 'YYYY-MM-DD') < SYSDATE)
+    (m.data_final IS NOT NULL AND TRUNC(m.data_final) < TRUNC(SYSDATE))
   )
 `)
 

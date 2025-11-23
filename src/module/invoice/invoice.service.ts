@@ -194,7 +194,7 @@ export class InvoiceService {
             CodigoFactura: savedInvoice.Codigo,
             quantidade: item.Quantidade ?? 1, // default 1 se não enviar
             total: item.Total ?? 0,
-            obs: item.obs ?? `Item fatura ${savedInvoice.Codigo}`,
+            obs: item.obs?.substring(0, 45) ?? `Item fatura ${savedInvoice.Codigo}`,
             taxaIva: item.taxaIva ?? 0,
             valorIva: item.valorIva ?? 0,
             preco: item.preco ?? 0,

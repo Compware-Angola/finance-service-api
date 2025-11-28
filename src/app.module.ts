@@ -7,8 +7,8 @@ import { WebhookModule } from './module/webhook/webhook.module';
 import { PaymentModule } from './module/payment/payment.module';
 import { BullModule } from '@nestjs/bullmq';
 import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
-import { AdvancePaymentsModule } from './module/advance_payments/advance_payments.module';
 import { BullMQWorkerService } from './bullmq-worker.service';
+import { AssessmentModule } from './module/assessment/assessment.module';
 
 
 @Module({
@@ -57,11 +57,11 @@ import { BullMQWorkerService } from './bullmq-worker.service';
     WebhookModule,
     PaymentModule,
     DebtNegotiationModule,
-    AdvancePaymentsModule,
+    AssessmentModule,
 
   ],
   providers: [
-    BullMQWorkerService, // ADICIONE AQUI
+    BullMQWorkerService, 
   ],
 
 

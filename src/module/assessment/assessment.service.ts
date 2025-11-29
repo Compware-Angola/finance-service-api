@@ -354,7 +354,7 @@ export class AssessmentService {
         cor: null!, // comNotaGarantida ? 'rgba(0,255,0,0.2)' : cor,
         codigoTurmaHorario: row.CODIGOHORARIO,
         codigoGrade: row.CODIGOGRADE,
-        numeroDeIscritos: inscritos!, // --- IGNORE ---
+        numeroDeIscritos: inscritos, // --- IGNORE ---
         numNotaPorLancar,
         numNotaLancada: totalLancadas,
       });

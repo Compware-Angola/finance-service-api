@@ -3,7 +3,7 @@ import { AssessmentService, NotaLancadaResponseDto } from './assessment.service'
 
 import { BuscarDisciplinasProvaDto } from './dto/buscar-disciplinas-prova.dto';
 import { BuscarNotasDto } from './dto/buscar-notas.dto';
-import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { ListarUnidadesCurricularesDto } from './dto/listar-unidades-curriculares.dto';
 import { DefineFormulaUcService } from './define_formula_uc.service';
 import { AtualizarFormulaDto } from './dto/atualizar-formula.dto';
@@ -11,10 +11,13 @@ import { DefinirOralGradeDto } from './dto/definir-oral-grade.dto';
 import { ListarDefinirOralDto } from './dto/listar-definir-oral.dto';
 import { DefineFormulaUcOralService } from './define_formula_uc_oral.service';
 import { AtualizarStatusOralDto } from './dto/atualizar-status-oral.dto';
+import { BuscarEstudantesDto } from './dto/buscar-estudantes.dto';
+import { EstudanteLancamentoDto } from './dto/estudante-lancamento.dto';
+import { NoteReleaseService } from './note_release.service';
 
 @Controller('assessment')
 export class AssessmentController {
-  constructor(private readonly service: AssessmentService,private readonly defineFormulaUcService:DefineFormulaUcService,private readonly oralService:DefineFormulaUcOralService) {}
+  constructor(private readonly note_release_service:NoteReleaseService, private readonly service: AssessmentService,private readonly defineFormulaUcService:DefineFormulaUcService,private readonly oralService:DefineFormulaUcOralService) {}
 
 
 
@@ -63,5 +66,16 @@ async atualizarStatus(
     message: 'Status da oral atualizado com sucesso',
     habilitar: dto.habilitar,
   };
+}
+@Get('estudantes')
+@ApiOperation({ summary: 'Buscar estudantes para lançamento de notas' })
+@ApiQuery({ name: 'gradeId', type: Number })
+@ApiQuery({ name: 'tipoAvaliacaoId', type: Number })
+@ApiQuery({ name: 'anoLectivoId', type: Number })
+@ApiQuery({ name: 'verHorario', type: Boolean })
+async buscarEstudantes(
+  @Query(ValidationPipe) dto: BuscarEstudantesDto,
+): Promise<EstudanteLancamentoDto[]> {
+  return this.note_release_service.buscarEstudantes(dto);
 }
 }

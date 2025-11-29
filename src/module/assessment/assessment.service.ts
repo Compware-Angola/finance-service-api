@@ -1,9 +1,10 @@
 // src/assessment/assessment.service.ts
 
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { BuscarDisciplinasProvaDto, FiltroNota } from './dto/buscar-disciplinas-prova.dto';
 import { AnoLectivoUtil } from '../util/current-academic-year';
+import { BuscarNotasDto } from './dto/buscar-notas.dto';
 
 export interface LancamentoNotaPorCursoModel {
   disciplina: string;
@@ -16,7 +17,17 @@ export interface LancamentoNotaPorCursoModel {
   numeroDeIscritos: number;
   numNotaPorLancar: number;
 }
+// src/assessment/dto/nota-lancada.response.dto.ts
 
+export class NotaLancadaResponseDto {
+  alunoId: number;
+  alunoNome: string;
+  numeroAluno?: string;
+  nota: number;
+  observacao?: string;
+  dataLancamento?: Date;
+  // adicione mais campos conforme vierem do banco
+}
 @Injectable()
 export class AssessmentService {
   private anoAtualPrincipal: number;
@@ -76,6 +87,96 @@ export class AssessmentService {
     }
 
     return [];
+  }
+  async buscarNotas(
+    turmaOuHorarioId: number,
+    params: BuscarNotasDto,
+  ): Promise<NotaLancadaResponseDto[]> {
+    const { tipoAvaliacaoId, anoLectivoId } = params;
+
+    let result: any[] = [];
+
+    if (anoLectivoId <= 17) {
+      result = await this.dataSource.query(`
+    SELECT 
+      a.codigo           AS "alunoId",
+      pi.nome_completo   AS "alunoNome",
+      a.CODIGO     AS "numeroAluno",
+      tgcaa.nota         AS "nota",
+      tgcaa.observacao   AS "observacao",
+      tgcaa.CREATED_AT AS "dataLancamento"
+    FROM FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES tgcaa
+    INNER JOIN FK2_TB_GRADE_CURRICULAR_ALUNO gca 
+      ON gca.codigo = tgcaa.grade_curricular_aluno
+    JOIN FK2_TB_MATRICULAS m 
+      ON m.codigo = gca.CODIGO_MATRICULA
+    JOIN FK2_TB_ADMISSAO a 
+      ON a.codigo = m.CODIGO_ALUNO
+    JOIN FK2_TB_PREINSCRICAO pi 
+      ON pi.codigo = a.PRE_INCRICAO
+    JOIN TB_TURMAS t 
+      ON t.codigo = m.fk_turma
+    WHERE t.codigo = :turmaOuHorarioId
+      AND tgcaa.tipo_avaliacao = :tipoAvaliacaoId
+      AND t."Codigo_AnoLectivo" = :anoLectivoId
+      AND tgcaa.nota IS NOT NULL
+    ORDER BY pi.nome_completo
+  `, [
+        turmaOuHorarioId,
+        tipoAvaliacaoId,
+        anoLectivoId,]);
+
+    } else {
+      // === HORÁRIO (novo) ===
+      result = await this.dataSource.query(`
+    SELECT 
+      a.codigo           AS "alunoId",
+      pi.nome_completo   AS "alunoNome",
+      a.CODIGO     AS "numeroAluno",
+      tgcaa.nota         AS "nota",
+      tgcaa.observacao   AS "observacao",
+      tgcaa.CREATED_AT AS "dataLancamento"
+    FROM FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES tgcaa
+    JOIN FK2_TB_GRADE_CURRICULAR_ALUNO gca 
+      ON gca.codigo = tgcaa.grade_curricular_aluno
+    JOIN FK2_TB_MATRICULAS m 
+      ON m.codigo = gca.CODIGO_MATRICULA
+    JOIN FK2_TB_ADMISSAO a 
+      ON a.codigo = m.CODIGO_ALUNO
+    JOIN FK2_TB_PREINSCRICAO pi 
+      ON pi.codigo = a.PRE_INCRICAO
+    JOIN FK2_MGH_TB_HORARIO h 
+      ON h.pk_horario = TO_NUMBER(JSON_VALUE(gca.ref_horario, '$.pk'))
+   
+    JOIN FK2_TB_GRADE_CURRICULAR_ALUNO gca 
+      ON gca.codigo = tgcaa.grade_curricular_aluno
+    JOIN FK2_TB_MATRICULAS m 
+      ON m.codigo = gca.CODIGO_MATRICULA
+    JOIN FK2_TB_ADMISSAO a 
+      ON a.codigo = m.CODIGO_ALUNO
+    JOIN FK2_TB_PREINSCRICAO pi 
+      ON pi.codigo = a.PRE_INCRICAO
+    JOIN FK2_MGH_TB_HORARIO h 
+      ON h.pk_horario = TO_NUMBER(JSON_VALUE(gca.ref_horario, '$.pk'))
+    WHERE h.pk_horario = :turmaOuHorarioId
+      AND tgcaa.tipo_avaliacao = :tipoAvaliacaoId
+      AND TO_NUMBER(JSON_VALUE(h.ref_ano_lectivo, '$.pk')) = :anoLectivoId
+      AND tgcaa.nota IS NOT NULL
+    ORDER BY pi.nome_completo
+  `, [turmaOuHorarioId,
+        tipoAvaliacaoId,
+        anoLectivoId,]);
+    }
+
+    // Converte o resultado bruto para o DTO (boa prática)
+    return result.map(row => ({
+      alunoId: Number(row.alunoId),
+      alunoNome: row.alunoNome,
+      numeroAluno: row.numeroAluno ?? undefined,
+      nota: Number(row.nota),
+      observacao: row.observacao ?? undefined,
+      dataLancamento: row.dataLancamento ? new Date(row.dataLancamento) : undefined,
+    }));
   }
 
   // ==================== POR HORÁRIO ====================
@@ -342,8 +443,8 @@ export class AssessmentService {
         tipoAvaliacaoId,
       );
       const r = this.normalizeRow(row);
-      console.log(r,"TESTE ###$");
-      
+      console.log(r, "TESTE ###$");
+
       const anoCorrente = this.anoAtualPrincipal;
       const inscritos = await this.buscarNumeroDeIscritos(r, r.turmaouhorario, anoCorrente);
       const numNotaPorLancar = inscritos >= totalLancadas
@@ -503,7 +604,7 @@ export class AssessmentService {
       INNER JOIN FK2_TB_TURMAS t 
         ON t.codigo = m.fk_turma
       INNER JOIN FK2_TB_GRADE_CURRICULAR_ALUNO gca 
-        ON gca.fk_matricula = m.codigo
+        ON gca.CODIGO_MATRICULA = m.codigo
       INNER JOIN FK2_TB_GRADE_CURRICULAR gc 
         ON gc.Codigo = gca.codigo_grade_curricular
     WHERE t.codigo = :turmaId 
@@ -532,7 +633,7 @@ export class AssessmentService {
 
   /** Calcula o número de alunos inscritos (funciona para TURMA e HORÁRIO) */
   async buscarNumeroDeIscritos(
-    lancamento: LancamentoNotaPorCursoModel| any,
+    lancamento: LancamentoNotaPorCursoModel | any,
     turmaOuHorario: string,
     anoLectivoAtual: number,
   ): Promise<number> {

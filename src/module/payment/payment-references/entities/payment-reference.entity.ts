@@ -1,22 +1,32 @@
+// payment-references.entity.ts
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  BeforeInsert,
 } from 'typeorm';
+import { BaseEntity } from 'src/common/base-entity';
 
-@Entity('pagamento_por_referencias')
-export class PaymentReferences {
-  @PrimaryGeneratedColumn({ type: 'bigint' })
+@Entity({ name: 'UMA_PAGAMENTO_POR_REFERENCIAS', })
+export class PaymentReferences extends BaseEntity {
+  @PrimaryColumn({ name: 'id', type: 'number',  })  
   id: number;
 
-  @Column({ name: 'PAYMENT_ID', type: 'bigint', nullable: true, comment: 'Id do pagamento no BE' })
+  @Column({
+    name: 'PAYMENT_ID',
+    type: 'number',
+    precision: 19,
+    scale: 0,
+    nullable: true,
+    comment: 'Id do pagamento no BE',
+  })
   paymentId?: number;
 
   @Column({
     name: 'SOURCE_ID',
-    type: 'varchar',
+    type: 'varchar2',
     length: 50,
     nullable: false,
     unique: true,
@@ -26,8 +36,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'factura_codigo',
-    type: 'int',
-    unsigned: true,
+    type: 'number',
     nullable: false,
     comment: 'Código da Factura do Mutue',
   })
@@ -35,7 +44,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'ENTITY_ID',
-    type: 'varchar',
+    type: 'varchar2',
     length: 50,
     nullable: false,
     comment: 'Identificador da UMA no BE (número informado nos ATM’s ou Express)',
@@ -44,7 +53,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'REFERENCE',
-    type: 'varchar',
+    type: 'varchar2',
     length: 100,
     nullable: false,
     unique: true,
@@ -54,7 +63,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'REFERENCE_ID',
-    type: 'varchar',
+    type: 'varchar2',
     length: 250,
     nullable: true,
   })
@@ -62,7 +71,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'MERCHANT_TRANSACTION_ID',
-    type: 'varchar',
+    type: 'varchar2',
     length: 250,
     nullable: true,
   })
@@ -70,7 +79,9 @@ export class PaymentReferences {
 
   @Column({
     name: 'AMOUNT',
-    type: 'double',
+    type: 'number',
+    precision: 15,
+    scale: 2,
     nullable: false,
     comment: 'Valor a pagar da Factura',
   })
@@ -78,7 +89,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'START_DATE',
-    type: 'datetime',
+    type: 'timestamp',
     nullable: false,
     comment: 'Data que se gerou a referência',
   })
@@ -86,7 +97,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'END_DATE',
-    type: 'datetime',
+    type: 'timestamp',
     nullable: false,
     comment: 'Data em que a referência vai expirar',
   })
@@ -94,7 +105,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'Status',
-    type: 'varchar',
+    type: 'varchar2',
     length: 50,
     nullable: false,
     comment: 'Estado da referência (ACTIVE, INACTIVE, CANCELED, PAID, ERROR)',
@@ -103,7 +114,7 @@ export class PaymentReferences {
 
   @Column({
     name: 'webhook',
-    type: 'text',
+    type: 'clob',
     nullable: true,
     comment: 'Payload do Webhook recebido (quando aplicável)',
   })
@@ -112,7 +123,6 @@ export class PaymentReferences {
   @CreateDateColumn({
     name: 'created_at',
     type: 'timestamp',
-    default: () => 'CURRENT_TIMESTAMP',
   })
   createdAt: Date;
 
@@ -120,7 +130,8 @@ export class PaymentReferences {
     name: 'updated_at',
     type: 'timestamp',
     nullable: true,
-    onUpdate: 'CURRENT_TIMESTAMP',
   })
   updatedAt: Date;
+
+
 }

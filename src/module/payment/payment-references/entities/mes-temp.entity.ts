@@ -1,47 +1,47 @@
 import { Column, Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 
-@Entity('mes_temp')
+@Entity({ name: 'UMA_MES_TEMP', })
 export class MesTemp {
-  @PrimaryGeneratedColumn({ type: 'int', unsigned: true })
+  @PrimaryGeneratedColumn({ type: 'int', "unsigned": true })
   id: number;
 
-  @Column({ type: 'varchar', length: 45 })
+  @Column({ type: 'varchar', "length": 45 })
   designacao: string;
 
-  @Column({ type: 'tinyint', width: 1, default: 1 })
+  @Column({ type: 'int', "width": 1, "default": 1 })
   isencao: number;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ type: 'int', "nullable": true })
   ordem_mes: number;
 
-  @Column({ type: 'int', unsigned: true, default: 1 })
+  @Column({ type: 'int', "unsigned": true, "default": 1 })
   ano_lectivo: number;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ type: 'int', "nullable": true })
   prestacao: number;
 
-  @Column({ type: 'int', default: 1 })
+  @Column({ type: 'int', "default": 1 })
   activo: number;
 
-  @Column({ type: 'int', default: 1 })
+  @Column({ type: 'int', "default": 1 })
   activo_posgraduacao: number;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'date', "nullable": true })
   data_limite: Date;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'date', "nullable": true })
   data_inicial: Date;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'date', "nullable": true })
   data_final: Date;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'date', "nullable": true })
   data_final_desconto: Date;
 
-  @Column({ type: 'int', unsigned: true, nullable: true })
+  @Column({ type: 'int', "unsigned": true, "nullable": true })
   semestre: number;
 
-  @Column({ type: 'int', unsigned: true, nullable: true })
+  @Column({ type: 'int', "unsigned": true, "nullable": true })
   semestre_posgraduacao: number;
 
 

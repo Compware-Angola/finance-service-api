@@ -8,7 +8,6 @@ import { Invoice } from './entities/invoice.entity';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
-import { InvoiceFilterPreEnrollmentDto } from './dto/invoice-filter-preenrollment.dto';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
 
 @ApiTags('Invoices')
@@ -22,7 +21,7 @@ export class InvoiceController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Cria uma nova fatura' })
-  @ApiResponse({ status: 201, description: 'Fatura criada com sucesso.' })
+  @ApiResponse({ status: 201, "description": 'Fatura criada com sucesso.' })
   async create(@Body() createInvoiceDto: CreateInvoiceDto){
     return this.invoiceService.queueCreateInvoice(createInvoiceDto);
   }
@@ -32,7 +31,7 @@ export class InvoiceController {
   // ------------------------------------
   @Get()
   @ApiOperation({ summary: 'Retorna todas as faturas com paginação' })
-  @ApiResponse({ status: 200, description: 'Lista de faturas retornada com sucesso.' })
+  @ApiResponse({ status: 200, "description": 'Lista de faturas retornada com sucesso.' })
   async findAll(@Query() paginationQuery: PaginationQueryDto): Promise<PagedResult<Invoice>> {
     return this.invoiceService.findAll(paginationQuery);
   }
@@ -40,7 +39,7 @@ export class InvoiceController {
 
   @Get('types')
   @ApiOperation({ summary: 'Retorna todos os tipos de documento de faturação' })
-  @ApiResponse({ status: 200, description: 'Lista de tipos de documento de faturação retornada com sucesso.' })
+  @ApiResponse({ status: 200, "description": 'Lista de tipos de documento de faturação retornada com sucesso.' })
   async findAllTypeInvoiceDocument(): Promise<TypeInvoiceDocument[]> {
     return this.invoiceService.findAllTypeInvoiceDocument();
   }
@@ -49,12 +48,12 @@ export class InvoiceController {
   // 6. FIND BY MATRICULA (GET /invoices/by-matricula)
   // ------------------------------------
   @Get('by-matricula')
-  @ApiOperation({ summary: 'Retorna faturas por Código de Matrícula, com paginação' })
-  @ApiResponse({ status: 200, description: 'Lista de faturas filtrada.' })
+  @ApiOperation({ summary: 'Retorna faturas por Código de Matrícula, "com" paginação' })
+  @ApiResponse({ status: 200, "description": 'Lista de faturas filtrada.' })
   async findByMatricula(
     @Query() filterQuery: InvoiceFilterEnrollmentDto
   ): Promise<PagedResult<Invoice>> {
-    // Este método está correto, pois o ValidationPipe em main.ts lida com o DTO de query.
+    // Este método está correto, "pois" o ValidationPipe em main.ts lida com o DTO de query.
     return this.invoiceService.findByEnrollmentCode(filterQuery);
   }
 
@@ -63,10 +62,10 @@ export class InvoiceController {
   // ------------------------------------
   @Get(':id')
   @ApiOperation({ summary: 'Busca uma fatura pelo Código' })
-  @ApiParam({ name: 'id', description: 'O Código (ID) da fatura', type: Number })
-  @ApiResponse({ status: 200, description: 'Fatura encontrada.', type: Invoice })
-  @ApiResponse({ status: 400, description: 'ID da fatura inválido.' })
-  @ApiResponse({ status: 404, description: 'Fatura não encontrada.' })
+  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura', "type": Number })
+  @ApiResponse({ status: 200, "description": 'Fatura encontrada.', "type": Invoice })
+  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' })
+  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
   async findOne(@Param('id', ParseIntPipe) Codigo: number): Promise<Invoice> {
     return this.invoiceService.findOne(Codigo);
   }
@@ -77,12 +76,12 @@ export class InvoiceController {
   // ------------------------------------
   @Patch(':id')
   @ApiOperation({ summary: 'Atualiza uma fatura existente' })
-  @ApiParam({ name: 'id', description: 'O Código (ID) da fatura a ser atualizada', type: Number })
-  @ApiResponse({ status: 400, description: 'ID da fatura inválido.' }) // Adicionado 400
-  @ApiResponse({ status: 200, description: 'Fatura atualizada com sucesso.', type: Invoice })
-  @ApiResponse({ status: 404, description: 'Fatura não encontrada.' })
+  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura a ser atualizada', "type": Number })
+  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' }) // Adicionado 400
+  @ApiResponse({ status: 200, "description": 'Fatura atualizada com sucesso.', "type": Invoice })
+  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
   async update(@Param('id', ParseIntPipe) Codigo: number, @Body() updateInvoiceDto: UpdateInvoiceDto): Promise<Invoice> {
-    return this.invoiceService.update(Codigo, updateInvoiceDto);
+    return this.invoiceService.update(Codigo, "update"InvoiceDto);
   }
   ------------------------------------
   // 5. REMOVE (DELETE :id) - CORRIGIDO O NaN
@@ -90,10 +89,10 @@ export class InvoiceController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove uma fatura pelo Código' })
-  @ApiParam({ name: 'id', description: 'O Código (ID) da fatura a ser removida', type: Number })
-  @ApiResponse({ status: 400, description: 'ID da fatura inválido.' }) // Adicionado 400
-  @ApiResponse({ status: 204, description: 'Fatura removida com sucesso.' })
-  @ApiResponse({ status: 404, description: 'Fatura não encontrada.' })
+  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura a ser removida', "type": Number })
+  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' }) // Adicionado 400
+  @ApiResponse({ status: 204, "description": 'Fatura removida com sucesso.' })
+  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
   async remove(@Param('id', ParseIntPipe) Codigo: number): Promise<void> {
     await this.invoiceService.remove(Codigo);
   }

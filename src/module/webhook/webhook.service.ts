@@ -41,7 +41,7 @@ export class WebhookService {
         return { success: false, message: 'Fatura não encontrada para a referência fornecida' };
       }
       const registerPayload: RegisterPaymentReferenceDto = {
-        sourceId: invoice.NextFactura.toString(), // Representa o código da factura no Mutue
+        sourceId:undefined, // invoice.NextFactura, // Representa o código da factura no Mutue
         facturaCodigo: invoice.Codigo, // Código interno da Factura
         entityId: entidade, // Entidade associada à referência
         reference: reference, // A referência de pagamento
@@ -56,7 +56,7 @@ export class WebhookService {
         paymentId: paymentId,
         referenceId: 'REF-ID-EXTERNO-12345',
         merchantTransactionId: 'MERCHANT-TXN-12345',
-        webhook: '{"event": "reference_created", "data": {...}}',
+        webhook: '{event: reference_created, data: {...}}',
       };
       await this.paymentReferencesService.registerPaymentReference(registerPayload);
       this.logger.log(`✅ Fatura com referência ${reference} atualizada para status: ${status}`);

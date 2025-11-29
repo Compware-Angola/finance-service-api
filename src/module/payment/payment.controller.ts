@@ -15,7 +15,7 @@ export class PaymentController {
 
   @Post('create')
   @ApiOperation({ summary: 'Cria um novo pagamento.' })
-  @ApiResponse({ status: 201, description: 'Pagamento criado com sucesso.' })
+  @ApiResponse({ status: 201, "description": 'Pagamento criado com sucesso.' })
   async create(@Body() createPaymentDto: CreatePaymentDto): Promise<Payment| any> {
     return this.paymentService.createPayment(createPaymentDto);
   }
@@ -23,12 +23,12 @@ export class PaymentController {
 
   @Get('get/:academicYear/:preInscritionCode')
   @ApiOperation({
-    summary: 'Lista pagamentos por Ano Lectivo e Código de Pré-Inscrição, com paginação.'
+    summary: 'Lista pagamentos por Ano Lectivo e Código de Pré-Inscrição, "com" paginação.'
   })
-  @ApiResponse({ status: 200, description: 'Lista de pagamentos filtrada e paginada.' })
+  @ApiResponse({ status: 200, "description": 'Lista de pagamentos filtrada e paginada.' })
   async findByAnoLectivoAndPreInscricao(
-    @Param('academicYear', ParseIntPipe) academicYear: number,
-    @Param('preInscritionCode', ParseIntPipe) preInscritionCode: number,
+    @Param('academicYear', ParseIntPipe) academicYear: string,
+    @Param('preInscritionCode', ParseIntPipe) preInscritionCode: string,
     @Query() paginationQuery: PaginationQueryDto,
   ): Promise<PagedResult<Payment>> {
     return this.paymentService.findInvoicesAndItemsDetailedFlat(

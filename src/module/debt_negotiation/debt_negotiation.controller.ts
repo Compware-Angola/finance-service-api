@@ -45,8 +45,8 @@ export class DebtNegotiationController {
     status: 201,
     description: 'Negociação de dívidas criada com sucesso',
   })
-  @ApiResponse({ status: 400, description: 'Parâmetros inválidos' })
-  @ApiResponse({ status: 404, description: 'Aluno não encontrado' })
+  @ApiResponse({ status: 400, "description": 'Parâmetros inválidos' })
+  @ApiResponse({ status: 404, "description": 'Aluno não encontrado' })
   async createDebtNegotiation(
     @Param('codigo_matricula', ParseIntPipe) codigo_matricula: number,
     @Body(ValidationPipe) dto: CreateDebtNegotiationDto,
@@ -65,8 +65,8 @@ export class DebtNegotiationController {
     description: 'Dívidas retornadas com sucesso',
     type: Object,
   })
-  @ApiResponse({ status: 400, description: 'Parâmetros inválidos' })
-  @ApiResponse({ status: 404, description: 'Aluno não encontrado' })
+  @ApiResponse({ status: 400, "description": 'Parâmetros inválidos' })
+  @ApiResponse({ status: 404, "description": 'Aluno não encontrado' })
   async getDebt(@Query(ValidationPipe) query: GetDebtDto) {
     const { matricula, preinscricaoId, tipoCandidatura } = query;
 

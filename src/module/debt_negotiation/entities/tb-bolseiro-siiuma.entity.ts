@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity('tb_bolseiro_siiuma')
+@Entity({ name: 'UMA_TB_BOLSEIRO_SIIUMA', })
 export class TbBolseiroSiiuma {
   @PrimaryGeneratedColumn()
   codigo: number;
@@ -10,7 +10,7 @@ export class TbBolseiroSiiuma {
 
   @Column()
   ano: string;
-  @Column({ type: "varchar", length: 450, name: "nome" })
+  @Column({ type: "varchar", "length": 450, "name": "nome" })
   nome: string;
 
   @Column()

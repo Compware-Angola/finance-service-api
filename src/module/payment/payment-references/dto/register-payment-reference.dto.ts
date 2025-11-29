@@ -24,7 +24,7 @@ export class RegisterPaymentReferenceDto {
 
   @IsOptional()
   @IsNumber({}, { message: 'O código da factura (facturaCodigo) deve ser um número inteiro.' })
-  readonly facturaCodigo?: number;
+  readonly facturaCodigo?: any;
 
   @IsOptional()
   @IsString({ message: 'O identificador da entidade (entityId) deve ser uma string.' })

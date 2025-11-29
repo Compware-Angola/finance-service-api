@@ -21,7 +21,7 @@ export class PropinaAlunoService {
 
   async propinaAluno(
     codigo_inscricao: number,
-    aluno_cacuaco: number,
+    aluno_cacuaco: string,
     ano_lectivo: number,
     matricula:number,
     user:any
@@ -35,11 +35,14 @@ export class PropinaAlunoService {
     const anoLectivoId = await this.getAnoLectivoByCandidatura(user, ano_lectivo);
 
     // 3. Busca curso da pré-inscrição
-    const curso = await this.getCursoByPreinscricao(codigo_inscricao);
+    const curso = await this.getCursoByPreinscricao(codigo_inscricao.toString());
+
     if (!curso) return null;
 
     // 4. Verifica exceção de pagamento
     const temExcecao = await this.checkExcecao(matricula);
+  
+    
     let propina: PropinaResult | null = null;
 
     if (temExcecao && temExcecao.data_fim >= new Date().toISOString().split('T')[0]) {
@@ -53,6 +56,9 @@ export class PropinaAlunoService {
       }
     } else {
       propina = await this.getPropinaByCurso(curso.curso, aluno_cacuaco, anoLectivoId);
+
+      console.log(propina,"####UUU");
+      
     }
 
     this.cache.set(cacheKey, propina);
@@ -60,8 +66,8 @@ export class PropinaAlunoService {
   }
 
   private async getAnoLectivoByCandidatura(user: any, ano_lectivo: number): Promise<number> {
-    if (user.codigo_tipo_candidatura === 1) return ano_lectivo;
-    if (user.codigo_tipo_candidatura === 2) {
+    if (Number(user.codigo_tipo_candidatura) === 1) return ano_lectivo;
+    if (Number(user.codigo_tipo_candidatura) === 2) {
       const mestrado = await this.cicloMestrado();
       return mestrado?.Codigo ?? ano_lectivo;
     }
@@ -69,79 +75,91 @@ export class PropinaAlunoService {
     return doutoramento?.Codigo ?? ano_lectivo;
   }
 
-  private async getCursoByPreinscricao(codigo_inscricao: number) {
-    const result = await this.dataSource.query(`
-      SELECT c.Designacao AS curso, c.Codigo AS codigo_curso
-      FROM tb_cursos c
-      INNER JOIN tb_preinscricao p ON c.Codigo = p.Curso_Candidatura
-      WHERE p.Codigo = ?
-      LIMIT 1
-    `, [codigo_inscricao]);
-    return result[0] || null;
-  }
+private async getCursoByPreinscricao(preinscricaoId: string): Promise<{ curso: string; codigo_curso: number } | null> {
+  const query = `
+    SELECT c."Designacao" AS curso, c."Codigo" AS codigo_curso
+    FROM "UMA_TB_CURSOS" c
+    INNER JOIN "UMA_TB_PREINSCRICAO" p
+      ON c."Codigo" = p."Curso_Candidatura"
+    WHERE p."Codigo" = :1
+    FETCH NEXT 1 ROWS ONLY
+  `;
+
+  const result = await this.dataSource.query(query, [preinscricaoId]);
+const mapped = result.map(r => ({
+  curso: r.CURSO || r.curso,
+  codigo_curso: r.CODIGO_CURSO || r.codigo_curso,
+}));
+  return mapped[0] || null;
+}
+
 
   private async getCursoById(codigo_curso: number) {
     const result = await this.dataSource.query(`
-      SELECT Designacao AS curso FROM tb_cursos WHERE Codigo = ? LIMIT 1
+      SELECT Designacao AS curso FROM "UMA_TB_CURSOS" WHERE Codigo = ?   FETCH NEXT 1 ROWS ONLY
     `, [codigo_curso]);
     return result[0] || null;
   }
 
-  private async getPropinaByCurso(
-    nomeCurso: string,
-    cacuaco: number,
-    ano_lectivo: number,
-  ): Promise<PropinaResult | null> {
-    const result = await this.dataSource.query(`
-      SELECT 
-        ts.Descricao,
-        ts.Preco,
-        ts.TipoServico,
-        ts.Codigo,
-        tt.taxa
-      FROM tb_tipo_servicos ts
-      LEFT JOIN tipo_taxas tt ON tt.id = ts.taxa_iva_id
-      WHERE ts.Descricao LIKE ?
-        AND ts.cacuaco = ?
-        AND ts.codigo_ano_lectivo = ?
-      LIMIT 1
-    `, [`propina ${nomeCurso}%`, cacuaco, ano_lectivo]);
+private async getPropinaByCurso(
+  nomeCurso: string,
+  cacuaco: string,        // ← STRING!
+  ano_lectivo: number,
+): Promise<PropinaResult | null> {
+  const result = await this.dataSource.query(`
+    SELECT
+      ts."Descricao",
+      ts."Preco",
+      ts."TipoServico",
+      ts."Codigo",
+      tt."taxa"
+    FROM "UMA_TB_TIPO_SERVICOS" ts
+    LEFT JOIN "UMA_TIPO_TAXAS" tt ON tt."id" = ts."taxa_iva_id"
+    WHERE ts."Descricao" LIKE :1
+      AND ts."cacuaco" = :2
+      AND ts."codigo_ano_lectivo" = :3
+    FETCH NEXT 1 ROWS ONLY
+  `, [`Propina ${nomeCurso}%`, cacuaco, ano_lectivo]);
 
-    return result[0] || null;
-  }
 
-  private async checkExcecao(matricula: number) {
-    const result = await this.dataSource.query(`
-      SELECT codigo_curso_pagamento, data_fim
-      FROM curso_pagamento_excepcao
-      WHERE codigo_matricula = ?
-      LIMIT 1
-    `, [matricula]);
-    return result[0] || null;
-  }
+  return result[0] || null;
+}
+
+private async checkExcecao(matricula: number) {
+  const result = await this.dataSource.query(`
+    SELECT "codigo_curso_pagamento", "data_fim"
+    FROM "UMA_CURSO_PAGAMENTO_EXCEPCAO"
+    WHERE "codigo_matricula" = :1
+    FETCH NEXT 1 ROWS ONLY
+  `, [matricula]);
+
+  return result[0] || null;
+}
+
 
    /**
    * Retorna o ciclo de Mestrado
    */
-async cicloMestrado(){
-  const result = await this.dataSource.query(`
-    SELECT Codigo, Designacao
-    FROM tb_ano_lectivo
-    WHERE Designacao = 'Ciclo Mestrado'
-    LIMIT 1
-  `);
+
+async cicloDoutoramento() {
+const result = await this.dataSource.query(`
+  SELECT "Codigo", "Designacao"
+  FROM "UMA_TB_ANO_LECTIVO"
+  WHERE "Designacao" = 'Ciclo Doutoramento'
+  FETCH NEXT 1 ROWS ONLY
+`);
+
   return result[0] || null;
 }
 
-async cicloDoutoramento(){
+async cicloMestrado() {
   const result = await this.dataSource.query(`
-    SELECT Codigo, Designacao
-    FROM tb_ano_lectivo
-    WHERE Designacao = 'Ciclo Doutoramento'
-    LIMIT 1
+    SELECT "Codigo", "Designacao"
+    FROM "UMA_TB_ANO_LECTIVO"
+    WHERE "Designacao" = 'Ciclo Mestrado'
+    FETCH NEXT 1 ROWS ONLY
   `);
   return result[0] || null;
 }
-
 
 }

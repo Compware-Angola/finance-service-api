@@ -27,7 +27,7 @@ export class AppyPayWebhookDto {
       status: 'Pending',
       code: 101,
       message: 'A solicitação foi aceita para processamento.',
-      reference: { referenceNumber: '401392944', entity: '10065' },
+      reference: { referenceNumber: '401392944', "entity": '10065' },
     },
   })
   @IsOptional()

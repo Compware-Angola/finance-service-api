@@ -20,7 +20,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle('Invoice Service API')
     .setDescription(
-      'Serviço responsável por gerar faturas, calcular sequências fiscais e gerar o hash de assinatura (Hash Fiscal).',
+      'Serviço responsável por gerar faturas, "calcular" sequências fiscais e gerar o hash de assinatura (Hash Fiscal).',
     )
     .setVersion('1.0')
     .build();

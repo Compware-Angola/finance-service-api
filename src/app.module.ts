@@ -7,8 +7,9 @@ import { WebhookModule } from './module/webhook/webhook.module';
 import { PaymentModule } from './module/payment/payment.module';
 import { BullModule } from '@nestjs/bullmq';
 import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
-import { AdvancePaymentsModule } from './module/advance_payments/advance_payments.module';
 import { BullMQWorkerService } from './bullmq-worker.service';
+import { DefaultNamingStrategy } from 'typeorm';
+import { AssessmentModule } from './module/assessment/assessment.module';
 
 
 @Module({
@@ -16,39 +17,39 @@ import { BullMQWorkerService } from './bullmq-worker.service';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    TypeOrmModule.forRootAsync({
+TypeOrmModule.forRootAsync({
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => {
+    const isSSL = config.get<string>('DB_SSL') === 'true';
+
+    return {
+      type: 'oracle' as const,
+      host: config.get<string>('DB_HOST'),
+      port: config.get<number>('DB_PORT', 1521),
+      username: config.get<string>('DB_USERNAME'),
+      password: config.get<string>('DB_PASSWORD'),
+      sid: config.get<string>('DB_SID'),
+
+      entities: [__dirname + '/**/*.entity{.ts,.js}'],
+      synchronize: false,
+      logging: ['query', 'error'],
+
+      extra: {
+        disableInsertDefaultValues: true,
+        ...(isSSL ? { ssl: { rejectUnauthorized: true } } : {}),
+      },
+    };
+  },
+}),
+
+    BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const isSSL = config.get<string>('DB_SSL') === 'true';
-        return {
-          type: 'mysql',
-          host: config.get<string>('DB_HOST'),
-          port: config.get<number>('DB_PORT', 3306),
-          username: config.get<string>('DB_USERNAME'),
-          password: config.get<string>('DB_PASSWORD'),
-          database: config.get<string>('DB_DATABASE'),
-
-          entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          synchronize: false,
-
-          extra: isSSL
-            ? {
-              ssl: {
-                rejectUnauthorized: true,
-              },
-            }
-            : {},
-        };
-      },
-    }),
-  BullModule.forRootAsync({
-      imports: [ConfigModule], 
-      inject: [ConfigService], 
-      useFactory: (config: ConfigService) => ({ 
+      useFactory: (config: ConfigService) => ({
         connection: {
-          host: config.get<string>('REDIS_HOST', 'localhost'), 
-          port: config.get<number>('REDIS_PORT', 6379),      
+          host: config.get<string>('REDIS_HOST', 'localhost'),
+          port: config.get<number>('REDIS_PORT', 6379),
         },
       }),
     }),
@@ -57,11 +58,12 @@ import { BullMQWorkerService } from './bullmq-worker.service';
     WebhookModule,
     PaymentModule,
     DebtNegotiationModule,
-    AdvancePaymentsModule,
+    AssessmentModule
+  
 
   ],
   providers: [
-    BullMQWorkerService, // ADICIONE AQUI
+    BullMQWorkerService, 
   ],
 
 

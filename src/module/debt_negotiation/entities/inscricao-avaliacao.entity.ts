@@ -1,13 +1,13 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { Factura } from './factura.entity';
 
-@Entity('inscricao_avaliacoes')
+@Entity({ name: 'UMA_INSCRICAO_AVALIACOES', })
 export class InscricaoAvaliacao {
   @PrimaryGeneratedColumn()
-  codigo: number;
+  codigo: string;
 
   @Column({ name: 'codigo_matricula' })
-  codigo_matricula: number;
+  codigo_matricula: string;
 
   @Column({ name: 'codigo_factura' })
   codigo_factura: number;
@@ -16,10 +16,10 @@ export class InscricaoAvaliacao {
   codigo_grade: string;
 
   @Column({ name: 'codigo_ano_lectivo' })
-  codigo_ano_lectivo: number;
+  codigo_ano_lectivo: string;
 
   @Column({ name: 'codigo_tipo_avaliacao' })
-  codigo_tipo_avaliacao: number;
+  codigo_tipo_avaliacao: string;
 
   @Column()
   estado: string;

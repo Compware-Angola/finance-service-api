@@ -13,6 +13,8 @@ export class InvoiceProcessor extends WorkerHost {
     console.log(`Processing job ${job.id} of type ${job.name}`);
    if (job.name === 'createInvoiceJob') {
       const { createInvoiceDto, referenceParams, dueDateParams } = job.data;
+      console.log("2",createInvoiceDto);
+      
 
       await this.invoiceService.create(createInvoiceDto, referenceParams, dueDateParams);
       console.log(`Job ${job.id} completed successfully.`);
@@ -20,7 +22,7 @@ export class InvoiceProcessor extends WorkerHost {
     }
 
     console.log(`Job ${job.id} has an unknown type: ${job.name}`);
-    return { success: false, message: 'Unknown job type' };
+    return { success: false, "message": 'Unknown job type' };
 
   }
   @OnWorkerEvent('completed')

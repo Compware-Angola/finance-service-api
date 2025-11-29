@@ -342,8 +342,10 @@ export class AssessmentService {
         tipoAvaliacaoId,
       );
       const r = this.normalizeRow(row);
+      console.log(r,"TESTE ###$");
+      
       const anoCorrente = this.anoAtualPrincipal;
-      const inscritos = await this.buscarNumeroDeIscritos(r, r.turmaOuHorario, anoCorrente);
+      const inscritos = await this.buscarNumeroDeIscritos(r, r.turmaouhorario, anoCorrente);
       const numNotaPorLancar = inscritos >= totalLancadas
         ? inscritos - totalLancadas
         : 0;
@@ -398,7 +400,7 @@ export class AssessmentService {
         turmaOuHorario: row.turmaOuHorario,
         semestre: semestre === 1 ? 'I SEMESTRE' : 'II SEMESTRE',
         cor,
-        numeroDeIscritos: 0!, // --- IGNORE ---
+        numeroDeIscritos: inscritos, // --- IGNORE ---
         codigoTurmaHorario: row.CODIGOTURMA,
         codigoGrade: row.CODIGOGRADE,
         numNotaPorLancar,
@@ -530,15 +532,15 @@ export class AssessmentService {
 
   /** Calcula o número de alunos inscritos (funciona para TURMA e HORÁRIO) */
   async buscarNumeroDeIscritos(
-    lancamento: LancamentoNotaPorCursoModel,
+    lancamento: LancamentoNotaPorCursoModel| any,
     turmaOuHorario: string,
     anoLectivoAtual: number,
   ): Promise<number> {
     // Anos letivos antigos (≤ 17) → contagem por turma + grade
     if (anoLectivoAtual <= 17) {
       return this.contarInscritosAntigo(
-        lancamento.codigoGrade,
-        lancamento.codigoTurmaHorario,
+        lancamento.codigograde,
+        lancamento.codigohorario,
         anoLectivoAtual,
       );
     }

@@ -9,6 +9,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
 import { BullMQWorkerService } from './bullmq-worker.service';
 import { DefaultNamingStrategy } from 'typeorm';
+import { AssessmentModule } from './module/assessment/assessment.module';
 
 
 @Module({
@@ -57,6 +58,7 @@ TypeOrmModule.forRootAsync({
     WebhookModule,
     PaymentModule,
     DebtNegotiationModule,
+    AssessmentModule
   
 
   ],

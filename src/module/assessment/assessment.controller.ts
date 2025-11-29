@@ -1,12 +1,16 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, ValidationPipe, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, ValidationPipe, Query, Put } from '@nestjs/common';
 import { AssessmentService, NotaLancadaResponseDto } from './assessment.service';
 
 import { BuscarDisciplinasProvaDto } from './dto/buscar-disciplinas-prova.dto';
 import { BuscarNotasDto } from './dto/buscar-notas.dto';
+import { ApiOperation } from '@nestjs/swagger';
+import { ListarUnidadesCurricularesDto } from './dto/listar-unidades-curriculares.dto';
+import { DefineFormulaUcService } from './define_formula_uc.service';
+import { AtualizarFormulaDto } from './dto/atualizar-formula.dto';
 
 @Controller('assessment')
 export class AssessmentController {
-  constructor(private readonly service: AssessmentService) {}
+  constructor(private readonly service: AssessmentService,private readonly defineFormulaUcService:DefineFormulaUcService) {}
 
 
 
@@ -23,4 +27,15 @@ export class AssessmentController {
   ): Promise<NotaLancadaResponseDto[]> {
     return this.service.buscarNotas(params.turmaOuHorarioId, params);
   }
+  @Get('unidades-curriculares')
+@ApiOperation({ summary: 'Listar fórmulas de avaliação por curso, ano e semestre' })
+async listarUnidadesCurriculares(
+  @Query(ValidationPipe) params: ListarUnidadesCurricularesDto,
+) {
+  return this.defineFormulaUcService.listarUnidadesCurriculares(params);
+}
+@Put('unidades-curriculares') // ou @Put
+async salvarFormula(@Body() body: AtualizarFormulaDto) {
+  return this.defineFormulaUcService.atualizarFormula(body);
+}
 }

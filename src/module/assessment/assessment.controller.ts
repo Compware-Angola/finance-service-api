@@ -3,14 +3,18 @@ import { AssessmentService, NotaLancadaResponseDto } from './assessment.service'
 
 import { BuscarDisciplinasProvaDto } from './dto/buscar-disciplinas-prova.dto';
 import { BuscarNotasDto } from './dto/buscar-notas.dto';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ListarUnidadesCurricularesDto } from './dto/listar-unidades-curriculares.dto';
 import { DefineFormulaUcService } from './define_formula_uc.service';
 import { AtualizarFormulaDto } from './dto/atualizar-formula.dto';
+import { DefinirOralGradeDto } from './dto/definir-oral-grade.dto';
+import { ListarDefinirOralDto } from './dto/listar-definir-oral.dto';
+import { DefineFormulaUcOralService } from './define_formula_uc_oral.service';
+import { AtualizarStatusOralDto } from './dto/atualizar-status-oral.dto';
 
 @Controller('assessment')
 export class AssessmentController {
-  constructor(private readonly service: AssessmentService,private readonly defineFormulaUcService:DefineFormulaUcService) {}
+  constructor(private readonly service: AssessmentService,private readonly defineFormulaUcService:DefineFormulaUcService,private readonly oralService:DefineFormulaUcOralService) {}
 
 
 
@@ -37,5 +41,27 @@ async listarUnidadesCurriculares(
 @Put('unidades-curriculares') // ou @Put
 async salvarFormula(@Body() body: AtualizarFormulaDto) {
   return this.defineFormulaUcService.atualizarFormula(body);
+}
+@Get('definir/oral')
+  @ApiOperation({ summary: 'Listar disciplinas com status de oral habilitado' })
+  @ApiResponse({ status: 200, type: [DefinirOralGradeDto] })
+  async buscar(
+    @Query(ValidationPipe) params: ListarDefinirOralDto,
+  ): Promise<DefinirOralGradeDto[]> {
+    return this.oralService.buscar(params);
+  }
+  @Patch('definir/oral/status')
+@ApiOperation({ summary: 'Habilitar ou desabilitar prova oral para uma disciplina' })
+@ApiBody({ type: AtualizarStatusOralDto })
+@ApiResponse({ status: 200, description: 'Status atualizado com sucesso' })
+@ApiResponse({ status: 404, description: 'Disciplina não encontrada' })
+async atualizarStatus(
+  @Body(ValidationPipe) dto: AtualizarStatusOralDto,
+): Promise<{ message: string; habilitar: boolean }> {
+  await this.oralService.atualizarStatus(dto);
+  return {
+    message: 'Status da oral atualizado com sucesso',
+    habilitar: dto.habilitar,
+  };
 }
 }

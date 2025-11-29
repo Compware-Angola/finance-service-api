@@ -5,6 +5,7 @@ import { AnoLectivoUtil } from '../util/current-academic-year';
 import { AcademicYear } from '../invoice/entities/academic.year.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DefineFormulaUcService } from './define_formula_uc.service';
+import { DefineFormulaUcOralService } from './define_formula_uc_oral.service';
 
 @Module({
   imports: [    TypeOrmModule.forFeature([
@@ -13,6 +14,6 @@ import { DefineFormulaUcService } from './define_formula_uc.service';
      
       ]),],
   controllers: [AssessmentController],
-  providers: [AssessmentService,AnoLectivoUtil, DefineFormulaUcService],
+  providers: [AssessmentService,AnoLectivoUtil, DefineFormulaUcService, DefineFormulaUcOralService],
 })
 export class AssessmentModule {}

@@ -7,15 +7,7 @@ import { BuscarEstudantesDto } from './dto/buscar-estudantes.dto';
 export class NoteReleaseService {
   constructor(private dataSource: DataSource) {}
 
-  async buscarEstudantes(dto: BuscarEstudantesDto): Promise<{
-    listaDeAlunos: EstudanteLancamentoDto[];
-    estudantesComNotas: number;
-    totalAlunos: number;
-    totalCadeirantes: number;
-    totalNovos: number;
-    podeLancar: boolean;
-    podeLancarExcecao: boolean;
-  }> {
+  async buscarEstudantes(dto: BuscarEstudantesDto): Promise<EstudanteLancamentoDto[]| any> {
     console.log('Entrou no buscarEstudantes (NestJS)');
 
     let estudantesComNotas = 0;
@@ -50,7 +42,8 @@ export class NoteReleaseService {
       planoCurricularCursoCodigo?.CODIGO,
       gradeId,
     );
-
+ console.log(planoCurricularCursoCodigo, planoCurricularGrade, grade," Dados básicos carregados com sucesso");
+ 
     // PASSO 4 – Tipo de prova padrão
     const tipoProvaFinal = tipoProvaId || 1;
 
@@ -143,7 +136,7 @@ export class NoteReleaseService {
       let totalCadeirantes = 0;
       let totalNovos = 0;
 
-      for (const aluno of listaDeAlunos) {
+      for (const aluno of listaDeAlunos as any) {
         if (await this.isCadeirante(aluno.codigoMatricula, anoLectivoId)) {
           totalCadeirantes++;
         } else {
@@ -170,135 +163,144 @@ export class NoteReleaseService {
 
   private async buscarGradePorId(codigo: number): Promise<any> {
     const sql = `
-      SELECT CODIGO, CODIGO_CURSO, CODIGO_CLASSE, CODIGO_SEMESTRE, CODIGO_DISCIPLINA, DESIGNACAO
+      SELECT CODIGO, CODIGO_CURSO, CODIGO_CLASSE, CODIGO_SEMESTRE, CODIGO_DISCIPLINA
       FROM FK2_TB_GRADE_CURRICULAR 
+      
       WHERE CODIGO = :codigo
     `;
     const result = await this.dataSource.query(sql, [codigo]);
     return result[0] || null;
   }
+private async buscarPlanoCurricularCurso(codigoCurso: number, codigoAnoLectivo: number): Promise<{ CODIGO: number } | null> {
+  const result = await this.dataSource.query(
+    `SELECT CODIGO
+     FROM FK2_TB_PLANO_CURRICULAR_CURSO
+     WHERE (:curso1 = 0 OR CODIGO_CURSO = :curso2)
+       AND (:ano1 = 0 OR CODIGO_ANO_LECTIVO = :ano2)
+     ORDER BY CODIGO DESC
+     FETCH FIRST 1 ROW ONLY`,
+    [codigoCurso, codigoCurso, codigoAnoLectivo, codigoAnoLectivo] 
+  );
 
-  private async buscarPlanoCurricularCurso(codigoCurso: number, codigoAnoLectivo: number): Promise<{ CODIGO: number } | null> {
-    const sql = `
-      SELECT CODIGO
-      FROM FK2_TB_PLANO_CURRICULAR_CURSO
-      WHERE (CODIGO_CURSO = :curso OR :curso = 0)
-        AND (CODIGO_ANO_LECTIVO = :ano OR :ano = 0)
-        AND FACULDADEID IS NOT NULL
-      ORDER BY CODIGO DESC
-      FETCH FIRST 1 ROW ONLY
-    `;
-    const result = await this.dataSource.query(sql, { curso: codigoCurso, ano: codigoAnoLectivo });
-    return result[0] ? { CODIGO: result[0].CODIGO } : null;
-  }
+  return result[0] ? { CODIGO: result[0].CODIGO } : null;
+}
 
   private async buscarPlanoCurricularGrade(planoCodigo: number, gradeCodigo: number): Promise<any | null> {
     const sql = `
       SELECT CODIGO, NOTA_MIN_PRATICA, PESO_PRATICA, NOTA_MIN_PRIMEIRA_FREQ, PESO_PRIMEIRA_FREQ,
-             NOTA_MIN_SEGUNDA_FREQ, PESO_SEGUNDA_FREQ, CODIGO_PLANOCURRICULARCURSO, CODIGO_GRADECURRICULAR
+             NOTA_MIN_SEGUNDA_FREQ, PESO_SEGUNDA_FREQ, CODIGO_PLANO_CURRICULAR_CURSO, CODIGO_GRADE_CURRICULAR
       FROM FK2_TB_PLANO_CURRICULAR_GRADE
-      WHERE CODIGO_PLANOCURRICULARCURSO = :plano
-        AND CODIGO_GRADECURRICULAR = :grade
+      WHERE CODIGO_PLANO_CURRICULAR_CURSO = :planoCodigo
+        AND CODIGO_GRADE_CURRICULAR = :gradeCodigo
     `;
-    const result = await this.dataSource.query(sql, { plano: planoCodigo, grade: gradeCodigo });
+    const result = await this.dataSource.query(sql, [ planoCodigo, gradeCodigo ]);
     return result[0] || null;
   }
+private async buscarAlunosPorTurma(
+  gradeId: number,
+  turmaId: number,
+  tipoAvaliacaoId: number,
+  tipoProvaId: number,
+  anoLectivoId: number,
+): Promise<any[]> {
+  const sql = `
+    SELECT DISTINCT
+      gca.CODIGO AS codigo_grade,
+      m.CODIGO AS numero_de_matricula,
+      p.NOME_COMPLETO AS nome_completo,
+      gcaa.CODIGO AS avaliacao,
+      gcaa.STATUS_ AS status,
+      gca.TURMA AS turma,
+      gcaa.OBSERVACAO AS observacao,
+      gcaa.NOTA AS nota,
+      gcaa.CREATED_AT AS dataLancamento,
+      gcaa.UPDATE_AT AS dataDeAtualizacao,
+      tu.NOME AS nome_docente,
+      TRIM(BOTH '"' FROM 
+        JSON_VALUE(DBMS_LOB.SUBSTR(gcaa.REF_UTILIZADOR, 4000, 1), '$.desc')
+      ) AS nome_docente_json
+    FROM FK2_TB_GRADE_CURRICULAR_ALUNO gca
+    LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES gcaa
+      ON gcaa.GRADE_CURRICULAR_ALUNO = gca.CODIGO
+      AND gcaa.TIPO_AVALIACAO = :tipoAval
+      AND gcaa.TIPO_DE_PROVA = :tipoProva
+    INNER JOIN FK2_TB_MATRICULAS m ON m.CODIGO = gca.CODIGO_MATRICULA
+    INNER JOIN FK2_TB_ADMISSAO a ON a.CODIGO = m.CODIGO_ALUNO
+    INNER JOIN FK2_TB_PREINSCRICAO p ON p.CODIGO = a.PRE_INCRICAO
+    LEFT JOIN FK2_TB_UTILIZADORES tu ON tu.CODIGO = gcaa.UTILIZADOR
+    WHERE m.ESTADO_MATRICULA IN ('concluido', 'diplomado', 'activo', 'inactivo')
+      AND gca.CODIGO_GRADE_CURRICULAR = :gradeId
+      AND gca.TURMA = :turmaId
+      AND gca.CODIGO_STATUS_GRADE_CURRICULAR IN (2, 3)
+      AND gca.CODIGO_ANO_LECTIVO = :anoLectivoId
+    ORDER BY p.NOME_COMPLETO
+  `;
 
-  private async buscarAlunosPorTurma(
-    gradeId: number,
-    turmaId: number,
-    tipoAvaliacaoId: number,
-    tipoProvaId: number,
-    anoLectivoId: number,
-  ): Promise<any[]> {
-    const sql = `
-      SELECT DISTINCT
-        gca.CODIGO AS codigo_grade,
-        m.CODIGO AS numero_de_matricula,
-        p.NOME_COMPLETO AS nome_completo,
-        gcaa.CODIGO AS avaliacao,
-        gcaa.STATUS AS status,
-        gca.TURMA AS turma,
-        gcaa.OBSERVACAO AS observacao,
-        gcaa.NOTA AS nota,
-        gcaa.CREATED_AT AS dataLancamento,
-        gcaa.UPDATE_AT AS dataDeAtualizacao,
-        tu.NOME AS nome_docente,
-        JSON_UNQUOTE(JSON_EXTRACT(gcaa.REF_UTILIZADOR, '$.desc')) AS nome_docente_json
-      FROM FK2_TB_GRADE_CURRICULAR_ALUNO gca
-      LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES gcaa
-        ON gcaa.GRADE_CURRICULAR_ALUNO = gca.CODIGO
-        AND gcaa.TIPO_AVALIACAO = :tipoAval
-        AND gcaa.TIPO_DE_PROVA = :tipoProva
-      INNER JOIN FK2_TB_MATRICULAS m ON m.CODIGO = gca.CODIGO_MATRICULA
-      INNER JOIN FK2_TB_ADMISSAO a ON a.CODIGO = m.CODIGO_ALUNO
-      INNER JOIN FK2_TB_PREINSCRICAO p ON p.CODIGO = a.PRE_INCRICAO
-      LEFT JOIN FK2_TB_UTILIZADORES tu ON tu.CODIGO = gcaa.UTILIZADOR
-      WHERE m.ESTADO_MATRICULA IN ('concluido', 'diplomado', 'activo', 'inactivo')
-        AND gca.CODIGO_GRADE_CURRICULAR = :gradeId
-        AND gca.TURMA = :turmaId
-        AND gca.CODIGO_STATUS_GRADE_CURRICULAR IN (2, 3)
-        AND gca.CODIGO_ANO_LECTIVO = :anoLectivoId
-      ORDER BY p.NOME_COMPLETO ASC
-    `;
+  const rows = await this.dataSource.query(sql, [
+    tipoAvaliacaoId,
+    tipoProvaId,
+    gradeId,
+    turmaId,
+    anoLectivoId,
+  ]);
 
-    const rows = await this.dataSource.query(sql, {
-      gradeId,
-      turmaId,
-      tipoAval: tipoAvaliacaoId,
-      tipoProva: tipoProvaId,
-      anoLectivoId,
-    });
+  return rows.map(r => this.transformarRowParaAluno(r));
+}
 
-    return rows.map((r: any) => this.transformarRowParaAluno(r));
-  }
+private async buscarAlunosPorHorario(
+  gradeId: number,
+  horarioId: number,
+  tipoAvaliacaoId: number,
+  tipoProvaId: number,
+  anoLectivoId: number,
+): Promise<any[]> {
+  const sql = `
+    SELECT DISTINCT
+      gca.CODIGO AS codigo_grade,
+      m.CODIGO AS numero_de_matricula,
+      p.NOME_COMPLETO AS nome_completo,
+      gcaa.CODIGO AS avaliacao,
+      gcaa.STATUS_ AS status,
+      gcaa.OBSERVACAO AS observacao,
+      gcaa.NOTA AS nota,
+      gca.REF_HORARIO AS horario,
+      gcaa.CREATED_AT AS dataLancamento,
+      gcaa.UPDATE_AT AS dataDeAtualizacao,
+      -- Extrai nome do docente do JSON armazenado em CLOB
+      TRIM(BOTH '"' FROM 
+        JSON_VALUE(DBMS_LOB.SUBSTR(gcaa.REF_UTILIZADOR, 4000, 1), '$.desc')
+      ) AS nome_docente
+    FROM FK2_TB_GRADE_CURRICULAR_ALUNO gca
+    LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES gcaa
+      ON gcaa.GRADE_CURRICULAR_ALUNO = gca.CODIGO
+      AND gcaa.TIPO_AVALIACAO = :tipoAval
+      AND gcaa.TIPO_DE_PROVA = :tipoProva
+    INNER JOIN FK2_TB_MATRICULAS m ON m.CODIGO = gca.CODIGO_MATRICULA
+    INNER JOIN FK2_TB_ADMISSAO a ON a.CODIGO = m.CODIGO_ALUNO
+    INNER JOIN FK2_TB_PREINSCRICAO p ON p.CODIGO = a.PRE_INCRICAO
+    WHERE 
+      -- Extrai o pk do JSON do horário (CLOB → VARCHAR2 → JSON)
+      TO_NUMBER(
+        TRIM(BOTH '"' FROM 
+          JSON_VALUE(DBMS_LOB.SUBSTR(gca.REF_HORARIO, 4000, 1), '$.pk')
+        )
+      ) = :horarioId
+      AND gca.CODIGO_GRADE_CURRICULAR = :gradeId
+      AND gca.CODIGO_STATUS_GRADE_CURRICULAR IN (2, 3)
+      AND gca.CODIGO_ANO_LECTIVO = :anoLectivoId
+    ORDER BY p.NOME_COMPLETO
+  `;
 
-  private async buscarAlunosPorHorario(
-    gradeId: number,
-    horarioId: number,
-    tipoAvaliacaoId: number,
-    tipoProvaId: number,
-    anoLectivoId: number,
-  ): Promise<any[]> {
-    const sql = `
-      SELECT DISTINCT
-        gca.CODIGO AS codigo_grade,
-        m.CODIGO AS numero_de_matricula,
-        p.NOME_COMPLETO AS nome_completo,
-        gcaa.CODIGO AS avaliacao,
-        gcaa.STATUS AS status,
-        gcaa.OBSERVACAO AS observacao,
-        gcaa.NOTA AS nota,
-        gca.REF_HORARIO AS horario,
-        gcaa.CREATED_AT AS dataLancamento,
-        gcaa.UPDATE_AT AS dataDeAtualizacao,
-        JSON_UNQUOTE(JSON_EXTRACT(gcaa.REF_UTILIZADOR, '$.desc')) AS nome_docente
-      FROM FK2_TB_GRADE_CURRICULAR_ALUNO gca
-      LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES gcaa
-        ON gcaa.GRADE_CURRICULAR_ALUNO = gca.CODIGO
-        AND gcaa.TIPO_AVALIACAO = :tipoAval
-        AND gcaa.TIPO_DE_PROVA = :tipoProva
-      INNER JOIN FK2_TB_MATRICULAS m ON m.CODIGO = gca.CODIGO_MATRICULA
-      INNER JOIN FK2_TB_ADMISSAO a ON a.CODIGO = m.CODIGO_ALUNO
-      INNER JOIN FK2_TB_PREINSCRICAO p ON p.CODIGO = a.PRE_INCRICAO
-      WHERE JSON_UNQUOTE(JSON_EXTRACT(gca.REF_HORARIO, '$.pk')) = :horarioId
-        AND gca.CODIGO_GRADE_CURRICULAR = :gradeId
-        AND gca.CODIGO_STATUS_GRADE_CURRICULAR IN (2, 3)
-        AND gca.CODIGO_ANO_LECTIVO = :anoLectivoId
-      ORDER BY p.NOME_COMPLETO ASC
-    `;
+  const rows = await this.dataSource.query(sql, [
+    tipoAvaliacaoId,
+    tipoProvaId,
+    horarioId,
+    gradeId,
+    anoLectivoId,
+  ]);
 
-    const rows = await this.dataSource.query(sql, {
-      horarioId,
-      gradeId,
-      tipoAval: tipoAvaliacaoId,
-      tipoProva: tipoProvaId,
-      anoLectivoId,
-    });
-
-    return rows.map((r: any) => this.transformarRowParaAluno(r, true));
-  }
-
+  return rows.map(r => this.transformarRowParaAluno(r, true));
+}
   private async buscarAlunosExamePorHorario(
     gradeId: number,
     horarioId: number,
@@ -308,7 +310,7 @@ export class NoteReleaseService {
     // Implementação igual à original Java (exame só quem tem frequência < 10, etc.)
     // Aqui um exemplo funcional – adapta conforme tua regra exata
     const sql = `/* tua query de exame por horário aqui */`;
-    const rows = await this.dataSource.query(sql, { gradeId, horarioId, tipoProvaId, anoLectivoId });
+    const rows = await this.dataSource.query(sql,[ { gradeId, horarioId, tipoProvaId, anoLectivoId }]);
     return rows.map((r: any) => ({ ...this.transformarRowParaAluno(r, true), podeLancar: false }));
   }
 
@@ -320,7 +322,7 @@ export class NoteReleaseService {
   ): Promise<any[]> {
     // Mesmo esquema do Java – recurso só quem reprovou no exame normal
     const sql = `/* query recurso */`;
-    const rows = await this.dataSource.query(sql, { gradeId, horarioId, tipoProvaId, anoLectivoId });
+    const rows = await this.dataSource.query(sql, [{ gradeId, horarioId, tipoProvaId, anoLectivoId }]);
     return rows.map((r: any) => ({ ...this.transformarRowParaAluno(r, true), podeLancar: true }));
   }
 
@@ -331,7 +333,7 @@ export class NoteReleaseService {
         AND TURMA = :turmaId
         AND TIPO_AVALIACAO = :tipoAval
     `;
-    const result = await this.dataSource.query(sql, { gradeId, turmaId, tipoAval: tipoAvaliacaoId });
+    const result = await this.dataSource.query(sql, [{ gradeId, turmaId, tipoAval: tipoAvaliacaoId }]);
     return result[0] || null;
   }
 
@@ -342,7 +344,7 @@ export class NoteReleaseService {
         AND JSON_UNQUOTE(JSON_EXTRACT(REF_HORARIO, '$.pk')) = :horarioId
         AND TIPO_AVALIACAO = :tipoAval
     `;
-    const result = await this.dataSource.query(sql, { gradeId, horarioId, tipoAval: tipoAvaliacaoId });
+    const result = await this.dataSource.query(sql, [{ gradeId, horarioId, tipoAval: tipoAvaliacaoId }]);
     return result[0] || null;
   }
 

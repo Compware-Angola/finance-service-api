@@ -16,7 +16,6 @@ export class DefineFormulaUcService {
   ): Promise<UnidadeCurricularGradeDto[]> {
     const { cursoId, anoLectivoId, anoCurricular, semestre } = params;
 
-    // 1. BUSCA O PLANO — USANDO ? + ARRAY (ÚNICA FORMA QUE FUNCIONA SEM BUG)
   // 1. BUSCA O PLANO — SEM NENHUM BIND (FUNCIONA 100%)
     const planoSql = `
       SELECT CODIGO

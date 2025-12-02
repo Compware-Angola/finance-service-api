@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, HttpStatus, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, HttpCode, HttpStatus, ParseIntPipe, Put } from '@nestjs/common';
 
 import { UpdateRoonDto } from './dto/update-roon.dto';
 import { RoomService } from './roon.service';
 import { CreateRoomDto } from './dto/create-roon.dto';
 import { ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 
-@Controller('room')
+@Controller('rooms')
 export class RoonController {
   constructor(private readonly roomService: RoomService) { }
 
@@ -18,7 +18,14 @@ export class RoonController {
   async createRoom(@Body() createRoomDto: CreateRoomDto) {
     return this.roomService.createRoom(createRoomDto);
   }
-
+  @Get("/list-all")
+  @ApiOperation({
+    summary: 'Listar todas as salas',
+    description: 'Retorna uma lista de todas as salas registradas no sistema.',
+  })
+  async getAllRooms() {
+    return this.roomService.fecthAllRooms();
+  }
   @Get("types")
   @ApiOperation({
     summary: 'Listar tipos de salas',
@@ -27,6 +34,28 @@ export class RoonController {
   async getAllTypeRooms() {
     return this.roomService.getAllTypeRooms();
   }
+  @Get(':codigo')
+  @ApiOperation({ summary: 'Obter detalhes de uma sala pelo código' })
+  @ApiParam({ name: 'codigo', description: 'Código numérico da sala', example: 219 })
+  @ApiResponse({ status: 200, description: 'Detalhes da sala' })
+  @ApiResponse({ status: 404, description: 'Sala não encontrada' })
+  async getRoomByCodigo(@Param('codigo', ParseIntPipe) codigo: number) {
+    return this.roomService.getRoomById(codigo);
+  }
+
+  @Put(':codigo')
+  @ApiOperation({ summary: 'Atualizar detalhes de uma sala' })
+  @ApiParam({ name: 'codigo', description: 'Código numérico da sala', example: 219 })
+  @ApiResponse({ status: 200, description: 'Sala atualizada com sucesso' })
+  @ApiResponse({ status: 404, description: 'Sala não encontrada' })
+  async updateRoom(
+    @Param('codigo', ParseIntPipe) codigo: number,
+    @Body() updateRoonDto: UpdateRoonDto
+  ) {
+    return this.roomService.updateRoom(codigo, updateRoonDto);
+  }
+
+
 @Delete(':codigo')
 @ApiOperation({ summary: 'EXCLUIR DEFINITIVAMENTE uma sala (hard delete)' })
 @ApiParam({ name: 'codigo', description: 'Código numérico da sala', example: 219 })

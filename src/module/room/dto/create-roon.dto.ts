@@ -130,13 +130,13 @@ export class CreateRoomDto {
 
   @ApiPropertyOptional({
     description: 'Sala utilizável?',
-    example: 'Sim',
-    enum: ['Sim', 'Não'],
-    default: 'Sim',
+    example: 'SIM',
+    enum: ['SIM', 'NÃO'],
+    default: 'SIM',
   })
   @IsOptional()
-  @IsIn(['Sim', 'Não'])
-  utilizavel?: 'Sim' | 'Não';
+
+  utilizavel?:string;
 
   @ApiPropertyOptional({
     description: 'Capacidade especial para exame/acesso prova',

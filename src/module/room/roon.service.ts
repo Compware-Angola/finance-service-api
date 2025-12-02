@@ -2,6 +2,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { UpdateRoonDto } from './dto/update-roon.dto';
 
 @Injectable()
 export class RoomService {
@@ -122,5 +123,104 @@ async deleteRoom(codigo: number | string): Promise<{ success: true; message: str
   } else {
     throw new NotFoundException(`Sala com código ${codigo} não encontrada ou já excluída`);
   }
+}
+async fecthAllRooms(): Promise<{ success: true; data: any[] }> {
+  const rooms = await this.dataSource.query(`
+    SELECT * FROM FK2_TB_SALAS
+    WHERE DELETED_AT IS NULL
+    ORDER BY CODIGO DESC
+  `);
+  return { success: true, data: await toLowerCaseKeys(rooms) };
+}
+
+async getRoomById(codigo: number | string): Promise<any> {
+  const codigoNum = Number(codigo);
+  if (isNaN(codigoNum)) {
+    throw new BadRequestException('Código da sala deve ser um número válido');
+  }
+  const room = await this.dataSource.query(
+    `SELECT * FROM FK2_TB_SALAS WHERE CODIGO = :codigoNum AND DELETED_AT IS NULL`,
+   [codigoNum]
+  );
+  if (room.length === 0) {
+    throw new NotFoundException(`Sala com código ${codigo} não encontrada`);
+  }
+
+  return   await toLowerCaseKeys(room[0]);
+}
+
+async updateRoom(
+  codigo: number | string,
+  dto: UpdateRoonDto, // usa o teu DTO com os campos corretos
+): Promise<{ success: true; message: string; data: any }> {
+  const codigoNum = Number(codigo);
+  if (isNaN(codigoNum)) {
+    throw new BadRequestException('Código da sala deve ser um número válido');
+  }
+
+  // Verifica se existe
+  const roomExists = await this.getRoomById(codigoNum);
+  if (!roomExists) {
+    throw new NotFoundException(`Sala com código ${codigo} não encontrada`);
+  }
+
+  // Mapeamento correto: frontend → coluna do banco (UPPER_SNAKE_CASE)
+  const fieldMap: Record<string, string> = {
+    designacao: 'DESIGNACAO',
+    tipo_sala: 'TIPO_SALA',
+    numero: 'NUMERO',
+    estado: 'ESTADO',
+    capacidade: 'CAPACIDADE',
+    polo_id: 'POLO_ID',
+    piso_id: 'PISO_ID',
+    edificio_id: 'EDIFICIO_ID',
+    comprimento: 'COMPRIMENTO',
+    largura: 'LARGURA',
+    area: 'AREA',
+    num_ac: 'NUM_AC',
+    num_lampadas: 'NUM_LAMPADAS',
+    num_janelas: 'NUM_JANELAS',
+    area_aluno: 'AREA_ALUNO',
+    utilizavel: 'UTILIZAVEL',
+    capacidade_exame_acesso_prova: 'CAPACIDADEEXAMEACESSOPROVA', // campo certo!
+  };
+
+  // Filtra apenas os campos que vieram no DTO e que existem no map
+  const updates: string[] = [];
+  const params: any = { codigoNum };
+
+  Object.keys(dto).forEach((key) => {
+    const dbColumn = fieldMap[key];
+    if (dbColumn && dto[key] !== undefined) {
+      const paramName = key;
+      updates.push(`${dbColumn} = :${paramName}`);
+      params[paramName] = dto[key] === '' ? null : dto[key]; // trata string vazia como null
+    }
+  });
+
+  // Se não houver campos para atualizar
+  if (updates.length === 0) {
+    throw new BadRequestException('Nenhum campo válido para atualizar');
+  }
+
+  // Adiciona updated_at automaticamente
+  updates.push(`UPDATED_AT = SYSDATE`);
+
+  // Monta e executa a query
+  const query = `
+    UPDATE FK2_TB_SALAS 
+    SET ${updates.join(', ')} 
+    WHERE CODIGO = :codigoNum
+  `;
+
+  await this.dataSource.query(query, params);
+
+  // Retorna a sala atualizada
+  const updatedRoom = await this.getRoomById(codigoNum);
+  return {
+    success: true,
+    message: 'Sala atualizada com sucesso',
+    data: updatedRoom.data,
+  };
 }
 }

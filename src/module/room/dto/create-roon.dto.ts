@@ -146,12 +146,4 @@ export class CreateRoomDto {
   @IsNumber()
   capacidade_exame_acesso_prova?: number;
 
-  @ApiProperty({
-    description: 'Código único da sala (chave de negócio)',
-    example: 'SAL-B205-LAB',
-  })
-  @IsString()
-  @IsNotEmpty()
-  @Length(3, 50)
-  codigo: string;
 }

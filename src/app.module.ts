@@ -10,6 +10,7 @@ import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiatio
 import { BullMQWorkerService } from './bullmq-worker.service';
 import { DefaultNamingStrategy } from 'typeorm';
 import { AssessmentModule } from './module/assessment/assessment.module';
+import { RoonModule } from './module/room/roon.module';
 
 
 @Module({
@@ -58,7 +59,8 @@ TypeOrmModule.forRootAsync({
     WebhookModule,
     PaymentModule,
     DebtNegotiationModule,
-    AssessmentModule
+    AssessmentModule,
+    RoonModule
   
 
   ],

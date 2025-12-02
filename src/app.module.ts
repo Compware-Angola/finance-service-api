@@ -11,6 +11,7 @@ import { BullMQWorkerService } from './bullmq-worker.service';
 import { DefaultNamingStrategy } from 'typeorm';
 import { AssessmentModule } from './module/assessment/assessment.module';
 import { RoonModule } from './module/room/roon.module';
+import { ExemptDaysModule } from './module/exempt_days/exempt_days.module';
 
 
 @Module({
@@ -60,7 +61,8 @@ TypeOrmModule.forRootAsync({
     PaymentModule,
     DebtNegotiationModule,
     AssessmentModule,
-    RoonModule
+    RoonModule,
+    ExemptDaysModule
   
 
   ],

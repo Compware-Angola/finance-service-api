@@ -12,6 +12,7 @@ import { DefaultNamingStrategy } from 'typeorm';
 import { AssessmentModule } from './module/assessment/assessment.module';
 import { RoonModule } from './module/room/roon.module';
 import { ExemptDaysModule } from './module/exempt_days/exempt_days.module';
+import { AcademicActivitiesModule } from './module/academic_activities/academic_activities.module';
 
 
 @Module({
@@ -62,7 +63,8 @@ TypeOrmModule.forRootAsync({
     DebtNegotiationModule,
     AssessmentModule,
     RoonModule,
-    ExemptDaysModule
+    ExemptDaysModule,
+    AcademicActivitiesModule
   
 
   ],

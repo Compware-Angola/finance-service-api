@@ -63,7 +63,7 @@ async findstudents(filters: StudentFiltersDto) {
     classe,
   } as any);
 
-  return await toLowerCaseKeys(rows);
+  return {success:true,data:await toLowerCaseKeys(rows)};
 }
 
 
@@ -94,7 +94,7 @@ async upsertStudentEvaluation(dto: StudentEvaluationDto) {
   { codigo_grade_avaliacao_aluno, tipoDeProva, tipoAvaliacao } as any
 );
 
-console.log(existing);
+
 
 if (existing.length !=0) {
   // Executa UPDATE
@@ -130,6 +130,7 @@ if (existing.length !=0) {
 
 } else {
   // Executa INSERT
+  // se for a segunda frenquincia procurar a primeira para meter na nota anterior
     const result = await this.dataSource.query(
       `SELECT MAX(CODIGO) AS MAX_CODIGO FROM FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES`
     );

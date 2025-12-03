@@ -30,5 +30,5 @@ export class StudentFiltersDto {
 @ApiProperty({ description: 'Turno do aluno', example: 5 })
   @IsNumber()
   @Type(() => Number)
-  turno:Number
+  turno:number
 }

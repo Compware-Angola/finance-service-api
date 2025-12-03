@@ -40,7 +40,7 @@ export class NoteReleaseService {
     // PASSO 3 – Plano da disciplina
     planoCurricularGrade = await this.buscarPlanoCurricularGrade(
       planoCurricularCursoCodigo?.CODIGO,
-      gradeId,
+       grade.CODIGO,
     );
     console.log(planoCurricularCursoCodigo, planoCurricularGrade, grade, " Dados básicos carregados com sucesso");
 
@@ -497,6 +497,9 @@ private async findEstudantesParaLancamentoDeNotasByUCAndHorario(
   anoLectivoId: number,
 ): Promise<any[]> {
 
+  console.log("Entrei",gradeId,horarioId,tipoAvaliacaoId,tipoProvaId,anoLectivoId);
+  
+
   const sql = `
 SELECT 
     GCA.CODIGO AS CODIGO_GRADE,
@@ -522,7 +525,7 @@ SELECT
                )
         FROM FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA2
         WHERE AVA2.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
-          AND AVA2.TIPO_AVALIACAO = :tipoAvaliacaoId
+        --  AND AVA2.TIPO_AVALIACAO = :tipoAvaliacaoId
           AND AVA2.TIPO_DE_PROVA  = :tipoProvaId
           AND ROWNUM = 1
     ) AS NOME_DOCENTE
@@ -530,8 +533,8 @@ SELECT
 FROM FK2_TB_GRADE_CURRICULAR_ALUNO GCA
 LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA
     ON AVA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
-   AND AVA.TIPO_AVALIACAO = :tipoAvaliacaoId
-   AND AVA.TIPO_DE_PROVA  = :tipoProvaId
+ --  AND AVA.TIPO_AVALIACAO = :tipoAvaliacaoId
+  -- AND AVA.TIPO_DE_PROVA  = :tipoProvaId
 
 INNER JOIN FK2_TB_MATRICULAS MAT ON MAT.CODIGO = GCA.CODIGO_MATRICULA
 INNER JOIN FK2_TB_ADMISSAO ADM ON ADM.CODIGO = MAT.CODIGO_ALUNO
@@ -539,7 +542,7 @@ INNER JOIN FK2_TB_PREINSCRICAO PRE ON PRE.CODIGO = ADM.PRE_INCRICAO
 
 WHERE
     MAT.ESTADO_MATRICULA IN ('concluido', 'diplomado', 'activo', 'inactivo')
-    AND GCA.CODIGO_GRADE_CURRICULAR = :gradeId
+  --  AND GCA.CODIGO_GRADE_CURRICULAR = :gradeId
     AND GCA.CODIGO_STATUS_GRADE_CURRICULAR IN (2,3)
     AND GCA.CODIGO_ANO_LECTIVO = :anoLectivoId
 
@@ -556,11 +559,14 @@ ORDER BY PRE.NOME_COMPLETO
 
   const params = {   tipoAvaliacaoId,
     tipoProvaId,
-    gradeId,
+  //  gradeId,
     horarioId,
     anoLectivoId};
 
   const rows = await this.dataSource.query(sql, params as any);
+
+  console.log("RESULTADO",rows);
+  
 
   return rows.map((r: any) => ({
     ...this.transformarRowParaAluno(r, true),

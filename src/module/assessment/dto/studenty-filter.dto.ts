@@ -27,4 +27,8 @@ export class StudentFiltersDto {
   @IsNumber()
   @Type(() => Number)
   classe: number;
+@ApiProperty({ description: 'Turno do aluno', example: 5 })
+  @IsNumber()
+  @Type(() => Number)
+  turno:Number
 }

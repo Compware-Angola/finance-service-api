@@ -10,7 +10,7 @@ export class NoteReleaseService {
   
   
 async findstudents(filters: StudentFiltersDto) {
-  const { anoLectivoId, gradeCurricularId, tipoProvaId, classe ,tipoAvaliacao} = filters;
+  const { anoLectivoId, gradeCurricularId, tipoProvaId, classe ,tipoAvaliacao,turno} = filters;
 
   const query = `
     SELECT 
@@ -49,6 +49,7 @@ async findstudents(filters: StudentFiltersDto) {
         AND GCA.CODIGO_GRADE_CURRICULAR = :gradeCurricularId
         AND GCA.CODIGO_STATUS_GRADE_CURRICULAR IN (2,3)
         AND CONF.CLASSE = :classe
+        AND PRE.CODIGO_TURNO  =:turno
     GROUP BY 
         GCA.CODIGO, MAT.CODIGO, PRE.NOME_COMPLETO,
         AVA.CODIGO, AVA.STATUS_, AVA.OBSERVACAO, AVA.NOTA, CONF.CODIGO
@@ -61,6 +62,7 @@ async findstudents(filters: StudentFiltersDto) {
     tipoProvaId,
     tipoAvaliacao,
     classe,
+    turno
   } as any);
 
   return {success:true,data:await toLowerCaseKeys(rows)};

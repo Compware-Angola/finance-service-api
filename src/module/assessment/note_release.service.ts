@@ -5,9 +5,9 @@ import { BuscarEstudantesDto } from './dto/buscar-estudantes.dto';
 
 @Injectable()
 export class NoteReleaseService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
-  async buscarEstudantes(dto: BuscarEstudantesDto): Promise<EstudanteLancamentoDto[]| any> {
+  async buscarEstudantes(dto: BuscarEstudantesDto): Promise<EstudanteLancamentoDto[] | any> {
     console.log('Entrou no buscarEstudantes (NestJS)');
 
     let estudantesComNotas = 0;
@@ -42,8 +42,8 @@ export class NoteReleaseService {
       planoCurricularCursoCodigo?.CODIGO,
       gradeId,
     );
- console.log(planoCurricularCursoCodigo, planoCurricularGrade, grade," Dados básicos carregados com sucesso");
- 
+    console.log(planoCurricularCursoCodigo, planoCurricularGrade, grade, " Dados básicos carregados com sucesso");
+
     // PASSO 4 – Tipo de prova padrão
     const tipoProvaFinal = tipoProvaId || 1;
 
@@ -57,6 +57,7 @@ export class NoteReleaseService {
 
     try {
       if (verHorario) {
+        /*
         listaDeAlunosTemp = await this.buscarAlunosPorHorario(
           gradeId,
           horarioId!,
@@ -64,6 +65,7 @@ export class NoteReleaseService {
           tipoProvaFinal,
           anoLectivoId,
         );
+        */
       } else {
         listaDeAlunosTemp = await this.buscarAlunosPorTurma(
           gradeId,
@@ -78,7 +80,7 @@ export class NoteReleaseService {
       switch (tipoAvaliacaoId) {
         case 6: // EXAME
           if (verHorario) {
-            listaDeAlunosTemp = await this.buscarAlunosExamePorHorario(
+            listaDeAlunosTemp = await this.findEstudantesParaLancamentoDeNotasByUCAndHorario2exame(
               gradeId,
               horarioId!,
               tipoProvaFinal,
@@ -93,7 +95,7 @@ export class NoteReleaseService {
 
         case 7: // RECURSO
           if (verHorario) {
-            listaDeAlunosTemp = await this.buscarAlunosRecursoPorHorario(
+            listaDeAlunosTemp = await this.findEstudantesParaLancamentoDeNotasByUCAndHorarioRecurso(
               gradeId,
               horarioId!,
               tipoProvaFinal,
@@ -108,6 +110,14 @@ export class NoteReleaseService {
 
         default:
           // Frequências normais + outros tipos
+          if (verHorario) {
+            listaDeAlunosTemp = await this.findEstudantesParaLancamentoDeNotasByUCAndHorario(gradeId,
+              horarioId!,
+              tipoAvaliacaoId,
+              tipoProvaId!,
+              anoLectivoId)
+
+          }
           listaDeAlunosTemp.forEach((aluno) => {
             aluno.podeLancar = true;
             listaDeAlunos.push(this.mapearAluno(aluno));
@@ -116,13 +126,13 @@ export class NoteReleaseService {
       }
 
       // PASSO 8 – Contar quem já tem nota
-      estudantesComNotas = listaDeAlunos.filter((a:any) => a.nota >= 0).length;
+      estudantesComNotas = listaDeAlunos.filter((a: any) => a.nota >= 0).length;
 
       // PASSO 9 – Criar lançamento se ainda não existir
       if (estudantesComNotas === 0) {
         const lancamentoExiste = verHorario
-          ? await this.verificarLancamentoHorario(gradeId, horarioId!, tipoAvaliacaoId)
-          : await this.verificarLancamentoTurma(gradeId, turmaId!, tipoAvaliacaoId);
+          ? await this.verificarLancamentoEmAvaliacaoHorario(gradeId, horarioId!, tipoAvaliacaoId)
+          : await this.verificarLancamentoEmAvaliacao(gradeId, turmaId!, tipoAvaliacaoId);
 
         if (lancamentoExiste) {
           await this.criarOuEditarLancamentoEpoca(lancamentoExiste);
@@ -171,19 +181,19 @@ export class NoteReleaseService {
     const result = await this.dataSource.query(sql, [codigo]);
     return result[0] || null;
   }
-private async buscarPlanoCurricularCurso(codigoCurso: number, codigoAnoLectivo: number): Promise<{ CODIGO: number } | null> {
-  const result = await this.dataSource.query(
-    `SELECT CODIGO
+  private async buscarPlanoCurricularCurso(codigoCurso: number, codigoAnoLectivo: number): Promise<{ CODIGO: number } | null> {
+    const result = await this.dataSource.query(
+      `SELECT CODIGO
      FROM FK2_TB_PLANO_CURRICULAR_CURSO
      WHERE (:curso1 = 0 OR CODIGO_CURSO = :curso2)
        AND (:ano1 = 0 OR CODIGO_ANO_LECTIVO = :ano2)
      ORDER BY CODIGO DESC
      FETCH FIRST 1 ROW ONLY`,
-    [codigoCurso, codigoCurso, codigoAnoLectivo, codigoAnoLectivo] 
-  );
+      [codigoCurso, codigoCurso, codigoAnoLectivo, codigoAnoLectivo]
+    );
 
-  return result[0] ? { CODIGO: result[0].CODIGO } : null;
-}
+    return result[0] ? { CODIGO: result[0].CODIGO } : null;
+  }
 
   private async buscarPlanoCurricularGrade(planoCodigo: number, gradeCodigo: number): Promise<any | null> {
     const sql = `
@@ -193,17 +203,17 @@ private async buscarPlanoCurricularCurso(codigoCurso: number, codigoAnoLectivo: 
       WHERE CODIGO_PLANO_CURRICULAR_CURSO = :planoCodigo
         AND CODIGO_GRADE_CURRICULAR = :gradeCodigo
     `;
-    const result = await this.dataSource.query(sql, [ planoCodigo, gradeCodigo ]);
+    const result = await this.dataSource.query(sql, [planoCodigo, gradeCodigo]);
     return result[0] || null;
   }
-private async buscarAlunosPorTurma(
-  gradeId: number,
-  turmaId: number,
-  tipoAvaliacaoId: number,
-  tipoProvaId: number,
-  anoLectivoId: number,
-): Promise<any[]> {
-  const sql = `
+  private async buscarAlunosPorTurma(
+    gradeId: number,
+    turmaId: number,
+    tipoAvaliacaoId: number,
+    tipoProvaId: number,
+    anoLectivoId: number,
+  ): Promise<any[]> {
+    const sql = `
     SELECT DISTINCT
       gca.CODIGO AS codigo_grade,
       m.CODIGO AS numero_de_matricula,
@@ -236,128 +246,443 @@ private async buscarAlunosPorTurma(
     ORDER BY p.NOME_COMPLETO
   `;
 
-  const rows = await this.dataSource.query(sql, [
-    tipoAvaliacaoId,
-    tipoProvaId,
-    gradeId,
-    turmaId,
-    anoLectivoId,
-  ]);
+    const rows = await this.dataSource.query(sql, [
+      tipoAvaliacaoId,
+      tipoProvaId,
+      gradeId,
+      turmaId,
+      anoLectivoId,
+    ]);
 
-  return rows.map(r => this.transformarRowParaAluno(r));
-}
-
-private async buscarAlunosPorHorario(
+    return rows.map(r => this.transformarRowParaAluno(r));
+  }
+ private async buscarAlunosPorHorario(
   gradeId: number,
   horarioId: number,
   tipoAvaliacaoId: number,
   tipoProvaId: number,
   anoLectivoId: number,
 ): Promise<any[]> {
+
   const sql = `
-    SELECT DISTINCT
-      gca.CODIGO AS codigo_grade,
-      m.CODIGO AS numero_de_matricula,
-      p.NOME_COMPLETO AS nome_completo,
-      gcaa.CODIGO AS avaliacao,
-      gcaa.STATUS_ AS status,
-      gcaa.OBSERVACAO AS observacao,
-      gcaa.NOTA AS nota,
-      gca.REF_HORARIO AS horario,
-      gcaa.CREATED_AT AS dataLancamento,
-      gcaa.UPDATE_AT AS dataDeAtualizacao,
-      -- Extrai nome do docente do JSON armazenado em CLOB
-      TRIM(BOTH '"' FROM 
-        JSON_VALUE(DBMS_LOB.SUBSTR(gcaa.REF_UTILIZADOR, 4000, 1), '$.desc')
-      ) AS nome_docente
-    FROM FK2_TB_GRADE_CURRICULAR_ALUNO gca
-    LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES gcaa
-      ON gcaa.GRADE_CURRICULAR_ALUNO = gca.CODIGO
-      AND gcaa.TIPO_AVALIACAO = :tipoAval
-      AND gcaa.TIPO_DE_PROVA = :tipoProva
-    INNER JOIN FK2_TB_MATRICULAS m ON m.CODIGO = gca.CODIGO_MATRICULA
-    INNER JOIN FK2_TB_ADMISSAO a ON a.CODIGO = m.CODIGO_ALUNO
-    INNER JOIN FK2_TB_PREINSCRICAO p ON p.CODIGO = a.PRE_INCRICAO
-    WHERE 
-      -- Extrai o pk do JSON do horário (CLOB → VARCHAR2 → JSON)
-      TO_NUMBER(
-        TRIM(BOTH '"' FROM 
-          JSON_VALUE(DBMS_LOB.SUBSTR(gca.REF_HORARIO, 4000, 1), '$.pk')
-        )
-      ) = :horarioId
-      AND gca.CODIGO_GRADE_CURRICULAR = :gradeId
-      AND gca.CODIGO_STATUS_GRADE_CURRICULAR IN (2, 3)
-      AND gca.CODIGO_ANO_LECTIVO = :anoLectivoId
-    ORDER BY p.NOME_COMPLETO
+ SELECT DISTINCT
+  gca.CODIGO                          AS codigo_grade,
+  m.CODIGO                            AS numero_de_matricula,
+  p.NOME_COMPLETO                     AS nome_completo,
+  gcaa.CODIGO                         AS avaliacao,
+  gcaa.STATUS_                        AS status,
+  gcaa.OBSERVACAO                     AS observacao,
+  gcaa.NOTA                           AS nota,
+  gca.REF_HORARIO                     AS horario,
+  gcaa.CREATED_AT                     AS dataLancamento,
+  gcaa.UPDATE_AT                      AS dataDeAtualizacao,
+
+  JSON_VALUE(
+    DBMS_LOB.SUBSTR(gcaa.REF_UTILIZADOR, 4000, 1),
+    '$.desc'
+  ) AS nome_docente
+
+FROM FK2_TB_GRADE_CURRICULAR_ALUNO gca
+
+LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES gcaa
+  ON gcaa.GRADE_CURRICULAR_ALUNO = gca.CODIGO
+ AND gcaa.TIPO_AVALIACAO = :tipoAvaliacaoId
+ AND gcaa.TIPO_DE_PROVA  = :tipoProvaId
+
+INNER JOIN FK2_TB_MATRICULAS m   ON m.CODIGO = gca.CODIGO_MATRICULA
+INNER JOIN FK2_TB_ADMISSAO a     ON a.CODIGO = m.CODIGO_ALUNO
+INNER JOIN FK2_TB_PREINSCRICAO p ON p.CODIGO = a.PRE_INCRICAO
+
+WHERE 
+  TO_NUMBER(
+    JSON_VALUE(
+      DBMS_LOB.SUBSTR(gca.REF_HORARIO, 4000, 1),
+      '$.pk'
+    )
+  ) = :horarioId
+
+  AND gca.CODIGO_GRADE_CURRICULAR = :gradeId
+  AND gca.CODIGO_STATUS_GRADE_CURRICULAR IN (2, 3)
+  AND gca.CODIGO_ANO_LECTIVO = :anoLectivoId
+
+ORDER BY p.NOME_COMPLETO
+
   `;
 
-  const rows = await this.dataSource.query(sql, [
+  const rows = await this.dataSource.query(sql, {
     tipoAvaliacaoId,
     tipoProvaId,
     horarioId,
     gradeId,
     anoLectivoId,
-  ]);
+  } as any);
 
   return rows.map(r => this.transformarRowParaAluno(r, true));
 }
-  private async buscarAlunosExamePorHorario(
+
+private async findEstudantesParaLancamentoDeNotasByUCAndHorario2exame(
+  gradeId: number,
+  horarioId: number,
+  tipoProvaId: number,
+  anoLectivoId: number,
+): Promise<any[]> {
+  console.log("11111111111");
+  
+
+  const sql = `
+    SELECT 
+      GCA.CODIGO                  AS CODIGO_GRADE,
+      MAT.CODIGO                 AS NUMERO_DE_MATRICULA,
+      PRE.NOME_COMPLETO          AS NOME_COMPLETO,
+      AVA.CODIGO                 AS AVALIACAO,
+      AVA.STATUS_                 AS STATUS,
+      AVA.OBSERVACAO             AS OBSERVACAO,
+      AVA.NOTA                   AS NOTA,
+      GCA.REF_HORARIO            AS HORARIO,
+
+      MIN(AVA.CREATED_AT)        AS DATALANCAMENTO,
+      MIN(AVA.UPDATE_AT)         AS DATADEATUALIZACAO,
+
+      TO_CHAR(AVA.UPDATE_AT,'HH24') AS HORA,
+      TO_CHAR(AVA.UPDATE_AT,'MI')   AS MINUTO,
+      TO_CHAR(AVA.CREATED_AT,'HH24') AS HORACRIACAO,
+      TO_CHAR(AVA.CREATED_AT,'MI')   AS MINUTOCRIACAO,
+
+      JSON_VALUE(
+        CAST(DBMS_LOB.SUBSTR(AVA.REF_UTILIZADOR,4000,1) AS VARCHAR2(4000)),
+        '$.desc'
+      ) AS NOME_DOCENTE
+
+    FROM FK2_TB_GRADE_CURRICULAR_ALUNO GCA
+    LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA
+      ON AVA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+     AND AVA.TIPO_AVALIACAO = :tipoAvaliacao
+     AND AVA.TIPO_DE_PROVA  = :tipoProvaId
+
+    INNER JOIN FK2_TB_MATRICULAS MAT  ON MAT.CODIGO = GCA.CODIGO_MATRICULA
+    INNER JOIN FK2_TB_ADMISSAO ADM    ON ADM.CODIGO = MAT.CODIGO_ALUNO
+    INNER JOIN FK2_TB_PREINSCRICAO PRE ON PRE.CODIGO = ADM.PRE_INCRICAO
+
+    WHERE
+      MAT.ESTADO_MATRICULA IN ('concluido', 'activo', 'inactivo')
+      AND GCA.CODIGO_GRADE_CURRICULAR = :gradeId
+
+      AND JSON_VALUE(
+        CAST(DBMS_LOB.SUBSTR(GCA.REF_HORARIO,4000,1) AS VARCHAR2(4000)),
+        '$.pk'
+      ) = TO_CHAR(:horarioId)
+
+      AND GCA.CODIGO_STATUS_GRADE_CURRICULAR IN (2, 3)
+      AND GCA.CODIGO_ANO_LECTIVO = :anoLectivoId
+
+      AND NOT EXISTS (
+        SELECT 1
+        FROM FK2_GRADE_CURRICULAR_ALUNO_AVALIACOES X
+        INNER JOIN FK2_GRADE_CURRICULAR_ALUNO Y
+          ON Y.CODIGO = X.GRADE_CURRICULAR_ALUNO
+        WHERE Y.CODIGO_GRADE_CURRICULAR = :gradeId
+          AND X.TIPO_AVALIACAO = 2
+          AND X.NOTA >= 8
+          AND X.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+      )
+
+    GROUP BY 
+      GCA.CODIGO, MAT.CODIGO, PRE.NOME_COMPLETO,
+      AVA.CODIGO, AVA.STATUS_, AVA.OBSERVACAO, AVA.NOTA,
+      GCA.REF_HORARIO, AVA.REF_UTILIZADOR
+
+    ORDER BY PRE.NOME_COMPLETO ASC
+  `;
+
+  const params = [2, tipoProvaId, gradeId, horarioId, anoLectivoId, gradeId];
+  const rows = await this.dataSource.query(sql, params);
+
+  return rows.map((r: any) => ({
+    ...this.transformarRowParaAluno(r, true),
+    podeLancar: false,
+  }));
+}
+
+ private async findEstudantesParaLancamentoDeNotasByUCAndHorarioRecurso(
+  gradeId: number,
+  horarioId: number,
+  tipoProvaId: number,
+  anoLectivoId: number,
+): Promise<any[]> {
+  console.log("3333333333333");
+  const sql = `
+    SELECT 
+      GCA.CODIGO                          AS CODIGO_GRADEC,
+      MAT.CODIGO                          AS NUMERO_DE_MATRICULA,
+      PRE.NOME_COMPLETO                   AS NOME_COMPLETO,
+      AVA.CODIGO                          AS AVALIACAO,
+      AVA.STATUS_                          AS STATUS,
+      AVA.OBSERVACAO                      AS OBSERVACAO,
+      AVA.NOTA                            AS NOTA,
+      GCA.REF_HORARIO                     AS HORARIO,
+
+      MIN(AVA.CREATED_AT)                 AS DATALANCAMENTO,
+      MIN(AVA.UPDATE_AT)                  AS DATADEATUALIZACAO,
+      TO_CHAR(AVA.UPDATE_AT,'HH24')       AS HORA,
+      TO_CHAR(AVA.UPDATE_AT,'MI')         AS MINUTO,
+      TO_CHAR(AVA.CREATED_AT,'HH24')      AS HORACRIACAO,
+      TO_CHAR(AVA.CREATED_AT,'MI')        AS MINUTOCRIACAO,
+
+      JSON_VALUE(
+        CAST(DBMS_LOB.SUBSTR(AVA.REF_UTILIZADOR,4000,1) AS VARCHAR2(4000)),
+        '$.desc'
+      ) AS NOME_DOCENTE
+
+    FROM FK2_TB_GRADE_CURRICULAR_ALUNO GCA
+    LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA
+      ON AVA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+     AND AVA.TIPO_AVALIACAO = :tipoAvaliacaoExame
+     AND AVA.TIPO_DE_PROVA  = :tipoProvaId
+
+    INNER JOIN FK2_TB_MATRICULAS MAT ON MAT.CODIGO = GCA.CODIGO_MATRICULA
+    INNER JOIN FK2_TB_ADMISSAO ADM   ON ADM.CODIGO = MAT.CODIGO_ALUNO
+    INNER JOIN FK2_TB_PREINSCRICAO PRE ON PRE.CODIGO = ADM.PRE_INCRICAO
+
+    WHERE
+      MAT.ESTADO_MATRICULA IN ('concluido','activo','inactivo')
+      AND GCA.CODIGO_GRADE_CURRICULAR = :gradeId
+
+      AND JSON_VALUE(
+        CAST(DBMS_LOB.SUBSTR(GCA.REF_HORARIO,4000,1) AS VARCHAR2(4000)),
+        '$.pk'
+      ) = TO_CHAR(:horarioId)
+
+      AND GCA.CODIGO_STATUS_GRADE_CURRICULAR NOT IN (4, 5)
+      AND GCA.CODIGO_ANO_LECTIVO = :anoLectivoId
+
+      AND EXISTS (
+        SELECT 1
+        FROM FK2_GRADE_CURRICULAR_ALUNO_AVALIACOES EXA
+        WHERE EXA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+          AND EXA.TIPO_AVALIACAO = 3
+          AND (EXA.NOTA < 10 OR EXA.NOTA IS NULL)
+      )
+
+    GROUP BY 
+      GCA.CODIGO, MAT.CODIGO, PRE.NOME_COMPLETO,
+      AVA.CODIGO, AVA.STATUS_, AVA.OBSERVACAO, AVA.NOTA,
+      GCA.REF_HORARIO, AVA.REF_UTILIZADOR
+
+    ORDER BY PRE.NOME_COMPLETO
+  `;
+
+  const params = [4, tipoProvaId, gradeId, horarioId, anoLectivoId];
+  const rows = await this.dataSource.query(sql, params);
+
+  return rows.map((r: any) => ({
+    ...this.transformarRowParaAluno(r, true),
+    podeLancar: true
+  }));
+}
+
+private async findEstudantesParaLancamentoDeNotasByUCAndHorario(
+  gradeId: number,
+  horarioId: number,
+  tipoAvaliacaoId: number,
+  tipoProvaId: number,
+  anoLectivoId: number,
+): Promise<any[]> {
+
+  const sql = `
+SELECT 
+    GCA.CODIGO AS CODIGO_GRADE,
+    MAT.CODIGO AS NUMERO_DE_MATRICULA,
+    PRE.NOME_COMPLETO AS NOME_COMPLETO,
+    AVA.CODIGO AS AVALIACAO,
+    AVA.STATUS_ AS STATUS,
+    AVA.OBSERVACAO AS OBSERVACAO,
+    AVA.NOTA AS NOTA,
+    MIN(DBMS_LOB.SUBSTR(GCA.REF_HORARIO, 4000, 1)) AS HORARIO,
+    MIN(AVA.CREATED_AT) AS DATALANCAMENTO,
+    MIN(AVA.UPDATE_AT) AS DATADEATUALIZACAO,
+    TO_CHAR(MIN(AVA.UPDATE_AT), 'HH24') AS HORA,
+    TO_CHAR(MIN(AVA.UPDATE_AT), 'MI') AS MINUTO,
+    TO_CHAR(MIN(AVA.CREATED_AT), 'HH24') AS HORACRIACAO,
+    TO_CHAR(MIN(AVA.CREATED_AT), 'MI') AS MINUTOCRIACAO,
+    
+    -- Subquery para trazer o docente
+    (
+        SELECT JSON_VALUE(
+                   CAST(DBMS_LOB.SUBSTR(AVA2.REF_UTILIZADOR, 4000, 1) AS VARCHAR2(4000)), 
+                   '$.desc'
+               )
+        FROM FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA2
+        WHERE AVA2.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+          AND AVA2.TIPO_AVALIACAO = :tipoAvaliacaoId
+          AND AVA2.TIPO_DE_PROVA  = :tipoProvaId
+          AND ROWNUM = 1
+    ) AS NOME_DOCENTE
+
+FROM FK2_TB_GRADE_CURRICULAR_ALUNO GCA
+LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA
+    ON AVA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+   AND AVA.TIPO_AVALIACAO = :tipoAvaliacaoId
+   AND AVA.TIPO_DE_PROVA  = :tipoProvaId
+
+INNER JOIN FK2_TB_MATRICULAS MAT ON MAT.CODIGO = GCA.CODIGO_MATRICULA
+INNER JOIN FK2_TB_ADMISSAO ADM ON ADM.CODIGO = MAT.CODIGO_ALUNO
+INNER JOIN FK2_TB_PREINSCRICAO PRE ON PRE.CODIGO = ADM.PRE_INCRICAO
+
+WHERE
+    MAT.ESTADO_MATRICULA IN ('concluido', 'diplomado', 'activo', 'inactivo')
+    AND GCA.CODIGO_GRADE_CURRICULAR = :gradeId
+    AND GCA.CODIGO_STATUS_GRADE_CURRICULAR IN (2,3)
+    AND GCA.CODIGO_ANO_LECTIVO = :anoLectivoId
+
+GROUP BY 
+    GCA.CODIGO, MAT.CODIGO, PRE.NOME_COMPLETO,
+    AVA.CODIGO, AVA.STATUS_, AVA.OBSERVACAO, AVA.NOTA
+
+HAVING 
+    JSON_VALUE(MIN(DBMS_LOB.SUBSTR(GCA.REF_HORARIO, 4000, 1)), '$.pk') = TO_CHAR(:horarioId)
+
+ORDER BY PRE.NOME_COMPLETO
+
+`;
+
+  const params = {   tipoAvaliacaoId,
+    tipoProvaId,
+    gradeId,
+    horarioId,
+    anoLectivoId};
+
+  const rows = await this.dataSource.query(sql, params as any);
+
+  return rows.map((r: any) => ({
+    ...this.transformarRowParaAluno(r, true),
+    podeLancar: false
+  }));
+}
+
+
+  private async verificarLancamentoEmAvaliacao(
+    gradeId: number,
+    turmaId: number,
+    tipoAvaliacaoId: number,
+  ): Promise<any | null> {
+    const sql = `
+    SELECT CODIGO
+    FROM FK2_TB_UNIDADE_CURRICULAR_LANCAMENTO_EPOCA
+    WHERE UNIDADE_CURRICULAR = :gradeId
+      AND TURMA = :turmaId
+      AND EPOCA = :tipoAvaliacaoId
+  `;
+
+    const result = await this.dataSource.query(sql, [gradeId,
+      turmaId,
+      tipoAvaliacaoId,]);
+
+    return result.length > 0 ? result[0] : null;
+  }
+  private async verificarLancamentoEmAvaliacaoHorario(
     gradeId: number,
     horarioId: number,
-    tipoProvaId: number,
-    anoLectivoId: number,
-  ): Promise<any[]> {
-    // Implementação igual à original Java (exame só quem tem frequência < 10, etc.)
-    // Aqui um exemplo funcional – adapta conforme tua regra exata
-    const sql = `/* tua query de exame por horário aqui */`;
-    const rows = await this.dataSource.query(sql,[ { gradeId, horarioId, tipoProvaId, anoLectivoId }]);
-    return rows.map((r: any) => ({ ...this.transformarRowParaAluno(r, true), podeLancar: false }));
-  }
-
-  private async buscarAlunosRecursoPorHorario(
-    gradeId: number,
-    horarioId: number,
-    tipoProvaId: number,
-    anoLectivoId: number,
-  ): Promise<any[]> {
-    // Mesmo esquema do Java – recurso só quem reprovou no exame normal
-    const sql = `/* query recurso */`;
-    const rows = await this.dataSource.query(sql, [{ gradeId, horarioId, tipoProvaId, anoLectivoId }]);
-    return rows.map((r: any) => ({ ...this.transformarRowParaAluno(r, true), podeLancar: true }));
-  }
-
-  private async verificarLancamentoTurma(gradeId: number, turmaId: number, tipoAvaliacaoId: number): Promise<any | null> {
+    tipoAvaliacaoId: number,
+  ): Promise<any | null> {
     const sql = `
-      SELECT CODIGO FROM FK2_TB_LANCAMENTO_EPOCA
-      WHERE CODIGO_GRADE_CURRICULAR = :gradeId
-        AND TURMA = :turmaId
-        AND TIPO_AVALIACAO = :tipoAval
-    `;
-    const result = await this.dataSource.query(sql, [{ gradeId, turmaId, tipoAval: tipoAvaliacaoId }]);
-    return result[0] || null;
+    SELECT CODIGO
+    FROM FK2_TB_UNIDADE_CURRICULAR_LANCAMENTO_EPOCA
+    WHERE UNIDADE_CURRICULAR = :gradeId
+      AND JSON_VALUE(REF_HORARIO, '$.pk') = TO_CHAR(:horarioId)
+      AND EPOCA = :tipoAvaliacaoId
+  `;
+
+    const result = await this.dataSource.query(sql, [gradeId,
+      horarioId,
+      tipoAvaliacaoId]);
+
+    return result.length > 0 ? result[0] : null;
   }
 
-  private async verificarLancamentoHorario(gradeId: number, horarioId: number, tipoAvaliacaoId: number): Promise<any | null> {
-    const sql = `
-      SELECT CODIGO FROM FK2_TB_LANCAMENTO_EPOCA
-      WHERE CODIGO_GRADE_CURRICULAR = :gradeId
-        AND JSON_UNQUOTE(JSON_EXTRACT(REF_HORARIO, '$.pk')) = :horarioId
-        AND TIPO_AVALIACAO = :tipoAval
-    `;
-    const result = await this.dataSource.query(sql, [{ gradeId, horarioId, tipoAval: tipoAvaliacaoId }]);
-    return result[0] || null;
-  }
+private async criarOuEditarLancamentoEpoca(lancamento: {
+  unidadeCurricular: number;   // código da UC (grade curricular)
+  turma: number;               // código da turma
+  epoca: number;               // código do tipo de avaliação (1=freq, 3=exame, 4=recurso...)
+  refHorario?: string;         // JSON com { pk: 123, desc: "Turma A" }
+  docente?: number;            // código do docente (opcional)
+  refUtilizador?: string;      // JSON do utilizador que está a abrir
+  motivoActualizacao?: string;
+}): Promise<void> {
+  const {
+    unidadeCurricular,
+    turma,
+    epoca,
+    refHorario,
+    docente,
+    refUtilizador,
+    motivoActualizacao,
+  } = lancamento;
 
-  private async criarOuEditarLancamentoEpoca(lancamento: any) {
-    // Se já existe → nada; senão cria
-    // Implementação completa depende do teu service de lançamento
-    console.log('Criando/Atualizando lançamento época:', lancamento);
-    // await this.dataSource.query('INSERT ...');
-  }
+  // Query UPSERT nativa do Oracle 12c+ (a mais rápida e segura)
+  const sql = `
+    MERGE INTO FK2_TB_UNIDADE_CURRICULAR_LANCAMENTO_EPOCA target
+    USING (
+      SELECT 
+        :unidadeCurricular AS UNIDADE_CURRICULAR,
+        :turma             AS TURMA,
+        :epoca             AS EPOCA
+      FROM DUAL
+    ) source
+    ON (
+      target.UNIDADE_CURRICULAR = source.UNIDADE_CURRICULAR
+      AND target.TURMA = source.TURMA
+      AND target.EPOCA = source.EPOCA
+    )
+    WHEN MATCHED THEN
+      UPDATE SET
+        target.DATA_ACTUALIZACAO    = SYSDATE,
+        target.MOTIVO_ACTUALIZACAO  = :motivoActualizacao,
+        target.REF_UTILIZADOR       = :refUtilizador,
+        target.REF_HORARIO          = :refHorario,
+        target.DOCENTE              = :docente,
+        target.NOTAS_LANCADAS       = 0  -- reinicia contagem se reabrir
+    WHEN NOT MATCHED THEN
+      INSERT (
+        UNIDADE_CURRICULAR,
+        TURMA,
+        EPOCA,
+        DATA_LANCAMENTO,
+        DATA_ACTUALIZACAO,
+        REF_HORARIO,
+        REF_UTILIZADOR,
+        DOCENTE,
+        NOTAS_LANCADAS,
+        MOTIVO_ACTUALIZACAO
+      )
+      VALUES (
+        :unidadeCurricular,
+        :turma,
+        :epoca,
+        SYSDATE,
+        SYSDATE,
+        :refHorario,
+        :refUtilizador,
+        :docente,
+        0,
+        :motivoActualizacao
+      )
+  `;
+
+  await this.dataSource.query(sql, {
+    unidadeCurricular,
+    turma,
+    epoca,
+    refHorario: refHorario || null,
+    docente: docente || null,
+    refUtilizador: refUtilizador || null,
+    motivoActualizacao: motivoActualizacao || 'Abertura/Reabertura de lançamento de notas',
+  } as any) ;
+}
 
   private async verificarPermissao(dto: BuscarEstudantesDto, tipoAvaliacaoId: number) {
     // Aqui vai tua lógica de prazo, grupos, exceções, etc.
     // Por enquanto retorna sempre true (conforme teu stub)
+    // No Legado a logica que esta la nunca vai ser aplicado porque esta tudo true !
     return { podeLancar: true, podeLancarExcecao: true };
   }
 
@@ -370,7 +695,7 @@ private async buscarAlunosPorHorario(
         AND gca.CODIGO_ANO_LECTIVO < :anoLectivoId
         AND gca.CODIGO_STATUS_GRADE_CURRICULAR = 4 -- 4 = cadeirante na tua base
     `;
-    const [row] = await this.dataSource.query(sql, [ matriculaCodigo, anoLectivoId]);
+    const [row] = await this.dataSource.query(sql, [matriculaCodigo, anoLectivoId]);
     return row.TOTAL > 0;
   }
 

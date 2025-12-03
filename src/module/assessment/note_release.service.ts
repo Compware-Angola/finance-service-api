@@ -102,6 +102,7 @@ export class NoteReleaseService {
               anoLectivoId,
             );
           }
+             console.log(listaDeAlunosTemp,"ESTUDANTE 3");
           listaDeAlunosTemp.forEach((aluno) => {
             aluno.podeLancar = true;
             listaDeAlunos.push(this.mapearAluno(aluno));
@@ -125,6 +126,8 @@ export class NoteReleaseService {
           break;
       }
 
+   
+      
       // PASSO 8 – Contar quem já tem nota
       estudantesComNotas = listaDeAlunos.filter((a: any) => a.nota >= 0).length;
 
@@ -327,75 +330,73 @@ private async findEstudantesParaLancamentoDeNotasByUCAndHorario2exame(
   anoLectivoId: number,
 ): Promise<any[]> {
   console.log("11111111111");
-  
 
   const sql = `
-    SELECT 
-      GCA.CODIGO                  AS CODIGO_GRADE,
-      MAT.CODIGO                 AS NUMERO_DE_MATRICULA,
-      PRE.NOME_COMPLETO          AS NOME_COMPLETO,
-      AVA.CODIGO                 AS AVALIACAO,
-      AVA.STATUS_                 AS STATUS,
-      AVA.OBSERVACAO             AS OBSERVACAO,
-      AVA.NOTA                   AS NOTA,
-      GCA.REF_HORARIO            AS HORARIO,
-
-      MIN(AVA.CREATED_AT)        AS DATALANCAMENTO,
-      MIN(AVA.UPDATE_AT)         AS DATADEATUALIZACAO,
-
-      TO_CHAR(AVA.UPDATE_AT,'HH24') AS HORA,
-      TO_CHAR(AVA.UPDATE_AT,'MI')   AS MINUTO,
-      TO_CHAR(AVA.CREATED_AT,'HH24') AS HORACRIACAO,
-      TO_CHAR(AVA.CREATED_AT,'MI')   AS MINUTOCRIACAO,
-
-      JSON_VALUE(
-        CAST(DBMS_LOB.SUBSTR(AVA.REF_UTILIZADOR,4000,1) AS VARCHAR2(4000)),
-        '$.desc'
-      ) AS NOME_DOCENTE
-
-    FROM FK2_TB_GRADE_CURRICULAR_ALUNO GCA
-    LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA
-      ON AVA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
-     AND AVA.TIPO_AVALIACAO = :tipoAvaliacao
-     AND AVA.TIPO_DE_PROVA  = :tipoProvaId
-
-    INNER JOIN FK2_TB_MATRICULAS MAT  ON MAT.CODIGO = GCA.CODIGO_MATRICULA
-    INNER JOIN FK2_TB_ADMISSAO ADM    ON ADM.CODIGO = MAT.CODIGO_ALUNO
-    INNER JOIN FK2_TB_PREINSCRICAO PRE ON PRE.CODIGO = ADM.PRE_INCRICAO
-
-    WHERE
-      MAT.ESTADO_MATRICULA IN ('concluido', 'activo', 'inactivo')
-      AND GCA.CODIGO_GRADE_CURRICULAR = :gradeId
-
-      AND JSON_VALUE(
-        CAST(DBMS_LOB.SUBSTR(GCA.REF_HORARIO,4000,1) AS VARCHAR2(4000)),
-        '$.pk'
-      ) = TO_CHAR(:horarioId)
-
-      AND GCA.CODIGO_STATUS_GRADE_CURRICULAR IN (2, 3)
-      AND GCA.CODIGO_ANO_LECTIVO = :anoLectivoId
-
-      AND NOT EXISTS (
-        SELECT 1
-        FROM FK2_GRADE_CURRICULAR_ALUNO_AVALIACOES X
-        INNER JOIN FK2_GRADE_CURRICULAR_ALUNO Y
-          ON Y.CODIGO = X.GRADE_CURRICULAR_ALUNO
-        WHERE Y.CODIGO_GRADE_CURRICULAR = :gradeId
-          AND X.TIPO_AVALIACAO = 2
-          AND X.NOTA >= 8
-          AND X.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
-      )
-
-    GROUP BY 
-      GCA.CODIGO, MAT.CODIGO, PRE.NOME_COMPLETO,
-      AVA.CODIGO, AVA.STATUS_, AVA.OBSERVACAO, AVA.NOTA,
-      GCA.REF_HORARIO, AVA.REF_UTILIZADOR
-
-    ORDER BY PRE.NOME_COMPLETO ASC
+    SELECT *
+    FROM (
+      SELECT 
+          GCA.CODIGO AS CODIGO_GRADE,
+          MAT.CODIGO AS NUMERO_DE_MATRICULA,
+          PRE.NOME_COMPLETO AS NOME_COMPLETO,
+          AVA.CODIGO AS AVALIACAO,
+          AVA.STATUS_ AS STATUS,
+          AVA.OBSERVACAO AS OBSERVACAO,
+          AVA.NOTA AS NOTA,
+          DBMS_LOB.SUBSTR(GCA.REF_HORARIO,4000,1) AS HORARIO,
+          AVA.CREATED_AT AS DATALANCAMENTO,
+          AVA.UPDATE_AT AS DATADEATUALIZACAO,
+          TO_CHAR(AVA.UPDATE_AT,'HH24') AS HORA,
+          TO_CHAR(AVA.UPDATE_AT,'MI') AS MINUTO,
+          TO_CHAR(AVA.CREATED_AT,'HH24') AS HORACRIACAO,
+          TO_CHAR(AVA.CREATED_AT,'MI') AS MINUTOCRIACAO,
+          (
+            SELECT JSON_VALUE(
+                       CAST(DBMS_LOB.SUBSTR(AVA2.REF_UTILIZADOR,4000,1) AS VARCHAR2(4000)),
+                       '$.desc'
+                   )
+            FROM FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA2
+            WHERE AVA2.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+              AND AVA2.TIPO_AVALIACAO = :tipoAvaliacao
+              AND AVA2.TIPO_DE_PROVA = :tipoProvaId
+              AND ROWNUM = 1
+          ) AS NOME_DOCENTE
+      FROM FK2_TB_GRADE_CURRICULAR_ALUNO GCA
+      LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA
+          ON AVA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+         AND AVA.TIPO_AVALIACAO = :tipoAvaliacao
+         AND AVA.TIPO_DE_PROVA  = :tipoProvaId
+      INNER JOIN FK2_TB_MATRICULAS MAT ON MAT.CODIGO = GCA.CODIGO_MATRICULA
+      INNER JOIN FK2_TB_ADMISSAO ADM ON ADM.CODIGO = MAT.CODIGO_ALUNO
+      INNER JOIN FK2_TB_PREINSCRICAO PRE ON PRE.CODIGO = ADM.PRE_INCRICAO
+      WHERE
+          MAT.ESTADO_MATRICULA IN ('concluido','activo','inactivo')
+          AND GCA.CODIGO_GRADE_CURRICULAR = :gradeId
+          AND GCA.CODIGO_STATUS_GRADE_CURRICULAR IN (2,3)
+          AND GCA.CODIGO_ANO_LECTIVO = :anoLectivoId
+          AND NOT EXISTS (
+              SELECT 1
+              FROM FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES X
+              INNER JOIN FK2_TB_GRADE_CURRICULAR_ALUNO Y
+                  ON Y.CODIGO = X.GRADE_CURRICULAR_ALUNO
+              WHERE Y.CODIGO_GRADE_CURRICULAR = :gradeId
+                AND X.TIPO_AVALIACAO = 2
+                AND X.NOTA >= 8
+                AND X.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+          )
+    ) t
+    WHERE JSON_VALUE(t.HORARIO, '$.pk') = TO_CHAR(:horarioId)
+    ORDER BY t.NOME_COMPLETO ASC
   `;
 
-  const params = [2, tipoProvaId, gradeId, horarioId, anoLectivoId, gradeId];
-  const rows = await this.dataSource.query(sql, params);
+  const params = {
+    tipoAvaliacao: 2,
+    tipoProvaId,
+    gradeId,
+    horarioId,
+    anoLectivoId,
+  };
+
+  const rows = await this.dataSource.query(sql, params as any);
 
   return rows.map((r: any) => ({
     ...this.transformarRowParaAluno(r, true),
@@ -403,80 +404,88 @@ private async findEstudantesParaLancamentoDeNotasByUCAndHorario2exame(
   }));
 }
 
- private async findEstudantesParaLancamentoDeNotasByUCAndHorarioRecurso(
+
+private async findEstudantesParaLancamentoDeNotasByUCAndHorarioRecurso(
   gradeId: number,
   horarioId: number,
   tipoProvaId: number,
   anoLectivoId: number,
 ): Promise<any[]> {
-  console.log("3333333333333");
-  const sql = `
+  console.log("Executando findEstudantesParaLancamentoDeNotasByUCAndHorarioRecurso...");
+
+const sql = `
+SELECT *
+FROM (
     SELECT 
-      GCA.CODIGO                          AS CODIGO_GRADEC,
-      MAT.CODIGO                          AS NUMERO_DE_MATRICULA,
-      PRE.NOME_COMPLETO                   AS NOME_COMPLETO,
-      AVA.CODIGO                          AS AVALIACAO,
-      AVA.STATUS_                          AS STATUS,
-      AVA.OBSERVACAO                      AS OBSERVACAO,
-      AVA.NOTA                            AS NOTA,
-      GCA.REF_HORARIO                     AS HORARIO,
-
-      MIN(AVA.CREATED_AT)                 AS DATALANCAMENTO,
-      MIN(AVA.UPDATE_AT)                  AS DATADEATUALIZACAO,
-      TO_CHAR(AVA.UPDATE_AT,'HH24')       AS HORA,
-      TO_CHAR(AVA.UPDATE_AT,'MI')         AS MINUTO,
-      TO_CHAR(AVA.CREATED_AT,'HH24')      AS HORACRIACAO,
-      TO_CHAR(AVA.CREATED_AT,'MI')        AS MINUTOCRIACAO,
-
-      JSON_VALUE(
-        CAST(DBMS_LOB.SUBSTR(AVA.REF_UTILIZADOR,4000,1) AS VARCHAR2(4000)),
-        '$.desc'
-      ) AS NOME_DOCENTE
-
+        GCA.CODIGO AS CODIGO_GRADEC,
+        MAT.CODIGO AS NUMERO_DE_MATRICULA,
+        PRE.NOME_COMPLETO AS NOME_COMPLETO,
+        AVA.CODIGO AS AVALIACAO,
+        AVA.STATUS_ AS STATUS,
+        AVA.OBSERVACAO AS OBSERVACAO,
+        AVA.NOTA AS NOTA,
+        MIN(DBMS_LOB.SUBSTR(GCA.REF_HORARIO, 4000, 1)) AS HORARIO,
+        MIN(AVA.CREATED_AT) AS DATALANCAMENTO,
+        MIN(AVA.UPDATE_AT) AS DATADEATUALIZACAO,
+        TO_CHAR(MIN(AVA.UPDATE_AT),'HH24') AS HORA,
+        TO_CHAR(MIN(AVA.UPDATE_AT),'MI') AS MINUTO,
+        TO_CHAR(MIN(AVA.CREATED_AT),'HH24') AS HORACRIACAO,
+        TO_CHAR(MIN(AVA.CREATED_AT),'MI') AS MINUTOCRIACAO,
+        -- Subquery para trazer o docente
+        (
+            SELECT JSON_VALUE(
+                       CAST(DBMS_LOB.SUBSTR(AVA2.REF_UTILIZADOR, 4000, 1) AS VARCHAR2(4000)), 
+                       '$.desc'
+                   )
+            FROM FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA2
+            WHERE AVA2.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+              AND AVA2.TIPO_AVALIACAO = :tipoAvaliacaoExame
+              AND AVA2.TIPO_DE_PROVA  = :tipoProvaId
+              AND ROWNUM = 1
+        ) AS NOME_DOCENTE
     FROM FK2_TB_GRADE_CURRICULAR_ALUNO GCA
     LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES AVA
-      ON AVA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
-     AND AVA.TIPO_AVALIACAO = :tipoAvaliacaoExame
-     AND AVA.TIPO_DE_PROVA  = :tipoProvaId
-
+        ON AVA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+       AND AVA.TIPO_AVALIACAO = :tipoAvaliacaoExame
+       AND AVA.TIPO_DE_PROVA  = :tipoProvaId
     INNER JOIN FK2_TB_MATRICULAS MAT ON MAT.CODIGO = GCA.CODIGO_MATRICULA
-    INNER JOIN FK2_TB_ADMISSAO ADM   ON ADM.CODIGO = MAT.CODIGO_ALUNO
+    INNER JOIN FK2_TB_ADMISSAO ADM ON ADM.CODIGO = MAT.CODIGO_ALUNO
     INNER JOIN FK2_TB_PREINSCRICAO PRE ON PRE.CODIGO = ADM.PRE_INCRICAO
-
     WHERE
-      MAT.ESTADO_MATRICULA IN ('concluido','activo','inactivo')
-      AND GCA.CODIGO_GRADE_CURRICULAR = :gradeId
-
-      AND JSON_VALUE(
-        CAST(DBMS_LOB.SUBSTR(GCA.REF_HORARIO,4000,1) AS VARCHAR2(4000)),
-        '$.pk'
-      ) = TO_CHAR(:horarioId)
-
-      AND GCA.CODIGO_STATUS_GRADE_CURRICULAR NOT IN (4, 5)
-      AND GCA.CODIGO_ANO_LECTIVO = :anoLectivoId
-
-      AND EXISTS (
-        SELECT 1
-        FROM FK2_GRADE_CURRICULAR_ALUNO_AVALIACOES EXA
-        WHERE EXA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
-          AND EXA.TIPO_AVALIACAO = 3
-          AND (EXA.NOTA < 10 OR EXA.NOTA IS NULL)
-      )
-
+        MAT.ESTADO_MATRICULA IN ('concluido','activo','inactivo')
+        AND GCA.CODIGO_GRADE_CURRICULAR = :gradeId
+        AND GCA.CODIGO_STATUS_GRADE_CURRICULAR NOT IN (4,5)
+        AND GCA.CODIGO_ANO_LECTIVO = :anoLectivoId
+        AND EXISTS (
+            SELECT 1
+            FROM FK2_TB_GRADE_CURRICULAR_ALUNO_AVALIACOES EXA
+            WHERE EXA.GRADE_CURRICULAR_ALUNO = GCA.CODIGO
+              AND EXA.TIPO_AVALIACAO = 3
+              AND (EXA.NOTA < 10 OR EXA.NOTA IS NULL)
+        )
     GROUP BY 
-      GCA.CODIGO, MAT.CODIGO, PRE.NOME_COMPLETO,
-      AVA.CODIGO, AVA.STATUS_, AVA.OBSERVACAO, AVA.NOTA,
-      GCA.REF_HORARIO, AVA.REF_UTILIZADOR
+        GCA.CODIGO, MAT.CODIGO, PRE.NOME_COMPLETO,
+        AVA.CODIGO, AVA.STATUS_, AVA.OBSERVACAO, AVA.NOTA
+) t
+WHERE JSON_VALUE(t.HORARIO, '$.pk') = TO_CHAR(:horarioId)
+ORDER BY t.NOME_COMPLETO
+`;
 
-    ORDER BY PRE.NOME_COMPLETO
-  `;
 
-  const params = [4, tipoProvaId, gradeId, horarioId, anoLectivoId];
-  const rows = await this.dataSource.query(sql, params);
+  const params = {
+    tipoAvaliacaoExame: 4,
+    tipoProvaId,
+    gradeId,
+    horarioId,
+    anoLectivoId
+  };
+
+  const rows = await this.dataSource.query(sql, params as any);
 
   return rows.map((r: any) => ({
     ...this.transformarRowParaAluno(r, true),
-    podeLancar: true
+    podeLancar: true,
+    nomeDocente: r.NOME_DOCENTE,
   }));
 }
 

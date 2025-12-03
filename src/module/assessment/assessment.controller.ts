@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, ValidationPipe, Query, Put } from '@nestjs/common';
 import { AssessmentService, NotaLancadaResponseDto } from './assessment.service';
 
-import { BuscarDisciplinasProvaDto } from './dto/buscar-disciplinas-prova.dto';
+
 import { BuscarNotasDto } from './dto/buscar-notas.dto';
 import { ApiBody, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ListarUnidadesCurricularesDto } from './dto/listar-unidades-curriculares.dto';
@@ -11,12 +11,37 @@ import { DefinirOralGradeDto } from './dto/definir-oral-grade.dto';
 import { ListarDefinirOralDto } from './dto/listar-definir-oral.dto';
 import { DefineFormulaUcOralService } from './define_formula_uc_oral.service';
 import { AtualizarStatusOralDto } from './dto/atualizar-status-oral.dto';
+import { BuscarDisciplinasProvaDto } from './dto/buscar-disciplinas-prova.dto';
+import { StudentFiltersDto } from './dto/studenty-filter.dto';
+import { NoteReleaseService } from './note_release.service';
+import { StudentEvaluationDto } from './dto/student-evaluation.dto';
 
 @Controller('assessment')
 export class AssessmentController {
-  constructor(private readonly service: AssessmentService,private readonly defineFormulaUcService:DefineFormulaUcService,private readonly oralService:DefineFormulaUcOralService) {}
-
-
+  constructor(private readonly noteReleaseService:NoteReleaseService,private readonly service: AssessmentService,private readonly defineFormulaUcService:DefineFormulaUcService,private readonly oralService:DefineFormulaUcOralService) {}
+  @Post('upsert')
+  @ApiOperation({
+    summary: 'Criar ou atualizar uma avaliação do aluno',
+    description:
+      'Faz um INSERT se a avaliação não existir ou UPDATE se já existir para o mesmo aluno, tipo de prova e época.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Avaliação criada ou atualizada com sucesso.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Dados inválidos enviados.',
+  })
+  async upsertEvaluation(@Body() dto: StudentEvaluationDto) {
+    return await this.noteReleaseService.upsertStudentEvaluation(dto);
+  }
+ @Get('filtrar')
+@ApiOperation({ summary: 'Filtrar alunos por critérios específicos' })
+@ApiResponse({ status: 200, description: 'Lista de alunos filtrados' })
+filtrarAlunos(@Query() filtro: StudentFiltersDto) {
+  return this.noteReleaseService.findstudents(filtro);
+}
 
   @Get('disciplinas-prova')
   async buscarDisciplinasProva(

@@ -2,9 +2,10 @@
 
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { BuscarDisciplinasProvaDto, FiltroNota } from './dto/buscar-disciplinas-prova.dto';
+
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { BuscarNotasDto } from './dto/buscar-notas.dto';
+import { BuscarDisciplinasProvaDto, FiltroNota } from './dto/buscar-disciplinas-prova.dto';
 
 export interface LancamentoNotaPorCursoModel {
   disciplina: string;

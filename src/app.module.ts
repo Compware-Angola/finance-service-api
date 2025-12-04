@@ -13,6 +13,7 @@ import { AssessmentModule } from './module/assessment/assessment.module';
 import { RoonModule } from './module/room/roon.module';
 import { ExemptDaysModule } from './module/exempt_days/exempt_days.module';
 import { AcademicActivitiesModule } from './module/academic_activities/academic_activities.module';
+import { TeacherModule } from './module/teacher/teacher.module';
 
 
 @Module({
@@ -64,7 +65,8 @@ TypeOrmModule.forRootAsync({
     AssessmentModule,
     RoonModule,
     ExemptDaysModule,
-    AcademicActivitiesModule
+    AcademicActivitiesModule,
+    TeacherModule
   
 
   ],

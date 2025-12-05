@@ -6,8 +6,8 @@ import { TeacherService } from './teacher.service';
 export class TeacherController {
   constructor(private readonly teacherService: TeacherService) {}
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
+  @Get('profile/:id')
+  getProfile(@Param('id') id: string) {
     return this.teacherService.profile(+id);
   }
 

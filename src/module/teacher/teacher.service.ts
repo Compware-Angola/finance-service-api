@@ -6,11 +6,12 @@ import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 
 @Injectable()
 export class TeacherService {
-  constructor(private readonly dataSource: DataSource) { }
+       constructor(private readonly dataSource: DataSource) { }
 
 
-async profile(userId: number) {
-  const query = `
+       async profile(userId: number) {
+
+              const query = `
 SELECT
         -- Dados pessoais
         td.CODIGO                         AS codigo_docente,
@@ -20,14 +21,16 @@ SELECT
         pe.NOME_DO_PAI                    AS nome_pai,
         pe.NOME_DA_MAE                    AS nome_mae,
         pe.DATA_DE_NASCIMENTO             AS data_nascimento,
-        tpdoc.DESIGNACAO                  AS tipo_documento,
         pe.NUM_DOC_IDENTIFICACAO          AS numero_documento,
         pe.DATA_DE_EMISSAO_DOCUMENTO      AS data_emissao,
         pe.ENDERECO                       AS endereco,
+        pe.TELEFONE1                      AS contacto_1,
+        pe.TELEFONE2                      AS contacto_2,
 
         -- Dados do Docente
         td.N_MECANOGRAFICO                AS n_mecanografico,
         td.FK_ESCALAO                     AS codigo_escalao,
+        td.DATAINICIODOCENCIA                     AS data_inicio_docente,
         td.TB_CATEGORIA_DOCENTE           AS codigo_categoria,
         cd.DESIGNACAO                     AS descricao_categoria,
         ed.DESIGNACAO                     AS escalao,
@@ -40,13 +43,17 @@ LEFT JOIN FK2_TB_CATEGORIA_DOCENTE cd  ON cd.codigo = td.TB_CATEGORIA_DOCENTE
 LEFT JOIN FK2_MGD_TB_CANDIDATURA   ccc ON ccc.codigo = td.FK_CANDIDATURA
 LEFT JOIN FK2_TB_GRAU_ACADEMICO    ga  ON ga.codigo = ccc.GRAU_ACADEMICO
 LEFT JOIN FK2_TB_PESSOA            pe  ON pe.pk_pessoa = json_value(tu.REF_PESSOA,'$.pk')
-LEFT JOIN FK2_TB_TIPO_DOCUMENTOS tpdoc ON pe.FK_TIPO_DOCUMENTO_IDENTIFICACAO =tpdoc.CODIGO
 LEFT JOIN FK2_TB_FACULDADE         fa  ON fa.codigo = td.faculdade
 WHERE tu.PK_UTILIZADOR = :1
 `;
 
-  const teacherData = await this.dataSource.query(query, [userId]);
-  return  await toLowerCaseKeys(teacherData);
-}
+              const teacherData = await this.dataSource.query(query, [userId]);
+
+
+              return {
+                     success: true,
+                     data: await toLowerCaseKeys(teacherData),
+              };
+       }
 
 }

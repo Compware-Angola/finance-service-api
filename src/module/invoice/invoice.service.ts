@@ -209,7 +209,7 @@ export class InvoiceService {
             estado: item.estado ?? 0,
             valorPago: item.valorPago ?? 0,
             valorATransportar: item.valorATransportar?.toString() ?? null,
-          } as   DeepPartial<InvoiceItem>,);
+          } as DeepPartial<InvoiceItem>,);
 
 
           invoiceItems.push(invoiceItem);
@@ -310,7 +310,7 @@ export class InvoiceService {
         '"f"."polo_id" AS "f_polo_id"',
         '"f"."hashValor" AS "f_hash_valor"',
         '"f"."canal" AS "f_canal"',
-        'TO_NUMBER("f"."ano_lectivo") AS "f_ano_lectivo"',
+
         'NVL(TO_CHAR("f"."estado"), \'0\') AS "f_estado"',
         '"f"."numSequenciaFactura" AS "f_num_sequencia_factura"',
         '"f"."tipo_documento_factura_id" AS "f_tipo_documento_factura_id"',
@@ -321,6 +321,9 @@ export class InvoiceService {
         '"p"."Data_Nascimento" AS "data_nascimento"',
         '"fi"."codigo" AS "fi_codigo"',
         '"fi"."CodigoFactura" AS "fi_CodigoFactura"',
+        '"fi"."taxa_iva" AS "fi_taxa_iva"',
+        '"fi"."valor_pago" AS "fi_valor_pago"',
+        '"fi"."valor_iva" AS "fi_valor_iva"',
         '"fi"."CodigoProduto" AS "fi_codigo_produto"',
         '"fi"."Quantidade" AS "fi_quantidade"',
         '"fi"."Total" AS "fi_total"',
@@ -336,6 +339,8 @@ export class InvoiceService {
         '"ppr"."Status" AS "ppr_status"',
         '"ppr"."START_DATE" AS "ppr_start_date"',
         '"ppr"."END_DATE" AS "ppr_end_date"',
+        '"ano"."Designacao" AS "ano_ano_lectivo"',
+        '"po"."designacao" AS "po_polo"',
       ])
       .leftJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.CodigoFactura = f.Codigo')
       .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
@@ -343,6 +348,13 @@ export class InvoiceService {
       .leftJoin('UMA_TB_MATRICULAS', 'm', '"m"."Codigo" = f.CodigoMatricula')
       .leftJoin('UMA_TB_ADMISSAO', 'a', 'm.Codigo_Aluno = a.codigo')
       .leftJoin('UMA_TB_PREINSCRICAO', 'p', 'a.pre_incricao = p.Codigo')
+      .leftJoin(
+        'UMA_TB_ANO_LECTIVO',
+        'ano',
+        'ano.Codigo = CAST(TRIM("f"."ano_lectivo") AS INTEGER)'
+      )
+      .leftJoin('UMA_POLOS', 'po', '"po"."id" = CAST(TRIM("f"."polo_id") AS INTEGER)')
+
       .leftJoin('UMA_PAGAMENTO_POR_REFERENCIAS', 'ppr', 'ppr.factura_codigo = f.Codigo AND ppr.Status != \'Expired\'')
 
       // FILTROS SIMPLES E RÁPIDOS (exatamente como você quer)
@@ -362,6 +374,8 @@ export class InvoiceService {
     // .limit(limit)
 
     const rawResults = await dataQuery.getRawMany();
+    console.log(rawResults);
+
 
     const paginatedInvoices = groupInvoices(rawResults);
 
@@ -484,9 +498,10 @@ function groupInvoices(rows: any[]): any[] {
         texto_hash: row.f_texto_hash,
         dataVencimento: row.f_data_vencimento,
         polo_id: row.f_polo_id,
+        polo: row.po_polo,
         hashValor: row.f_hash_valor,
         canal: row.f_canal,
-        ano_lectivo: row.f_ano_lectivo,
+        ano_lectivo: row.ano_ano_lectivo,
         estado: Number(row.f_estado),
         numSequenciaFactura: row.f_num_sequencia_factura,
         tipo_documento_factura_id: row.f_tipo_documento_factura_id,
@@ -503,7 +518,6 @@ function groupInvoices(rows: any[]): any[] {
     }
 
     const invoice = invoiceMap.get(codigo);
-    console.log(row);
 
 
     // ADICIONAR ITEM somente se fi_CodigoFactura == f_codigo
@@ -524,6 +538,9 @@ function groupInvoices(rows: any[]): any[] {
           OBS: row.fi_obs,
           Mes: row.fi_mes,
           Multa: row.fi_multa,
+          taxa_iva:row.fi_taxa_iva,
+          valor_iva:row.fi_valor_iva,
+          valor_pago:row.fi_valor_pago,
           codigo_anoLectivo: row.fi_codigo_ano_lectivo,
           DescricaoServico: row.ts_descricao,
           MesDesignacao: row.mes_designacao

@@ -35,8 +35,7 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
     .andWhere('REGEXP_LIKE(TRIM(f.CodigoMatricula), \'^[0-9]+$\')')
     .andWhere('NVL(TO_NUMBER(TRIM(mt.ano_lectivo)), 0) = :ano', { ano: codAnoLectivo })
     .andWhere('NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0) = :matricula', { matricula: codigo_matricula })
-    .andWhere('NVL(TO_CHAR(f.estado), \'0\') != \'3\''); // não traz anuladas
-
+    .andWhere('NVL(TO_CHAR(f.estado), \'0\') != \'3\''); 
   // FILTRO DE STATUS (pago / pendente)
   if (status === 'paid') {
     countQuery.andWhere('fi.valor_pago >= fi.Total');

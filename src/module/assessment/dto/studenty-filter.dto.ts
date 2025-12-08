@@ -8,10 +8,10 @@ export class StudentFiltersDto {
   @Type(() => Number)
   anoLectivoId: number;
 
-  @ApiProperty({ description: 'Código da grade curricular', example: 346 })
+  @ApiProperty({ description: 'Código do Horario', example: 346 })
   @IsNumber()
   @Type(() => Number)
-  gradeCurricularId: number;
+  horarioId: number;
 
   @ApiProperty({ description: 'Tipo de prova', example: 1 })
   @IsNumber()

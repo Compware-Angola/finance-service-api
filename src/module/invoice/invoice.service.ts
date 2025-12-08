@@ -255,42 +255,56 @@ export class InvoiceService {
   }
 
 
-  async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
-    const { limit = 10, page = 1, codigoMatricula, academicYear } = filterQuery;
+async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
+  const { limit = 10, page = 1, codigoMatricula, academicYear, status } = filterQuery;
 
-    if (isNaN(codigoMatricula) || isNaN(academicYear)) {
-      throw new BadRequestException('Parâmetros inválidos.');
-    }
+  if (!codigoMatricula || !academicYear) {
+    throw new BadRequestException('Código da matrícula e ano letivo são obrigatórios.');
+  }
 
-    const skip = (page - 1) * limit;
+  const skip = (page - 1) * limit;
 
-    // 1. CONTAGEM SEGURA
-    const totalResult = await this.invoiceRepository
-      .createQueryBuilder('f')
-      .where('REGEXP_LIKE(TRIM(f.CodigoMatricula), \'^[0-9]+$\')')
-      .andWhere('REGEXP_LIKE(TRIM(f.ano_lectivo), \'^[0-9]+$\')')
-      .andWhere('NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0) = :codigoMatricula', { codigoMatricula })
-      .andWhere('NVL(TO_NUMBER(TRIM(f.ano_lectivo)), 0) = :academicYear', { academicYear })
-      .andWhere('NVL(TO_CHAR(f.estado), \'0\') != :estado', { estado: '3' })
-      .select('COUNT(*) AS "total"')
-      .getRawOne();
+  // QueryBuilder base
+  const qb = this.invoiceRepository.createQueryBuilder('f');
 
-    const total = Number(totalResult?.total || 0);
-    const totalPages = Math.ceil(total / limit);
+  // Joins necessários (mantidos exatamente como tinhas)
+  qb.leftJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.CodigoFactura = f.Codigo')
+    .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
+    .leftJoin('UMA_MES_TEMP', 'mt', 'fi.mes_temp_id = mt.id')
+    .leftJoin('UMA_TB_MATRICULAS', 'm', 'm.Codigo = f.CodigoMatricula')
+    .leftJoin('UMA_TB_ADMISSAO', 'a', 'm.Codigo_Aluno = a.codigo')
+    .leftJoin('UMA_TB_PREINSCRICAO', 'p', 'a.pre_incricao = p.Codigo')
+    .leftJoin('UMA_TB_ANO_LECTIVO', 'ano', 'ano.Codigo = CAST(TRIM(f.ano_lectivo) AS INTEGER)')
+    .leftJoin('UMA_POLOS', 'po', '"po"."id" = CAST(TRIM(f.polo_id) AS INTEGER)')
+    .leftJoin(
+      'UMA_PAGAMENTO_POR_REFERENCIAS',
+      'ppr',
+      'ppr.factura_codigo = f.Codigo AND ppr.Status != :expired',
+      { expired: 'Expired' }
+    );
 
-    console.log(totalResult);
+  // FILTROS OBRIGATÓRIOS — SEMPRE DEVEM FUNCIONAR
+  qb.where('TRIM(f.CodigoMatricula) = :codigoMatricula', {
+    codigoMatricula: codigoMatricula.toString(),
+  })
+    .andWhere('TRIM(f.ano_lectivo) = :academicYear', {
+      academicYear: academicYear.toString(),
+    })
+    .andWhere('NVL(TO_CHAR(f.estado), \'0\') != \'3\''); 
 
+  // FILTRO OPCIONAL POR STATUS (só aplica se vier)
+if (status !== undefined && status !== null) {
+  qb.andWhere('NVL(TO_CHAR(f.estado), \'0\') = :status', { 
+    status: String(status)  
+  });
+}
 
-    if (total === 0) {
-      return { data: [], total, page, limit, totalPages };
-    }
-    const dataQuery = this.invoiceRepository
-      .createQueryBuilder('f')
-      .select([
-        '"f"."Codigo" AS "f_codigo"',
+  // SELECT com todos os campos que precisas
+  qb.select([
+    '"f"."Codigo" AS "f_codigo"',
         '"f"."DataFactura" AS "f_data_factura"',
         '"f"."TotalPreco" AS "f_total_preco"',
-        // Aqui pode manter o TO_NUMBER só no SELECT (é seguro agora)
+    
         'TO_NUMBER("f"."CodigoMatricula") AS "f_codigo_matricula"',
         '"f"."Referencia" AS "f_referencia"',
         '"f"."Desconto" AS "f_desconto"',
@@ -341,52 +355,41 @@ export class InvoiceService {
         '"ppr"."END_DATE" AS "ppr_end_date"',
         '"ano"."Designacao" AS "ano_ano_lectivo"',
         '"po"."designacao" AS "po_polo"',
-      ])
-      .leftJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.CodigoFactura = f.Codigo')
-      .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
-      .leftJoin('UMA_MES_TEMP', 'mt', 'fi.mes_temp_id = mt.id')
-      .leftJoin('UMA_TB_MATRICULAS', 'm', '"m"."Codigo" = f.CodigoMatricula')
-      .leftJoin('UMA_TB_ADMISSAO', 'a', 'm.Codigo_Aluno = a.codigo')
-      .leftJoin('UMA_TB_PREINSCRICAO', 'p', 'a.pre_incricao = p.Codigo')
-      .leftJoin(
-        'UMA_TB_ANO_LECTIVO',
-        'ano',
-        'ano.Codigo = CAST(TRIM("f"."ano_lectivo") AS INTEGER)'
-      )
-      .leftJoin('UMA_POLOS', 'po', '"po"."id" = CAST(TRIM("f"."polo_id") AS INTEGER)')
+  ]);
 
-      .leftJoin('UMA_PAGAMENTO_POR_REFERENCIAS', 'ppr', 'ppr.factura_codigo = f.Codigo AND ppr.Status != \'Expired\'')
+  qb.orderBy('f.Codigo', 'DESC')
+    .addOrderBy('fi.codigo', 'ASC')
+    .addOrderBy('ppr.id', 'ASC');
 
-      // FILTROS SIMPLES E RÁPIDOS (exatamente como você quer)
-      .where('"f"."CodigoMatricula" = :codigoMatricula', {
-        codigoMatricula: codigoMatricula.toString()
-      })
-      .andWhere('"f"."ano_lectivo" = :academicYear', {
-        academicYear: academicYear.toString()
-      })
-      .andWhere('NVL(TO_CHAR("f"."estado"), \'0\') != \'3\'')
+  // 1. CONTAGEM CORRETA (usando a mesma query)
+  const countQb = qb.clone();
+  const totalResult = await countQb.select('COUNT(DISTINCT f.Codigo)', 'total').getRawOne();
+  const total = Number(totalResult?.total || 0);
+  const totalPages = Math.ceil(total / limit);
 
-      .orderBy('"f"."Codigo"', 'DESC')
-      .addOrderBy('"fi"."codigo"', 'ASC')
-      .addOrderBy('"ppr"."id"', 'ASC')
-    // REMOVA O LIMIT AQUI SE QUISER TODAS AS FATURAS
-    // .offset(skip)
-    // .limit(limit)
+  console.log('Filtros aplicados:', { codigoMatricula, academicYear, status, total, page, limit });
 
-    const rawResults = await dataQuery.getRawMany();
-    console.log(rawResults);
-
-
-    const paginatedInvoices = groupInvoices(rawResults);
-
-    return {
-      data: paginatedInvoices,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+  if (total === 0) {
+    return { data: [], total, page, limit, totalPages };
   }
+
+  // 2. PAGINAÇÃO CORRETA
+ // qb.offset(skip).limit(limit);
+
+  const rawResults = await qb.getRawMany();
+
+  console.log('Dados encontrados:', rawResults.length);
+
+  const groupedInvoices = groupInvoices(rawResults);
+
+  return {
+    data: groupedInvoices,
+    total,
+    page,
+    limit,
+    totalPages,
+  };
+}
 
 
   /**

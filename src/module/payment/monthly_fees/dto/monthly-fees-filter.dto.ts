@@ -1,5 +1,5 @@
 // dto/monthly-fees-filter.dto.ts
-import { IsInt, IsNotEmpty } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
@@ -16,4 +16,9 @@ export class MonthlyFeesFilterDto extends PaginationQueryDto  {
   @Type(() => Number)
   @IsInt()
   codAnoLectivo: number;
+
+
+  @IsOptional()
+
+  status?: 'all' | 'paid' | 'pending'| string;
 }

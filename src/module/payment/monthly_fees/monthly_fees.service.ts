@@ -12,7 +12,13 @@ export class MonthlyFeesService {
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
   ) {}
 async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResult<any>> {
-  const { limit = 10, page = 1, codigo_matricula, codAnoLectivo } = paginationQuery;
+  const { 
+    limit = 10, 
+    page = 1, 
+    codigo_matricula, 
+    codAnoLectivo,
+    status // ← novo campo opcional no DTO
+  } = paginationQuery;
 
   if (!codigo_matricula || !codAnoLectivo) {
     return { data: [], total: 0, page, limit, totalPages: 0 };
@@ -20,7 +26,7 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
 
   const skip = (page - 1) * limit;
 
-  // 1. CONTAGEM SEGURA
+  // === QUERY DE CONTAGEM ===
   const countQuery = this.mesTempRepo
     .createQueryBuilder('mt')
     .innerJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.mes_temp_id = mt.id')
@@ -29,10 +35,17 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
     .andWhere('REGEXP_LIKE(TRIM(f.CodigoMatricula), \'^[0-9]+$\')')
     .andWhere('NVL(TO_NUMBER(TRIM(mt.ano_lectivo)), 0) = :ano', { ano: codAnoLectivo })
     .andWhere('NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0) = :matricula', { matricula: codigo_matricula })
-    .andWhere('NVL(TO_CHAR(f.estado), \'0\') != :estado', { estado: '3' })
-    .select('COUNT(DISTINCT mt.id)', 'total');
+    .andWhere('NVL(TO_CHAR(f.estado), \'0\') != \'3\''); // não traz anuladas
 
-  const totalResult = await countQuery.getRawOne();
+  // FILTRO DE STATUS (pago / pendente)
+  if (status === 'paid') {
+    countQuery.andWhere('fi.valor_pago >= fi.Total');
+  } else if (status === 'pending') {
+    countQuery.andWhere('fi.valor_pago < fi.Total');
+  }
+ 
+
+  const totalResult = await countQuery.select('COUNT(DISTINCT mt.id)', 'total').getRawOne();
   const total = Number(totalResult?.total || 0);
   const totalPages = Math.ceil(total / limit);
 
@@ -40,7 +53,7 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
     return { data: [], total, page, limit, totalPages };
   }
 
-  // 2. CONSULTA PAGINADA – TUDO EM snake_case + "aspas"
+  // === QUERY PRINCIPAL (com os dados) ===
   const dataQuery = this.mesTempRepo
     .createQueryBuilder('mt')
     .select([
@@ -68,7 +81,7 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
       'fi.preco AS "total_preco"',
       `CASE
          WHEN fi.valor_pago >= fi.Total THEN 1
-         WHEN fi.valor_pago > 0 THEN 2
+         WHEN fi.valor_pago > 0 AND fi.valor_pago < fi.Total THEN 2
          ELSE 0
        END AS "status_pagamento"`,
     ])
@@ -79,12 +92,20 @@ async findMonthlyFees(paginationQuery: MonthlyFeesFilterDto): Promise<PagedResul
     .andWhere('REGEXP_LIKE(TRIM(f.CodigoMatricula), \'^[0-9]+$\')')
     .andWhere('NVL(TO_NUMBER(TRIM(mt.ano_lectivo)), 0) = :ano', { ano: codAnoLectivo })
     .andWhere('NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0) = :matricula', { matricula: codigo_matricula })
-    .andWhere('NVL(TO_CHAR(f.estado), \'0\') != :estado', { estado: '3' })
+    .andWhere('NVL(TO_CHAR(f.estado), \'0\') != \'3\'');
+
+  // MESMO FILTRO DE STATUS NA QUERY PRINCIPAL
+  if (status === 'paid') {
+    dataQuery.andWhere('fi.valor_pago >= fi.Total');
+  } else if (status === 'pending') {
+    dataQuery.andWhere('fi.valor_pago < fi.Total');
+  }
+
+  const results = await dataQuery
     .orderBy('mt.ordem_mes', 'ASC')
     .offset(skip)
-    .limit(limit);
-
-  const results = await dataQuery.getRawMany();
+    .limit(limit)
+    .getRawMany();
 
   return {
     data: results,

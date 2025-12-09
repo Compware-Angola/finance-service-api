@@ -100,8 +100,9 @@ async findInvoicesAndItemsDetailedFlat(
       // PRODUTO
       '"tp"."Descricao" AS "Descricao_produto"',
     ])
-    .offset(skip)
-    .limit(limit)
+    // .distinct(true) 
+   // .offset(skip)
+   // .limit(limit)
     .orderBy('"p"."DataRegisto"', 'DESC')
     .addOrderBy('"f"."DataFactura"', 'DESC')
     .addOrderBy('"fi"."codigo"', 'ASC')

@@ -8,7 +8,7 @@ import { PaymentModule } from './module/payment/payment.module';
 import { BullModule } from '@nestjs/bullmq';
 import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
 import { BullMQWorkerService } from './bullmq-worker.service';
-import { DefaultNamingStrategy } from 'typeorm';
+
 import { AssessmentModule } from './module/assessment/assessment.module';
 import { RoonModule } from './module/room/roon.module';
 import { ExemptDaysModule } from './module/exempt_days/exempt_days.module';
@@ -66,13 +66,15 @@ TypeOrmModule.forRootAsync({
     RoonModule,
     ExemptDaysModule,
     AcademicActivitiesModule,
-    TeacherModule
+    TeacherModule,
+  
   
 
   ],
   providers: [
-    BullMQWorkerService, 
+    BullMQWorkerService
   ],
+
 
 
 })

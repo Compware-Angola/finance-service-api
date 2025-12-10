@@ -194,7 +194,7 @@ export class InvoiceService {
             CodigoFactura: savedInvoice.Codigo,
             quantidade: item.Quantidade ?? 1, // default 1 se não enviar
             total: item.Total ?? 0,
-            obs: item.obs?.substring(0, 45) ?? `Item fatura ${savedInvoice.Codigo}`,
+            obs: (item.obs ?? `Item fatura ${savedInvoice.Codigo}`).substring(0, 45),
             taxaIva: item.taxaIva ?? 0,
             valorIva: item.valorIva ?? 0,
             preco: item.preco ?? 0,
@@ -279,9 +279,7 @@ async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<Pag
     .leftJoin(
       'UMA_PAGAMENTO_POR_REFERENCIAS',
       'ppr',
-      'ppr.factura_codigo = f.Codigo AND ppr.Status != :expired',
-      { expired: 'Expired' }
-    );
+      'ppr.factura_codigo = f.Codigo');
 
   // FILTROS OBRIGATÓRIOS — SEMPRE DEVEM FUNCIONAR
   qb.where('TRIM(f.CodigoMatricula) = :codigoMatricula', {
@@ -353,6 +351,7 @@ if (status !== undefined && status !== null) {
         '"ppr"."Status" AS "ppr_status"',
         '"ppr"."START_DATE" AS "ppr_start_date"',
         '"ppr"."END_DATE" AS "ppr_end_date"',
+        '"ppr"."ENTITY_ID" AS "ppr_entidade"',
         '"ano"."Designacao" AS "ano_ano_lectivo"',
         '"po"."designacao" AS "po_polo"',
   ]);
@@ -561,6 +560,7 @@ function groupInvoices(rows: any[]): any[] {
           AMOUNT: row.ppr_amount,
           START_DATE: row.ppr_start_date,
           END_DATE: row.ppr_end_date,
+          ENTITY_ID:row.ppr_entidade,
           Status: row.ppr_status
         });
       }

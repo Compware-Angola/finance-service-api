@@ -10,10 +10,8 @@ import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiatio
 import { BullMQWorkerService } from './bullmq-worker.service';
 
 import { AssessmentModule } from './module/assessment/assessment.module';
-import { RoonModule } from './module/room/roon.module';
-import { ExemptDaysModule } from './module/exempt_days/exempt_days.module';
+
 import { AcademicActivitiesModule } from './module/academic_activities/academic_activities.module';
-import { TeacherModule } from './module/teacher/teacher.module';
 
 
 @Module({
@@ -63,10 +61,9 @@ TypeOrmModule.forRootAsync({
     PaymentModule,
     DebtNegotiationModule,
     AssessmentModule,
-    RoonModule,
-    ExemptDaysModule,
+   
     AcademicActivitiesModule,
-    TeacherModule,
+   
   
   
 

@@ -425,9 +425,6 @@ WHERE rn BETWEEN :startRow AND :endRow
   const total = Number(totalResult[0]?.TOTAL ?? 0);
   const totalPages = Math.ceil(total / limit);
 
-  // Mantém a tua lógica atual
-
-  console.log(rawResults);
   
   const groupedInvoices = groupInvoices(rawResults);
 

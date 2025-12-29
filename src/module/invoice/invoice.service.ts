@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, EntityManager, IsNull, Repository } from 'typeorm';
+import { DataSource, DeepPartial, EntityManager, IsNull, Repository } from 'typeorm';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { Invoice } from './entities/invoice.entity';
@@ -25,6 +25,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 export class InvoiceService {
   constructor(
     @InjectQueue('invoice_service')
+  
     private readonly invoiceQueue: Queue,
 
     @InjectRepository(Invoice)
@@ -40,6 +41,7 @@ export class InvoiceService {
     @InjectRepository(InvoiceItem)
     private readonly invoiceItemRepository: Repository<InvoiceItem>,
     private readonly hashService: InvoiceNumberingAndHashService,
+      private readonly dataSource: DataSource,
   ) { Invoice.setRepository(this.invoiceRepository); InvoiceItem.setRepository(this.invoiceItemRepository) }
   /**
    * Cria e salva uma nova fatura no banco de dados, "incluindo" a geração de hash e sequenciamento.
@@ -255,130 +257,134 @@ export class InvoiceService {
   }
 
 
-async findByEnrollmentCode(filterQuery: InvoiceFilterEnrollmentDto): Promise<PagedResult<any>> {
-  const { limit = 10, page = 1, codigoMatricula, academicYear, status } = filterQuery;
+async findByEnrollmentCode(
+  filterQuery: InvoiceFilterEnrollmentDto
+): Promise<PagedResult<any>> {
+
+  const {
+    limit = 10,
+    page = 1,
+    codigoMatricula,
+    academicYear,
+    status,
+  } = filterQuery;
 
   if (!codigoMatricula || !academicYear) {
-    throw new BadRequestException('Código da matrícula e ano letivo são obrigatórios.');
+    throw new BadRequestException(
+      'Código da matrícula e ano letivo são obrigatórios.'
+    );
   }
 
-  const skip = (page - 1) * limit;
+  // Oracle pagination (ROW_NUMBER)
+  const startRow = (page - 1) * limit + 1;
+  const endRow = page * limit;
 
-  // QueryBuilder base
-  const qb = this.invoiceRepository.createQueryBuilder('f');
+  /* ============================
+     QUERY PAGINADA (DADOS)
+     ============================ */
+  const dataSql = `
+    SELECT *
+    FROM (
+        SELECT
+            f.Codigo                    AS f_codigo,
+            f.DataFactura               AS f_data_factura,
+            f.TotalPreco                AS f_total_preco,
+            f.CodigoMatricula           AS f_codigo_matricula,
+            f.Referencia                AS f_referencia,
+            f.Desconto                  AS f_desconto,
+            f.Troco                     AS f_troco,
+            f.totalIVA                  AS f_total_iva,
+            f.TotalMulta                AS f_total_multa,
+            f.total_incidencia          AS f_total_incidencia,
+            f.total_retencao            AS f_total_retencao,
+            f.ValorAPagar               AS f_valor_a_pagar,
+            f.ValorEntregue             AS f_valor_entregue,
+            f.ValorAPagarExtenso        AS f_valor_a_pagar_extenso,
+            f.Descricao                 AS f_descricao,
+            f.NextFactura               AS f_next_factura,
+            f.texto_hash                AS f_texto_hash,
+            f.dataVencimento            AS f_data_vencimento,
+            f.polo_id                   AS f_polo_id,
+            f.hashValor                 AS f_hash_valor,
+            f.canal                     AS f_canal,
+            f.estado                    AS f_estado,
+            f.numSequenciaFactura       AS f_num_sequencia_factura,
+            f.tipo_documento_factura_id AS f_tipo_documento_factura_id,
 
-  // Joins necessários (mantidos exatamente como tinhas)
-  qb.leftJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.CodigoFactura = f.Codigo')
-    .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
-    .leftJoin('UMA_MES_TEMP', 'mt', 'fi.mes_temp_id = mt.id')
-    .leftJoin('UMA_TB_MATRICULAS', 'm', 'm.Codigo = f.CodigoMatricula')
-    .leftJoin('UMA_TB_ADMISSAO', 'a', 'm.Codigo_Aluno = a.codigo')
-    .leftJoin('UMA_TB_PREINSCRICAO', 'p', 'a.pre_incricao = p.Codigo')
-    .leftJoin('UMA_TB_ANO_LECTIVO', 'ano', 'ano.Codigo = CAST(TRIM(f.ano_lectivo) AS INTEGER)')
-    .leftJoin('UMA_POLOS', 'po', '"po"."id" = CAST(TRIM(f.polo_id) AS INTEGER)')
-    .leftJoin(
-      'UMA_PAGAMENTO_POR_REFERENCIAS',
-      'ppr',
-      'ppr.factura_codigo = f.Codigo');
+            p.Nome_Completo             AS nome_completo_aluno,
+            p.Email                     AS email_aluno,
 
-  // FILTROS OBRIGATÓRIOS — SEMPRE DEVEM FUNCIONAR
-  qb.where('TRIM(f.CodigoMatricula) = :codigoMatricula', {
-    codigoMatricula: codigoMatricula.toString(),
-  })
-    .andWhere('TRIM(f.ano_lectivo) = :academicYear', {
-      academicYear: academicYear.toString(),
-    })
-    .andWhere('NVL(TO_CHAR(f.estado), \'0\') != \'3\''); 
+            fi.codigo                   AS fi_codigo,
+            fi.Total                    AS fi_total,
 
-  // FILTRO OPCIONAL POR STATUS (só aplica se vier)
-if (status !== undefined && status !== null) {
-  qb.andWhere('NVL(TO_CHAR(f.estado), \'0\') = :status', { 
-    status: String(status)  
-  });
-}
+            ts.Descricao                AS ts_descricao,
+            mt.designacao               AS mes_designacao,
 
-  // SELECT com todos os campos que precisas
-  qb.select([
-    '"f"."Codigo" AS "f_codigo"',
-        '"f"."DataFactura" AS "f_data_factura"',
-        '"f"."TotalPreco" AS "f_total_preco"',
-    
-        'TO_NUMBER("f"."CodigoMatricula") AS "f_codigo_matricula"',
-        '"f"."Referencia" AS "f_referencia"',
-        '"f"."Desconto" AS "f_desconto"',
-        '"f"."Troco" AS "f_troco"',
-        '"f"."totalIVA" AS "f_total_iva"',
-        '"f"."TotalMulta" AS "f_total_multa"',
-        '"f"."total_incidencia" AS "f_total_incidencia"',
-        '"f"."total_retencao" AS "f_total_retencao"',
-        '"f"."ValorAPagar" AS "f_valor_a_pagar"',
-        '"f"."ValorEntregue" AS "f_valor_entregue"',
-        '"f"."ValorAPagarExtenso" AS "f_valor_a_pagar_extenso"',
-        '"f"."Descricao" AS "f_descricao"',
-        '"f"."NextFactura" AS "f_next_factura"',
-        '"f"."next" AS "f_next"',
-        '"f"."texto_hash" AS "f_texto_hash"',
-        '"f"."dataVencimento" AS "f_data_vencimento"',
-        '"f"."polo_id" AS "f_polo_id"',
-        '"f"."hashValor" AS "f_hash_valor"',
-        '"f"."canal" AS "f_canal"',
+            ppr.id                      AS ppr_id,
+            ppr."REFERENCE"             AS ppr_reference,
+            ppr."AMOUNT"                AS ppr_amount,
 
-        'NVL(TO_CHAR("f"."estado"), \'0\') AS "f_estado"',
-        '"f"."numSequenciaFactura" AS "f_num_sequencia_factura"',
-        '"f"."tipo_documento_factura_id" AS "f_tipo_documento_factura_id"',
-        '"p"."Nome_Completo" AS "nome_completo_aluno"',
-        '"p"."Bilhete_Identidade" AS "bi_aluno"',
-        '"p"."Email" AS "email_aluno"',
-        '"p"."Contactos_Telefonicos" AS "contactos_telefonicos"',
-        '"p"."Data_Nascimento" AS "data_nascimento"',
-        '"fi"."codigo" AS "fi_codigo"',
-        '"fi"."CodigoFactura" AS "fi_CodigoFactura"',
-        '"fi"."taxa_iva" AS "fi_taxa_iva"',
-        '"fi"."valor_pago" AS "fi_valor_pago"',
-        '"fi"."valor_iva" AS "fi_valor_iva"',
-        '"fi"."CodigoProduto" AS "fi_codigo_produto"',
-        '"fi"."Quantidade" AS "fi_quantidade"',
-        '"fi"."Total" AS "fi_total"',
-        '"fi"."OBS" AS "fi_obs"',
-        '"fi"."Mes" AS "fi_mes"',
-        '"fi"."Multa" AS "fi_multa"',
-        '"fi"."preco" AS "fi_preco"',
-        '"ts"."Descricao" AS "ts_descricao"',
-        '"mt"."designacao" AS "mes_designacao"',
-        '"ppr"."id" AS "ppr_id"',
-        '"ppr"."REFERENCE" AS "ppr_reference"',
-        '"ppr"."AMOUNT" AS "ppr_amount"',
-        '"ppr"."Status" AS "ppr_status"',
-        '"ppr"."START_DATE" AS "ppr_start_date"',
-        '"ppr"."END_DATE" AS "ppr_end_date"',
-        '"ppr"."ENTITY_ID" AS "ppr_entidade"',
-        '"ano"."Designacao" AS "ano_ano_lectivo"',
-        '"po"."designacao" AS "po_polo"',
-  ]);
+            ROW_NUMBER() OVER (
+              ORDER BY f.Codigo DESC, fi.codigo ASC, ppr.id ASC
+            ) AS rn
+        FROM FK2_FACTURA f
+        LEFT JOIN FK2_FACTURA_ITEMS fi
+               ON fi.CodigoFactura = f.Codigo
+        LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+               ON ts.Codigo = fi.CodigoProduto
+        LEFT JOIN FK2_MES_TEMP mt
+               ON mt.id = fi.mes_temp_id
+        LEFT JOIN FK2_TB_MATRICULAS m
+               ON m.Codigo = f.CodigoMatricula
+        LEFT JOIN FK2_TB_ADMISSAO a
+               ON a.codigo = m.Codigo_Aluno
+        LEFT JOIN FK2_TB_PREINSCRICAO p
+               ON p.Codigo = a.pre_incricao
+        LEFT JOIN FK2_PAGAMENTO_POR_REFERENCIAS ppr
+               ON ppr.factura_codigo = f.Codigo
+        WHERE
+            f.CodigoMatricula = :codigoMatricula
+            AND f.ano_lectivo = :academicYear
+            AND f.estado <> 3
+            AND (:status IS NULL OR f.estado = :status)
+    )
+    WHERE rn BETWEEN :startRow AND :endRow
+  `;
 
-  qb.orderBy('f.Codigo', 'DESC')
-    .addOrderBy('fi.codigo', 'ASC')
-    .addOrderBy('ppr.id', 'ASC');
+  const rawResults = await this.dataSource.query(dataSql, {
+    codigoMatricula,
+    academicYear,
+    status: status ?? null,
+    startRow,
+    endRow,
+  } as any);
 
-  // 1. CONTAGEM CORRETA (usando a mesma query)
-  const countQb = qb.clone();
-  const totalResult = await countQb.select('COUNT(DISTINCT f.Codigo)', 'total').getRawOne();
-  const total = Number(totalResult?.total || 0);
+  /* ============================
+     QUERY TOTAL (COUNT)
+     ============================ */
+  const countSql = `
+    SELECT COUNT(*) AS TOTAL
+    FROM FK2_FACTURA
+    WHERE
+        CodigoMatricula = :codigoMatricula
+        AND ano_lectivo = :academicYear
+        AND estado <> 3
+        AND (:status IS NULL OR estado = :status)
+  `;
+
+  const totalResult = await this.dataSource.query(countSql, {
+    codigoMatricula,
+    academicYear,
+    status: status ?? null,
+  } as any);
+
+  const total = Number(totalResult[0]?.TOTAL ?? 0);
   const totalPages = Math.ceil(total / limit);
 
-  console.log('Filtros aplicados:', { codigoMatricula, academicYear, status, total, page, limit });
+  // Mantém a tua lógica atual
 
-  if (total === 0) {
-    return { data: [], total, page, limit, totalPages };
-  }
-
-  // 2. PAGINAÇÃO CORRETA
- // qb.offset(skip).limit(limit);
-
-  const rawResults = await qb.getRawMany();
-
-  console.log('Dados encontrados:', rawResults.length);
-
+  console.log(rawResults);
+  
   const groupedInvoices = groupInvoices(rawResults);
 
   return {
@@ -389,6 +395,8 @@ if (status !== undefined && status !== null) {
     totalPages,
   };
 }
+
+
 
 
   /**

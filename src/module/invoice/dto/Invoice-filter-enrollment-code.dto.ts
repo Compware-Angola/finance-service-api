@@ -27,6 +27,13 @@ export class InvoiceFilterEnrollmentDto extends PaginationQueryDto {
   @Type(() => Number)
   academicYear:number
 
+    @ApiProperty({
+    description:'Status da fatura',
+    example:1,
+    required:false,
+    type:Number,
+  })
+
 @IsOptional()
   @Type(() => Number)
   status?:number

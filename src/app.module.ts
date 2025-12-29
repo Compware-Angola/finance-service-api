@@ -12,6 +12,8 @@ import { BullMQWorkerService } from './bullmq-worker.service';
 import { AssessmentModule } from './module/assessment/assessment.module';
 
 import { AcademicActivitiesModule } from './module/academic_activities/academic_activities.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { PaymentExpirationCron } from './module/jobs/payment-expiration.cron';
 
 
 @Module({
@@ -65,11 +67,12 @@ TypeOrmModule.forRootAsync({
     AcademicActivitiesModule,
    
   
-  
+   ScheduleModule.forRoot(),
 
   ],
   providers: [
-    BullMQWorkerService
+    BullMQWorkerService,
+    PaymentExpirationCron
   ],
 
 

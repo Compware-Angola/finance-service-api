@@ -283,72 +283,116 @@ async findByEnrollmentCode(
      QUERY PAGINADA (DADOS)
      ============================ */
   const dataSql = `
-    SELECT *
-    FROM (
-        SELECT
-            f.Codigo                    AS f_codigo,
-            f.DataFactura               AS f_data_factura,
-            f.TotalPreco                AS f_total_preco,
-            f.CodigoMatricula           AS f_codigo_matricula,
-            f.Referencia                AS f_referencia,
-            f.Desconto                  AS f_desconto,
-            f.Troco                     AS f_troco,
-            f.totalIVA                  AS f_total_iva,
-            f.TotalMulta                AS f_total_multa,
-            f.total_incidencia          AS f_total_incidencia,
-            f.total_retencao            AS f_total_retencao,
-            f.ValorAPagar               AS f_valor_a_pagar,
-            f.ValorEntregue             AS f_valor_entregue,
-            f.ValorAPagarExtenso        AS f_valor_a_pagar_extenso,
-            f.Descricao                 AS f_descricao,
-            f.NextFactura               AS f_next_factura,
-            f.texto_hash                AS f_texto_hash,
-            f.dataVencimento            AS f_data_vencimento,
-            f.polo_id                   AS f_polo_id,
-            f.hashValor                 AS f_hash_valor,
-            f.canal                     AS f_canal,
-            f.estado                    AS f_estado,
-            f.numSequenciaFactura       AS f_num_sequencia_factura,
-            f.tipo_documento_factura_id AS f_tipo_documento_factura_id,
+  SELECT *
+FROM (
+    SELECT
+        -- ================= FACTURA =================
+        f.Codigo                    AS f_codigo,
+        f.DataFactura               AS f_data_factura,
+        f.TotalPreco                AS f_total_preco,
+        TO_NUMBER(f.CodigoMatricula) AS f_codigo_matricula,
+        f.Referencia                AS f_referencia,
+        f.Desconto                  AS f_desconto,
+        f.Troco                     AS f_troco,
+        f.totalIVA                  AS f_total_iva,
+        f.TotalMulta                AS f_total_multa,
+        f.total_incidencia          AS f_total_incidencia,
+        f.total_retencao            AS f_total_retencao,
+        f.ValorAPagar               AS f_valor_a_pagar,
+        f.ValorEntregue             AS f_valor_entregue,
+        f.ValorAPagarExtenso        AS f_valor_a_pagar_extenso,
+        f.Descricao                 AS f_descricao,
+        f.NextFactura               AS f_next_factura,
+        f.next                      AS f_next,
+        f.texto_hash                AS f_texto_hash,
+        f.dataVencimento            AS f_data_vencimento,
+        f.polo_id                   AS f_polo_id,
+        f.hashValor                 AS f_hash_valor,
+        f.canal                     AS f_canal,
+        NVL(TO_CHAR(f.estado), '0') AS f_estado,
+        f.numSequenciaFactura       AS f_num_sequencia_factura,
+        f.tipo_documento_factura_id AS f_tipo_documento_factura_id,
 
-            p.Nome_Completo             AS nome_completo_aluno,
-            p.Email                     AS email_aluno,
+        -- ================= ALUNO =================
+        p.Nome_Completo             AS nome_completo_aluno,
+        p.Bilhete_Identidade        AS bi_aluno,
+        p.Email                     AS email_aluno,
+        p.Contactos_Telefonicos     AS contactos_telefonicos,
+        p.Data_Nascimento           AS data_nascimento,
 
-            fi.codigo                   AS fi_codigo,
-            fi.Total                    AS fi_total,
+        -- ================= FACTURA ITEMS =================
+        fi.codigo                   AS fi_codigo,
+        fi.CodigoFactura            AS fi_CodigoFactura,
+        fi.taxa_iva                 AS fi_taxa_iva,
+        fi.valor_pago               AS fi_valor_pago,
+        fi.valor_iva                AS fi_valor_iva,
+        fi.CodigoProduto            AS fi_codigo_produto,
+        fi.Quantidade               AS fi_quantidade,
+        fi.Total                    AS fi_total,
+        fi.OBS                      AS fi_obs,
+        fi.Mes                      AS fi_mes,
+        fi.Multa                    AS fi_multa,
+        fi.preco                    AS fi_preco,
 
-            ts.Descricao                AS ts_descricao,
-            mt.designacao               AS mes_designacao,
+        -- ================= SERVIÇOS / MESES =================
+        ts.Descricao                AS ts_descricao,
+        mt.designacao               AS mes_designacao,
 
-            ppr.id                      AS ppr_id,
-            ppr."REFERENCE"             AS ppr_reference,
-            ppr."AMOUNT"                AS ppr_amount,
+        -- ================= PAGAMENTO POR REFERÊNCIA =================
+        ppr.id                      AS ppr_id,
+        ppr."REFERENCE"             AS ppr_reference,
+        ppr."AMOUNT"                AS ppr_amount,
+        ppr."STATUS_"                AS ppr_status,
+        ppr."START_DATE"            AS ppr_start_date,
+        ppr."END_DATE"              AS ppr_end_date,
+        ppr."ENTITY_ID"             AS ppr_entidade,
 
-            ROW_NUMBER() OVER (
-              ORDER BY f.Codigo DESC, fi.codigo ASC, ppr.id ASC
-            ) AS rn
-        FROM FK2_FACTURA f
-        LEFT JOIN FK2_FACTURA_ITEMS fi
-               ON fi.CodigoFactura = f.Codigo
-        LEFT JOIN FK2_TB_TIPO_SERVICOS ts
-               ON ts.Codigo = fi.CodigoProduto
-        LEFT JOIN FK2_MES_TEMP mt
-               ON mt.id = fi.mes_temp_id
-        LEFT JOIN FK2_TB_MATRICULAS m
-               ON m.Codigo = f.CodigoMatricula
-        LEFT JOIN FK2_TB_ADMISSAO a
-               ON a.codigo = m.Codigo_Aluno
-        LEFT JOIN FK2_TB_PREINSCRICAO p
-               ON p.Codigo = a.pre_incricao
-        LEFT JOIN FK2_PAGAMENTO_POR_REFERENCIAS ppr
-               ON ppr.factura_codigo = f.Codigo
-        WHERE
-            f.CodigoMatricula = :codigoMatricula
-            AND f.ano_lectivo = :academicYear
-            AND f.estado <> 3
-            AND (:status IS NULL OR f.estado = :status)
-    )
-    WHERE rn BETWEEN :startRow AND :endRow
+        -- ================= ANO LECTIVO / POLO =================
+        ano.Designacao              AS ano_ano_lectivo,
+        po.designacao               AS po_polo,
+
+        -- ================= PAGINAÇÃO =================
+        ROW_NUMBER() OVER (
+            ORDER BY f.Codigo DESC, fi.codigo ASC, ppr.id ASC
+        ) AS rn
+
+    FROM FK2_FACTURA f
+
+    LEFT JOIN FK2_FACTURA_ITEMS fi
+           ON fi.CodigoFactura = f.Codigo
+
+    LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+           ON ts.Codigo = fi.CodigoProduto
+
+    LEFT JOIN FK2_MES_TEMP mt
+           ON mt.id = fi.mes_temp_id
+
+    LEFT JOIN FK2_TB_MATRICULAS m
+           ON m.Codigo = f.CodigoMatricula
+
+    LEFT JOIN FK2_TB_ADMISSAO a
+           ON a.codigo = m.Codigo_Aluno
+
+    LEFT JOIN FK2_TB_PREINSCRICAO p
+           ON p.Codigo = a.pre_incricao
+
+    LEFT JOIN FK2_PAGAMENTO_POR_REFERENCIAS ppr
+           ON ppr.factura_codigo = f.Codigo
+
+    LEFT JOIN FK2_TB_ANO_LECTIVO ano
+           ON ano.Codigo = f.ano_lectivo
+
+    LEFT JOIN FK2_POLOS po
+           ON po.id = f.polo_id
+
+    WHERE
+        f.CodigoMatricula = :codigoMatricula
+        AND f.ano_lectivo = :academicYear
+        AND f.estado <> 3
+        AND (:status IS NULL OR f.estado = :status)
+)
+WHERE rn BETWEEN :startRow AND :endRow
+
   `;
 
   const rawResults = await this.dataSource.query(dataSql, {
@@ -481,99 +525,111 @@ async findByEnrollmentCode(
 
 }
 function groupInvoices(rows: any[]): any[] {
-  const invoiceMap = new Map<string, any>();
+  const invoiceMap = new Map<number, any>();
 
-  rows.forEach(row => {
-    const codigo = row.f_codigo;
+  for (const row of rows) {
+    const codigo = row.F_CODIGO;
+    if (!codigo) continue;
 
+    /* ========================
+       FACTURA (HEADER)
+       ======================== */
     if (!invoiceMap.has(codigo)) {
       invoiceMap.set(codigo, {
         Codigo: codigo,
-        DataFactura: row.f_data_factura,
-        TotalPreco: row.f_total_preco,
-        CodigoMatricula: row.f_codigo_matricula,
-        Referencia: row.f_referencia,
-        Desconto: row.f_desconto,
-        Troco: row.f_troco,
-        totalIVA: row.f_total_iva,
-        TotalMulta: row.f_total_multa,
-        total_incidencia: row.f_total_incidencia,
-        total_retencao: row.f_total_retencao,
-        ValorAPagar: row.f_valor_a_pagar,
-        ValorEntregue: row.f_valor_entregue,
-        ValorAPagarExtenso: row.f_valor_a_pagar_extenso,
-        Descricao: row.f_descricao,
-        NextFactura: row.f_next_factura,
-        next: row.f_next,
-        texto_hash: row.f_texto_hash,
-        dataVencimento: row.f_data_vencimento,
-        polo_id: row.f_polo_id,
-        polo: row.po_polo,
-        hashValor: row.f_hash_valor,
-        canal: row.f_canal,
-        ano_lectivo: row.ano_ano_lectivo,
-        estado: Number(row.f_estado),
-        numSequenciaFactura: row.f_num_sequencia_factura,
-        tipo_documento_factura_id: row.f_tipo_documento_factura_id,
-        // DADOS DO ALUNO
-        NomeCompletoAluno: row.nome_completo_aluno,
-        BI_Aluno: row.bi_aluno,
-        EmailAluno: row.email_aluno,
-        Contactos_Telefonicos: row.contactos_telefonicos,
-        Data_Nascimento: row.data_nascimento,
-        // ITENS E PAGAMENTOS
+        DataFactura: row.F_DATA_FACTURA,
+        TotalPreco: row.F_TOTAL_PRECO,
+        CodigoMatricula: row.F_CODIGO_MATRICULA,
+        Referencia: row.F_REFERENCIA,
+        Desconto: row.F_DESCONTO,
+        Troco: row.F_TROCO,
+        totalIVA: row.F_TOTAL_IVA,
+        TotalMulta: row.F_TOTAL_MULTA,
+        total_incidencia: row.F_TOTAL_INCIDENCIA,
+        total_retencao: row.F_TOTAL_RETENCAO,
+        ValorAPagar: row.F_VALOR_A_PAGAR,
+        ValorEntregue: row.F_VALOR_ENTREGUE,
+        ValorAPagarExtenso: row.F_VALOR_A_PAGAR_EXTENSO,
+        Descricao: row.F_DESCRICAO,
+        NextFactura: row.F_NEXT_FACTURA,
+        next: row.F_NEXT,
+        texto_hash: row.F_TEXTO_HASH,
+        dataVencimento: row.F_DATA_VENCIMENTO,
+        polo_id: row.F_POLO_ID,
+        polo: row.PO_POLO,
+        hashValor: row.F_HASH_VALOR,
+        canal: row.F_CANAL,
+        estado: Number(row.F_ESTADO),
+        numSequenciaFactura: row.F_NUM_SEQUENCIA_FACTURA,
+        tipo_documento_factura_id: row.F_TIPO_DOCUMENTO_FACTURA_ID,
+        ano_lectivo: row.ANO_ANO_LECTIVO,
+
+        // ================= ALUNO =================
+     
+          NomeCompleto: row.NOME_COMPLETO_ALUNO,
+          BI: row.BI_ALUNO,
+          Email: row.EMAIL_ALUNO,
+          Contactos: row.CONTACTOS_TELEFONICOS,
+          DataNascimento: row.DATA_NASCIMENTO,
+       
+
+        // ================= LISTAS =================
         itens: [],
-        referencias_pagamento: []
+        referencias_pagamento: [],
       });
     }
 
     const invoice = invoiceMap.get(codigo);
 
-
-    // ADICIONAR ITEM somente se fi_CodigoFactura == f_codigo
-    if (row.f_codigo != undefined && row.fi_CodigoFactura === row.f_codigo) {
-      const itemKey = `${row.fi_mes}-${row.fi_codigo_produto}-${row.fi_codigo_ano_lectivo}`;
-      const itemExists = invoice.itens.some((i: any) =>
-        `${i.Mes}-${i.CodigoProduto}-${i.codigo_anoLectivo}` === itemKey
+    /* ========================
+       ITENS DA FACTURA
+       ======================== */
+    if (row.FI_CODIGO && row.FI_CODIGOFACTURA === codigo) {
+      const itemExists = invoice.itens.some(
+        (i: any) => i.codigo === row.FI_CODIGO
       );
 
       if (!itemExists) {
         invoice.itens.push({
-          codigo: row.fi_codigo,
-          CodigoProduto: row.fi_codigo_produto,
-          CodigoFactura: row.fi_CodigoFactura,
-          Quantidade: row.fi_quantidade,
-          Total: row.fi_total,
-          preco: row.fi_preco,
-          OBS: row.fi_obs,
-          Mes: row.fi_mes,
-          Multa: row.fi_multa,
-          taxa_iva:row.fi_taxa_iva,
-          valor_iva:row.fi_valor_iva,
-          valor_pago:row.fi_valor_pago,
-          codigo_anoLectivo: row.fi_codigo_ano_lectivo,
-          DescricaoServico: row.ts_descricao,
-          MesDesignacao: row.mes_designacao
+          codigo: row.FI_CODIGO,
+          CodigoFactura: row.FI_CODIGOFACTURA,
+          CodigoProduto: row.FI_CODIGO_PRODUTO,
+          Quantidade: row.FI_QUANTIDADE,
+          Total: row.FI_TOTAL,
+          preco: row.FI_PRECO,
+          OBS: row.FI_OBS,
+          Mes: row.FI_MES,
+          Multa: row.FI_MULTA,
+          taxa_iva: row.FI_TAXA_IVA,
+          valor_iva: row.FI_VALOR_IVA,
+          valor_pago: row.FI_VALOR_PAGO,
+          DescricaoServico: row.TS_DESCRICAO,
+          MesDesignacao: row.MES_DESIGNACAO,
         });
       }
     }
 
-    // ADICIONAR REFERÊNCIA DE PAGAMENTO
-    if (row.ppr_id != undefined) {
-      const refExists = invoice.referencias_pagamento.some((r: any) => r.id === row.ppr_id);
+    /* ========================
+       REFERÊNCIAS DE PAGAMENTO
+       ======================== */
+    if (row.PPR_ID) {
+      const refExists = invoice.referencias_pagamento.some(
+        (r: any) => r.id === row.PPR_ID
+      );
+
       if (!refExists) {
         invoice.referencias_pagamento.push({
-          id: row.ppr_id,
-          REFERENCE: row.ppr_reference,
-          AMOUNT: row.ppr_amount,
-          START_DATE: row.ppr_start_date,
-          END_DATE: row.ppr_end_date,
-          ENTITY_ID:row.ppr_entidade,
-          Status: row.ppr_status
+          id: row.PPR_ID,
+          REFERENCE: row.PPR_REFERENCE,
+          AMOUNT: row.PPR_AMOUNT,
+          Status: row.PPR_STATUS,
+          START_DATE: row.PPR_START_DATE,
+          END_DATE: row.PPR_END_DATE,
+          ENTITY_ID: row.PPR_ENTIDADE,
         });
       }
     }
-  });
+  }
 
   return Array.from(invoiceMap.values());
 }

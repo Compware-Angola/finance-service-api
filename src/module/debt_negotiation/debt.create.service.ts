@@ -150,8 +150,8 @@ export class CreateDebtNegotiationService {
       const faturaEntrada = await this.invoiceService.create({
         ...baseInvoiceDto,
         Descricao: isTotal
-          ? 'Renegociação de Dívida - Pagamento Total'
-          : 'Renegociação de Dívida - Entrada 50%',
+          ? 'Negociação de Dívida - Pagamento Total'
+          : 'Negociação de Dívida - Entrada 50%',
         TotalPreco: primeiroValorApagar,
         ValorAPagar: primeiroValorApagar,
 
@@ -164,7 +164,7 @@ export class CreateDebtNegotiationService {
       if (!isTotal && valorRestante > 0) {
         faturaSaldo = await this.invoiceService.create({
           ...baseInvoiceDto,
-          Descricao: 'Renegociação de Dívida - Saldo Restante (Parcelado)',
+          Descricao: 'Negociação de Dívida - Saldo Restante (Parcelado)',
           TotalPreco: valorRestante,
           ValorAPagar: valorRestante,
           // Opcional: definir vencimento futuro

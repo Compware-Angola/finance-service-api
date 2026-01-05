@@ -2,7 +2,7 @@
 import {
   Injectable,
   BadRequestException,
-  InternalServerErrorException,
+ 
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In as TypeOrmIn, DeepPartial } from 'typeorm';

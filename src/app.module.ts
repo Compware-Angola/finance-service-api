@@ -9,11 +9,11 @@ import { BullModule } from '@nestjs/bullmq';
 import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
 import { BullMQWorkerService } from './bullmq-worker.service';
 
-import { AssessmentModule } from './module/assessment/assessment.module';
 
-import { AcademicActivitiesModule } from './module/academic_activities/academic_activities.module';
+
 import { ScheduleModule } from '@nestjs/schedule';
 import { PaymentExpirationCron } from './module/jobs/payment-expiration.cron';
+import { DisciplineModule } from './module/discipline/discipline.module';
 
 
 @Module({
@@ -62,12 +62,14 @@ TypeOrmModule.forRootAsync({
     WebhookModule,
     PaymentModule,
     DebtNegotiationModule,
-    AssessmentModule,
-   
-    AcademicActivitiesModule,
-   
+
   
    ScheduleModule.forRoot(),
+   
+
+   
+  
+   DisciplineModule,
 
   ],
   providers: [

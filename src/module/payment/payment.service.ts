@@ -48,7 +48,7 @@ async findInvoicesAndItemsDetailedFlat(
     .andWhere('REGEXP_LIKE(TRIM("p"."Codigo_PreInscricao"), \'^[0-9]+$\')')
     .andWhere('TRIM("p"."AnoLectivo") = :anoLectivo', { anoLectivo })
     .andWhere('TRIM("p"."Codigo_PreInscricao") = :codigoPreInscricao', { codigoPreInscricao })
-    .andWhere('"p"."status_pagamento" = :status', { status: 'concluido' });
+    .andWhere('"f"."estado" = :status', { status: 1 });
 
   // CONTAGEM
   const totalResult = await baseQuery

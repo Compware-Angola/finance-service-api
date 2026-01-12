@@ -134,7 +134,7 @@ export class InvoiceService {
           totalIVA: invoiceData.totalIVA ?? 0,
           TotalMulta: invoiceData.TotalMulta ?? 0,
           ValorAPagar: invoiceData.ValorAPagar ?? invoiceData.TotalPreco,
-          Descricao: invoiceData.Descricao ?? 'Pagamento de Mensalidade',
+          Descricao: invoiceData.Descricao ?? '',
           codigoDescricao: invoiceData.codigo_descricao ?? 101,
           NextFactura: hashData.numeracaoFactura,
           next: hashData.numeracaoFactura,
@@ -284,115 +284,114 @@ async findByEnrollmentCode(
      ============================ */
   const dataSql = `
   SELECT *
-FROM (
-    SELECT
-        -- ================= FACTURA =================
-        f.Codigo                    AS f_codigo,
-        f.DataFactura               AS f_data_factura,
-        f.TotalPreco                AS f_total_preco,
-        TO_NUMBER(f.CodigoMatricula) AS f_codigo_matricula,
-        f.Referencia                AS f_referencia,
-        f.Desconto                  AS f_desconto,
-        f.Troco                     AS f_troco,
-        f.totalIVA                  AS f_total_iva,
-        f.TotalMulta                AS f_total_multa,
-        f.total_incidencia          AS f_total_incidencia,
-        f.total_retencao            AS f_total_retencao,
-        f.ValorAPagar               AS f_valor_a_pagar,
-        f.ValorEntregue             AS f_valor_entregue,
-        f.ValorAPagarExtenso        AS f_valor_a_pagar_extenso,
-        f.Descricao                 AS f_descricao,
-        f.NextFactura               AS f_next_factura,
-        f.next                      AS f_next,
-        f.texto_hash                AS f_texto_hash,
-        f.dataVencimento            AS f_data_vencimento,
-        f.polo_id                   AS f_polo_id,
-        f.hashValor                 AS f_hash_valor,
-        f.canal                     AS f_canal,
-        NVL(TO_CHAR(f.estado), '0') AS f_estado,
-        f.numSequenciaFactura       AS f_num_sequencia_factura,
-        f.tipo_documento_factura_id AS f_tipo_documento_factura_id,
+  FROM (
+      SELECT
+          -- ================= FACTURA =================
+          f.Codigo                     AS f_codigo,
+          f.DataFactura                AS f_data_factura,
+          f.TotalPreco                 AS f_total_preco,
+          TO_NUMBER(f.CodigoMatricula) AS f_codigo_matricula,
+          f.Referencia                 AS f_referencia,
+          f.Desconto                   AS f_desconto,
+          f.Troco                      AS f_troco,
+          f.totalIVA                   AS f_total_iva,
+          f.TotalMulta                 AS f_total_multa,
+          f.total_incidencia           AS f_total_incidencia,
+          f.total_retencao             AS f_total_retencao,
+          f.ValorAPagar                AS f_valor_a_pagar,
+          f.ValorEntregue              AS f_valor_entregue,
+          f.ValorAPagarExtenso         AS f_valor_a_pagar_extenso,
+          f.Descricao                  AS f_descricao,
+          f.NextFactura                AS f_next_factura,
+          f.next                       AS f_next,
+          f.texto_hash                 AS f_texto_hash,
+          f.dataVencimento             AS f_data_vencimento,
+          f.polo_id                    AS f_polo_id,
+          f.hashValor                  AS f_hash_valor,
+          f.canal                      AS f_canal,
+          NVL(TO_CHAR(f.estado), '0')  AS f_estado,
+          f.numSequenciaFactura        AS f_num_sequencia_factura,
+          f.tipo_documento_factura_id  AS f_tipo_documento_factura_id,
 
-        -- ================= ALUNO =================
-        p.Nome_Completo             AS nome_completo_aluno,
-        p.Bilhete_Identidade        AS bi_aluno,
-        p.Email                     AS email_aluno,
-        p.Contactos_Telefonicos     AS contactos_telefonicos,
-        p.Data_Nascimento           AS data_nascimento,
+          -- ================= ALUNO =================
+          p.Nome_Completo              AS nome_completo_aluno,
+          p.Bilhete_Identidade         AS bi_aluno,
+          p.Email                      AS email_aluno,
+          p.Contactos_Telefonicos      AS contactos_telefonicos,
+          p.Data_Nascimento            AS data_nascimento,
 
-        -- ================= FACTURA ITEMS =================
-        fi.codigo                   AS fi_codigo,
-        fi.CodigoFactura            AS fi_CodigoFactura,
-        fi.taxa_iva                 AS fi_taxa_iva,
-        fi.valor_pago               AS fi_valor_pago,
-        fi.valor_iva                AS fi_valor_iva,
-        fi.CodigoProduto            AS fi_codigo_produto,
-        fi.Quantidade               AS fi_quantidade,
-        fi.Total                    AS fi_total,
-        fi.OBS                      AS fi_obs,
-        fi.Mes                      AS fi_mes,
-        fi.Multa                    AS fi_multa,
-        fi.preco                    AS fi_preco,
+          -- ================= FACTURA ITEMS =================
+          fi.codigo                    AS fi_codigo,
+          fi.CodigoFactura             AS fi_codigo_factura,
+          fi.taxa_iva                  AS fi_taxa_iva,
+          fi.valor_pago                AS fi_valor_pago,
+          fi.valor_iva                 AS fi_valor_iva,
+          fi.CodigoProduto             AS fi_codigo_produto,
+          fi.Quantidade                AS fi_quantidade,
+          fi.Total                     AS fi_total,
+          fi.OBS                       AS fi_obs,
+          fi.Mes                       AS fi_mes,
+          fi.Multa                     AS fi_multa,
+          fi.preco                     AS fi_preco,
 
-        -- ================= SERVIÇOS / MESES =================
-        ts.Descricao                AS ts_descricao,
-        mt.designacao               AS mes_designacao,
+          -- ================= SERVIÇOS / MESES =================
+          ts.Descricao                 AS ts_descricao,
+          mt.designacao                AS mes_designacao,
 
-        -- ================= PAGAMENTO POR REFERÊNCIA =================
-        ppr.id                      AS ppr_id,
-        ppr."REFERENCE"             AS ppr_reference,
-        ppr."AMOUNT"                AS ppr_amount,
-        ppr."STATUS_"                AS ppr_status,
-        ppr."START_DATE"            AS ppr_start_date,
-        ppr."END_DATE"              AS ppr_end_date,
-        ppr."ENTITY_ID"             AS ppr_entidade,
+          -- ================= PAGAMENTO POR REFERÊNCIA =================
+          ppr.id                       AS ppr_id,
+          ppr."REFERENCE"              AS ppr_reference,
+          ppr."AMOUNT"                 AS ppr_amount,
+          ppr."STATUS_"                AS ppr_status,
+          ppr."START_DATE"             AS ppr_start_date,
+          ppr."END_DATE"               AS ppr_end_date,
+          ppr."ENTITY_ID"              AS ppr_entidade,
 
-        -- ================= ANO LECTIVO / POLO =================
-        ano.Designacao              AS ano_ano_lectivo,
-        po.designacao               AS po_polo,
+          -- ================= ANO LECTIVO / POLO =================
+          ano.Designacao               AS ano_ano_lectivo,
+          po.designacao                AS po_polo,
 
-        -- ================= PAGINAÇÃO =================
-        ROW_NUMBER() OVER (
-            ORDER BY f.Codigo DESC, fi.codigo ASC, ppr.id ASC
-        ) AS rn
+          -- ================= PAGINAÇÃO =================
+          ROW_NUMBER() OVER (
+              ORDER BY f.Codigo DESC, fi.codigo ASC, ppr.id ASC
+          ) AS rn
 
-    FROM FK2_FACTURA f
+      FROM FK2_FACTURA f
 
-    LEFT JOIN FK2_FACTURA_ITEMS fi
-           ON fi.CodigoFactura = f.Codigo
+      LEFT JOIN FK2_FACTURA_ITEMS fi
+             ON fi.CodigoFactura = f.Codigo
 
-    LEFT JOIN FK2_TB_TIPO_SERVICOS ts
-           ON ts.Codigo = fi.CodigoProduto
+      LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+             ON ts.Codigo = fi.CodigoProduto
 
-    LEFT JOIN FK2_MES_TEMP mt
-           ON mt.id = fi.mes_temp_id
+      LEFT JOIN FK2_MES_TEMP mt
+             ON mt.id = fi.mes_temp_id
 
-    LEFT JOIN FK2_TB_MATRICULAS m
-           ON m.Codigo = f.CodigoMatricula
+      LEFT JOIN FK2_TB_MATRICULAS m
+             ON m.Codigo = f.CodigoMatricula
 
-    LEFT JOIN FK2_TB_ADMISSAO a
-           ON a.codigo = m.Codigo_Aluno
+      LEFT JOIN FK2_TB_ADMISSAO a
+             ON a.codigo = m.Codigo_Aluno
 
-    LEFT JOIN FK2_TB_PREINSCRICAO p
-           ON p.Codigo = a.pre_incricao
+      LEFT JOIN FK2_TB_PREINSCRICAO p
+             ON p.Codigo = a.pre_incricao
 
-    LEFT JOIN FK2_PAGAMENTO_POR_REFERENCIAS ppr
-           ON ppr.factura_codigo = f.Codigo
+      LEFT JOIN FK2_PAGAMENTO_POR_REFERENCIAS ppr
+             ON ppr.factura_codigo = f.Codigo
 
-    LEFT JOIN FK2_TB_ANO_LECTIVO ano
-           ON ano.Codigo = f.ano_lectivo
+      LEFT JOIN FK2_TB_ANO_LECTIVO ano
+             ON ano.Codigo = f.ano_lectivo
 
-    LEFT JOIN FK2_POLOS po
-           ON po.id = f.polo_id
+      LEFT JOIN FK2_POLOS po
+             ON po.id = f.polo_id
 
-    WHERE
-        f.CodigoMatricula = :codigoMatricula
-        AND f.ano_lectivo = :academicYear
-        AND f.estado <> 3
-        AND (:status IS NULL OR f.estado = :status)
-)
-WHERE rn BETWEEN :startRow AND :endRow
-
+      WHERE
+          f.CodigoMatricula = :codigoMatricula
+          AND f.ano_lectivo = :academicYear
+          AND f.estado <> 3
+          AND (:status IS NULL OR f.estado = :status)
+  )
+  WHERE rn BETWEEN :startRow AND :endRow
   `;
 
   const rawResults = await this.dataSource.query(dataSql, {
@@ -403,17 +402,24 @@ WHERE rn BETWEEN :startRow AND :endRow
     endRow,
   } as any);
 
+  console.log(status,rawResults);
+  
+
   /* ============================
-     QUERY TOTAL (COUNT)
+     QUERY TOTAL (COUNT CORRETO)
      ============================ */
   const countSql = `
-    SELECT COUNT(*) AS TOTAL
-    FROM FK2_FACTURA
+    SELECT COUNT(DISTINCT f.Codigo) AS TOTAL
+    FROM FK2_FACTURA f
+    LEFT JOIN FK2_FACTURA_ITEMS fi
+           ON fi.CodigoFactura = f.Codigo
+    LEFT JOIN FK2_PAGAMENTO_POR_REFERENCIAS ppr
+           ON ppr.factura_codigo = f.Codigo
     WHERE
-        CodigoMatricula = :codigoMatricula
-        AND ano_lectivo = :academicYear
-        AND estado <> 3
-        AND (:status IS NULL OR estado = :status)
+        f.CodigoMatricula = :codigoMatricula
+        AND f.ano_lectivo = :academicYear
+        AND f.estado <> 3
+        AND (:status IS NULL OR f.estado = :status)
   `;
 
   const totalResult = await this.dataSource.query(countSql, {
@@ -423,9 +429,8 @@ WHERE rn BETWEEN :startRow AND :endRow
   } as any);
 
   const total = Number(totalResult[0]?.TOTAL ?? 0);
-  const totalPages = Math.ceil(total / limit);
+  const totalPages  = Math.ceil(total / limit) ;
 
-  
   const groupedInvoices = groupInvoices(rawResults);
 
   return {
@@ -581,7 +586,7 @@ function groupInvoices(rows: any[]): any[] {
     /* ========================
        ITENS DA FACTURA
        ======================== */
-    if (row.FI_CODIGO && row.FI_CODIGOFACTURA === codigo) {
+    if (row.FI_CODIGO && row.FI_CODIGO_FACTURA === codigo) {
       const itemExists = invoice.itens.some(
         (i: any) => i.codigo === row.FI_CODIGO
       );
@@ -589,7 +594,7 @@ function groupInvoices(rows: any[]): any[] {
       if (!itemExists) {
         invoice.itens.push({
           codigo: row.FI_CODIGO,
-          CodigoFactura: row.FI_CODIGOFACTURA,
+          CodigoFactura: row.FI_CODIGO_FACTURA,
           CodigoProduto: row.FI_CODIGO_PRODUTO,
           Quantidade: row.FI_QUANTIDADE,
           Total: row.FI_TOTAL,

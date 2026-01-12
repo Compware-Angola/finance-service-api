@@ -6,56 +6,56 @@ import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 @Injectable()
 export class TypeServiceService {
   constructor(private readonly dataSource: DataSource) {}
-async findTipoServicosDropdown({
-  sigla,
-  codigoAnoLectivo,
-  estado,
-  tipoServico,
-  visualizarNoPortal,
-  descricao
-}:FilterTypeServiceDto) {
-  const whereConditions: string[] = [];
-  const params: any = {};
+  async findTipoServicosDropdown({
+    sigla,
+    codigoAnoLectivo,
+    estado,
+    tipoServico,
+    visualizarNoPortal,
+    descricao,
+  }: FilterTypeServiceDto) {
+    const whereConditions: string[] = [];
+    const params: any = {};
 
-  /** 🔍 Filtros */
-  if (sigla) {
-    whereConditions.push('UPPER(TS.SIGLA) LIKE UPPER(:sigla)');
-    params.sigla = `%${sigla}%`;
-  }
-   if (descricao) {
-    whereConditions.push('UPPER(TS.DESCRICAO) LIKE UPPER(:descricao)');
-    params.descricao = `%${descricao}%`;
-  }
+    /** 🔍 Filtros */
 
+    if (sigla) {
+      whereConditions.push('UPPER(TS.SIGLA) = UPPER(:sigla)');
+      params.sigla = sigla;
+    }
 
-  if (codigoAnoLectivo !== undefined) {
-    whereConditions.push('TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo');
-    params.codigoAnoLectivo = codigoAnoLectivo;
-  }
-  
+    if (descricao) {
+      whereConditions.push('UPPER(TS.DESCRICAO) LIKE UPPER(:descricao)');
+      params.descricao = `%${descricao}%`;
+    }
 
-  if (estado !== undefined) {
-    whereConditions.push('TS.ESTADO = :estado');
-    params.estado = estado;
-  }
+    if (codigoAnoLectivo !== undefined) {
+      whereConditions.push('TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo');
+      params.codigoAnoLectivo = codigoAnoLectivo;
+    }
 
-  if (tipoServico !== undefined) {
-    whereConditions.push('TS.TIPOSERVICO = :tipoServico');
-    params.tipoServico = tipoServico;
-  }
+    if (estado !== undefined) {
+      whereConditions.push('TS.ESTADO = :estado');
+      params.estado = estado;
+    }
 
-  if (visualizarNoPortal !== undefined) {
-    whereConditions.push('TS.VISUALIZAR_NO_PORTAL = :visualizarNoPortal');
-    params.visualizarNoPortal = visualizarNoPortal;
-  }
+    if (tipoServico !== undefined) {
+      whereConditions.push('TS.TIPOSERVICO = :tipoServico');
+      params.tipoServico = tipoServico;
+    }
 
-  const whereClause =
-    whereConditions.length > 0
-      ? 'WHERE ' + whereConditions.join(' AND ')
-      : '';
+    if (visualizarNoPortal !== undefined) {
+      whereConditions.push('TS.VISUALIZAR_NO_PORTAL = :visualizarNoPortal');
+      params.visualizarNoPortal = visualizarNoPortal;
+    }
 
-  /** 📄 Query principal */
-  const sql = `
+    const whereClause =
+      whereConditions.length > 0
+        ? 'WHERE ' + whereConditions.join(' AND ')
+        : '';
+
+    /** 📄 Query principal */
+    const sql = `
     SELECT
       TS.CODIGO,
       TS.SIGLA,
@@ -78,9 +78,8 @@ async findTipoServicosDropdown({
     ORDER BY TS.CODIGO ASC
   `;
 
-  const result = await this.dataSource.query(sql, params);
+    const result = await this.dataSource.query(sql, params);
 
-  return await toLowerCaseKeys(result);
-}
-
+    return await toLowerCaseKeys(result);
+  }
 }

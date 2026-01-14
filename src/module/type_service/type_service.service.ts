@@ -54,7 +54,6 @@ export class TypeServiceService {
         ? 'WHERE ' + whereConditions.join(' AND ')
         : '';
 
-    /** 📄 Query principal */
     const sql = `
     SELECT
       TS.CODIGO,

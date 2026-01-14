@@ -6,56 +6,55 @@ import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 @Injectable()
 export class TypeServiceService {
   constructor(private readonly dataSource: DataSource) {}
-async findTipoServicosDropdown({
-  sigla,
-  codigoAnoLectivo,
-  estado,
-  tipoServico,
-  visualizarNoPortal,
-  descricao
-}:FilterTypeServiceDto) {
-  const whereConditions: string[] = [];
-  const params: any = {};
+  async findTipoServicosDropdown({
+    sigla,
+    codigoAnoLectivo,
+    estado,
+    tipoServico,
+    visualizarNoPortal,
+    descricao,
+  }: FilterTypeServiceDto) {
+    const whereConditions: string[] = [];
+    const params: any = {};
 
-  /** 🔍 Filtros */
-  if (sigla) {
-    whereConditions.push('UPPER(TS.SIGLA) LIKE UPPER(:sigla)');
-    params.sigla = `%${sigla}%`;
-  }
-   if (descricao) {
-    whereConditions.push('UPPER(TS.DESCRICAO) LIKE UPPER(:descricao)');
-    params.descricao = `%${descricao}%`;
-  }
+    /** 🔍 Filtros */
+    whereConditions.push('TS.SIGLA IS NOT NULL');
+    if (sigla) {
+      whereConditions.push('UPPER(TS.SIGLA) = UPPER(:sigla)');
+      params.sigla = sigla;
+    }
 
+    if (descricao) {
+      whereConditions.push('UPPER(TS.DESCRICAO) LIKE UPPER(:descricao)');
+      params.descricao = `%${descricao}%`;
+    }
 
-  if (codigoAnoLectivo !== undefined) {
-    whereConditions.push('TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo');
-    params.codigoAnoLectivo = codigoAnoLectivo;
-  }
-  
+    if (codigoAnoLectivo !== undefined) {
+      whereConditions.push('TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo');
+      params.codigoAnoLectivo = codigoAnoLectivo;
+    }
 
-  if (estado !== undefined) {
-    whereConditions.push('TS.ESTADO = :estado');
-    params.estado = estado;
-  }
+    if (estado !== undefined) {
+      whereConditions.push('TS.ESTADO = :estado');
+      params.estado = estado;
+    }
 
-  if (tipoServico !== undefined) {
-    whereConditions.push('TS.TIPOSERVICO = :tipoServico');
-    params.tipoServico = tipoServico;
-  }
+    if (tipoServico !== undefined) {
+      whereConditions.push('TS.TIPOSERVICO = :tipoServico');
+      params.tipoServico = tipoServico;
+    }
 
-  if (visualizarNoPortal !== undefined) {
-    whereConditions.push('TS.VISUALIZAR_NO_PORTAL = :visualizarNoPortal');
-    params.visualizarNoPortal = visualizarNoPortal;
-  }
+    if (visualizarNoPortal !== undefined) {
+      whereConditions.push('TS.VISUALIZAR_NO_PORTAL = :visualizarNoPortal');
+      params.visualizarNoPortal = visualizarNoPortal;
+    }
 
-  const whereClause =
-    whereConditions.length > 0
-      ? 'WHERE ' + whereConditions.join(' AND ')
-      : '';
+    const whereClause =
+      whereConditions.length > 0
+        ? 'WHERE ' + whereConditions.join(' AND ')
+        : '';
 
-  /** 📄 Query principal */
-  const sql = `
+    const sql = `
     SELECT
       TS.CODIGO,
       TS.SIGLA,
@@ -78,9 +77,8 @@ async findTipoServicosDropdown({
     ORDER BY TS.CODIGO ASC
   `;
 
-  const result = await this.dataSource.query(sql, params);
+    const result = await this.dataSource.query(sql, params);
 
-  return await toLowerCaseKeys(result);
-}
-
+    return await toLowerCaseKeys(result);
+  }
 }

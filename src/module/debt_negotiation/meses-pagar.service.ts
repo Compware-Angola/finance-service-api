@@ -34,8 +34,7 @@ export class MesesPagarService {
   ): Promise<MesPagar[]> {
     const anoLectivoId = await this.getAnoLectivoByCandidatura(user, codigo_anoLectivo);
     const mesesTemp = await this.getMesesTemp(tipo, user, anoLectivoId, mes_id);
-    console.log("M",mesesTemp);
-    
+
  
     const mesesApagar: MesPagar[] = [];
     for (const [index, aa] of mesesTemp.entries()) {

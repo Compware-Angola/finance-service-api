@@ -40,6 +40,8 @@ import { InvoiceService } from '../invoice/invoice.service';
 import { CreateDebtNegotiationService } from './debt.create.service';
 import { InvoiceNumberingAndHashService } from '../invoice/invoice-numbering-hash.service';
 import { CompanyKey } from 'src/common/config/security/key-company';
+import { ListDebtNegotiationController } from './list_debt_negotiation.controller';
+import { ListDebtNegotiationService } from './list_debt_negotiation.service';
 
 @Module({
   imports: [
@@ -73,10 +75,11 @@ import { CompanyKey } from 'src/common/config/security/key-company';
       DebtNegotiation,
     ]),
   ],
-  controllers: [DebtNegotiationController],
+  controllers: [DebtNegotiationController,ListDebtNegotiationController],
   providers: [
     DebtNegotiationService,
     CreateDebtNegotiationService,
+    ListDebtNegotiationService,
     AnoLectivoUtil,
     MesesPagarService,
     PropinaAlunoService,

@@ -177,7 +177,7 @@ export class PaymentReferencesService {
             .limit(1)
             .getRawOne();
 
-          console.log(ultimoId);
+     
 
 
           let nextId = 90000;

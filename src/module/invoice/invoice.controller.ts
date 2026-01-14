@@ -25,6 +25,14 @@ export class InvoiceController {
   async create(@Body() createInvoiceDto: CreateInvoiceDto){
     return this.invoiceService.queueCreateInvoice(createInvoiceDto);
   }
+   @Post('no-job')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Cria uma nova fatura' })
+  @ApiResponse({ status: 201, "description": 'Fatura criada com sucesso.' })
+  async create2(@Body() createInvoiceDto: CreateInvoiceDto){
+    return this.invoiceService.create(createInvoiceDto);
+  }
+
 
   // ------------------------------------
   // 2. FIND ALL (GET) - COM PAGINAÇÃO

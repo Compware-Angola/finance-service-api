@@ -18,7 +18,7 @@ export class PaymentService {
         private readonly invoiceService: InvoiceService,
         private dataSource: DataSource,
     ) { this.initAnoAtual(); }
-    private async initAnoAtual() {
+      private async initAnoAtual() {
         this.anoAtualPrincipal = await this.anoLectivoUtil.getAnoAtualId();
     }
 

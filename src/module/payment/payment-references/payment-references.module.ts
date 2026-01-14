@@ -10,6 +10,8 @@ import { MesTemp } from './entities/mes-temp.entity';
 import { AcademicYear } from 'src/module/invoice/entities/academic.year.entity';
 import { BullModule } from '@nestjs/bullmq';
 import { CreatePaymentReferencesProcessor } from 'src/module/jobs/create-payment-references.processor';
+import { ListPaymentRefenceController } from './list-payment-references.controller';
+import { ListPaymentRefenceService } from './list-payment-references.service';
 
 @Module({
   imports: [
@@ -19,8 +21,8 @@ import { CreatePaymentReferencesProcessor } from 'src/module/jobs/create-payment
       name: 'payment_reference_service',
     }),
   ],
-  controllers: [PaymentReferencesController],
-  providers: [PaymentReferencesService, CreatePaymentReferencesProcessor], 
+  controllers: [PaymentReferencesController,ListPaymentRefenceController],
+  providers: [PaymentReferencesService, CreatePaymentReferencesProcessor,ListPaymentRefenceService], 
   exports: [PaymentReferencesService,CreatePaymentReferencesProcessor],
 })
 export class PaymentReferencesModule {}

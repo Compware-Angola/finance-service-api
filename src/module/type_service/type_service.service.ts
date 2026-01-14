@@ -18,7 +18,7 @@ export class TypeServiceService {
     const params: any = {};
 
     /** 🔍 Filtros */
-
+    whereConditions.push('TS.SIGLA IS NOT NULL');
     if (sigla) {
       whereConditions.push('UPPER(TS.SIGLA) = UPPER(:sigla)');
       params.sigla = sigla;

@@ -9,6 +9,7 @@ import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
+import { InvoiceSearchDto } from './dto/get-invoice.dto';
 
 @ApiTags('Invoices')
 @Controller('invoices')
@@ -40,8 +41,8 @@ export class InvoiceController {
   @Get()
   @ApiOperation({ summary: 'Retorna todas as faturas com paginação' })
   @ApiResponse({ status: 200, "description": 'Lista de faturas retornada com sucesso.' })
-  async findAll(@Query() paginationQuery: PaginationQueryDto): Promise<PagedResult<Invoice>> {
-    return this.invoiceService.findAll(paginationQuery);
+  async findAll(@Query() paginationQuery: InvoiceSearchDto): Promise<PagedResult<Invoice>> {
+    return this.invoiceService.findInvoices(paginationQuery);
   }
 
 

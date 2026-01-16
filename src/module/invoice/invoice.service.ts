@@ -296,6 +296,7 @@ async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
         p.Nome_Completo AS nome_aluno,
         c.designacao AS curso,
         po.designacao AS polo,
+       ano.Designacao               AS ano_lectivo,
         ROW_NUMBER() OVER (ORDER BY f.Codigo DESC) AS rn
       FROM FK2_FACTURA f
       LEFT JOIN FK2_TB_MATRICULAS m ON m.Codigo = f.CodigoMatricula
@@ -303,6 +304,8 @@ async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
       LEFT JOIN FK2_TB_PREINSCRICAO p ON p.Codigo = a.pre_incricao
       LEFT JOIN FK2_TB_CURSOS c ON c.codigo = m.Codigo_Curso
       LEFT JOIN FK2_POLOS po ON po.id = f.polo_id
+      LEFT JOIN FK2_TB_ANO_LECTIVO ano
+             ON ano.Codigo = f.ano_lectivo
       WHERE 1=1
       ${whereClause}
     )
@@ -337,6 +340,42 @@ async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
     totalPages,
   };
 }
+async findInvoiceItens(invoiceId: number) {
+  const sql = `
+    SELECT
+      fi.Codigo                AS codigoItem,
+      fi.CodigoFactura         AS codigoFactura,
+      fi.CodigoProduto         AS codigoProduto,
+      fi.quantidade,
+      fi.obs,
+      fi.PRECO,
+      fi.TOTAL,
+
+      ts.Descricao             AS descricaoServico,
+      ts.Codigo                AS codigoServico,
+
+      mt.id                    AS mesId,
+      mt.DESIGNACAO             AS mesDescricao
+
+    FROM FK2_FACTURA_ITEMS fi
+
+    LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+           ON ts.Codigo = fi.CodigoProduto
+
+    LEFT JOIN FK2_MES_TEMP mt
+           ON mt.id = fi.mes_temp_id
+
+    WHERE fi.CodigoFactura = :invoiceId
+  `;
+
+  const params = [invoiceId];
+
+  const results = await this.dataSource.query(sql, params);
+
+  return toLowerCaseKeys(results);
+}
+
+
 
   async findAllTypeInvoiceDocument(): Promise<TypeInvoiceDocument[]> {
     return this.typeInvoiceDocumentRepository.find();

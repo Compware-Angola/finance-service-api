@@ -16,6 +16,8 @@ import { generateDueDate } from '../util/generate-due-date';
 import { InvoiceItem } from './entities/InvoiceIten.entity';
 import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { InvoiceSearchDto } from './dto/get-invoice.dto';
 
 //0 - pendente,
 //1 - validado
@@ -229,28 +231,151 @@ export class InvoiceService {
      * @param paginationQuery O DTO com os parâmetros de paginação (page e limit).
      * @returns Um objeto contendo a lista de faturas, total e informações de paginação.
      */
-  async findAll(paginationQuery: PaginationQueryDto): Promise<PagedResult<Invoice>> {
-    const { limit = 10, page = 1 } = paginationQuery;
+async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
+  const { search, anoLectivo, codigoMatricula, reference, limit = 10, page = 1,status } = filter;
 
-    // Calcula o 'offset' (quantos itens pular)
-    const skip = (page - 1) * limit;
+  const startRow = (page - 1) * limit + 1;
+  const endRow = page * limit;
 
-    // TypeORM's findAndCount: [results, totalCount]
-    const [invoices, total] = await this.invoiceRepository.findAndCount({
-      take: limit, // Corresponde ao LIMIT no SQL
-      skip: skip, // Corresponde ao OFFSET no SQL
-      order: { Codigo: 'DESC' }, // Boa prática: ordenar por PK ou data
-      // Você pode adicionar 'where' aqui se precisar de filtragem
-    });
-    const totalPages = Math.ceil(total / limit);
-    return {
-      data: invoices,
-      total,
-      page,
-      limit,
-      totalPages,
-    };
+  // WHERE dinâmico
+  const whereConditions: string[] = [];
+  const dataQueryParams: any = { startRow, endRow };
+  const countQueryParams: any = {};
+
+  if (search) {
+    whereConditions.push(`(
+      LOWER(p.Nome_Completo) LIKE LOWER(:search) OR
+      LOWER(f.Descricao) LIKE LOWER(:search) OR
+      LOWER(c.designacao) LIKE LOWER(:search) OR
+      LOWER(po.designacao) LIKE LOWER(:search) OR
+      LOWER(f.CodigoMatricula) LIKE LOWER(:search) OR
+       LOWER(f.Referencia) LIKE LOWER(:search) 
+    
+    )`);
+    dataQueryParams.search = `%${search}%`;
+    countQueryParams.search = `%${search}%`;
   }
+  if(status){
+       whereConditions.push(`f.estado = :estado`);
+    dataQueryParams.estado = status;
+    countQueryParams.estado = status;
+  }
+
+  if (anoLectivo) {
+    whereConditions.push(`f.ano_lectivo = :anoLectivo`);
+    dataQueryParams.anoLectivo = anoLectivo;
+    countQueryParams.anoLectivo = anoLectivo;
+  }
+
+  if (codigoMatricula) {
+    whereConditions.push(`f.CodigoMatricula = :codigoMatricula`);
+    dataQueryParams.codigoMatricula = codigoMatricula;
+    countQueryParams.codigoMatricula = codigoMatricula;
+  }
+
+  if (reference) {
+    whereConditions.push(`f.Referencia = :reference`);
+    dataQueryParams.reference = reference;
+    countQueryParams.reference = reference;
+  }
+
+  const whereClause = whereConditions.length > 0 ? 'AND ' + whereConditions.join(' AND ') : '';
+
+  // ===== QUERY DADOS =====
+  const dataSql = `
+    SELECT *
+    FROM (
+      SELECT
+        f.Codigo AS codigo,
+        f.DataFactura AS data_factura,
+        f.TotalPreco AS total_preco,
+        f.CodigoMatricula AS codigo_matricula,
+        f.Referencia AS referencia,
+        f.Descricao AS descricao,
+        f.estado AS estado,
+        p.Nome_Completo AS nome_aluno,
+        c.designacao AS curso,
+        po.designacao AS polo,
+       ano.Designacao               AS ano_lectivo,
+        ROW_NUMBER() OVER (ORDER BY f.Codigo DESC) AS rn
+      FROM FK2_FACTURA f
+      LEFT JOIN FK2_TB_MATRICULAS m ON m.Codigo = f.CodigoMatricula
+      LEFT JOIN FK2_TB_ADMISSAO a ON a.codigo = m.Codigo_Aluno
+      LEFT JOIN FK2_TB_PREINSCRICAO p ON p.Codigo = a.pre_incricao
+      LEFT JOIN FK2_TB_CURSOS c ON c.codigo = m.Codigo_Curso
+      LEFT JOIN FK2_POLOS po ON po.id = f.polo_id
+      LEFT JOIN FK2_TB_ANO_LECTIVO ano
+             ON ano.Codigo = f.ano_lectivo
+      WHERE 1=1
+      ${whereClause}
+    )
+    WHERE rn BETWEEN :startRow AND :endRow
+  `;
+
+  const rawResults = await this.dataSource.query(dataSql, dataQueryParams);
+
+  // ===== QUERY TOTAL =====
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM FK2_FACTURA f
+    LEFT JOIN FK2_TB_MATRICULAS m ON m.Codigo = f.CodigoMatricula
+    LEFT JOIN FK2_TB_ADMISSAO a ON a.codigo = m.Codigo_Aluno
+    LEFT JOIN FK2_TB_PREINSCRICAO p ON p.Codigo = a.pre_incricao
+    LEFT JOIN FK2_TB_CURSOS c ON c.codigo = m.Codigo_Curso
+    LEFT JOIN FK2_POLOS po ON po.id = f.polo_id
+    WHERE 1=1
+    ${whereClause}
+  `;
+
+  const totalResult = await this.dataSource.query(countSql, countQueryParams);
+
+  const total = Number(totalResult[0]?.TOTAL ?? 0);
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    data: toLowerCaseKeys(rawResults),
+    total,
+    page,
+    limit,
+    totalPages,
+  };
+}
+async findInvoiceItens(invoiceId: number) {
+  const sql = `
+    SELECT
+      fi.Codigo                AS codigoItem,
+      fi.CodigoFactura         AS codigoFactura,
+      fi.CodigoProduto         AS codigoProduto,
+      fi.quantidade,
+      fi.obs,
+      fi.PRECO,
+      fi.TOTAL,
+
+      ts.Descricao             AS descricaoServico,
+      ts.Codigo                AS codigoServico,
+
+      mt.id                    AS mesId,
+      mt.DESIGNACAO             AS mesDescricao
+
+    FROM FK2_FACTURA_ITEMS fi
+
+    LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+           ON ts.Codigo = fi.CodigoProduto
+
+    LEFT JOIN FK2_MES_TEMP mt
+           ON mt.id = fi.mes_temp_id
+
+    WHERE fi.CodigoFactura = :invoiceId
+  `;
+
+  const params = [invoiceId];
+
+  const results = await this.dataSource.query(sql, params);
+
+  return toLowerCaseKeys(results);
+}
+
+
 
   async findAllTypeInvoiceDocument(): Promise<TypeInvoiceDocument[]> {
     return this.typeInvoiceDocumentRepository.find();

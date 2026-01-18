@@ -27,18 +27,21 @@ export class CreatePaymentReferencesProcessor extends WorkerHost {
         throw new Error('invoiceId inválido');
       }
 
-      await this.paymentReferencesService.renewPaymentReference(Number(invoiceId));
+      await this.paymentReferencesService.renewPaymentReference(
+        Number(invoiceId),
+      );
       return { success: true };
     }
     if (job.name === 'createMonthlyPaymentReferencesJob') {
       const { createPaymentReferenceDto } = job.data;
-      await this.paymentReferencesService.createMonthlyPaymentReferences(createPaymentReferenceDto);
+      await this.paymentReferencesService.createMonthlyPaymentReferences(
+        createPaymentReferenceDto,
+      );
       console.log(`Job ${job.id} completed successfully.`);
       return { success: true };
     }
     console.log(`Job ${job.id} has an unknown type: ${job.name}`);
-    return { success: false, "message": 'Unknown job type' };
-
+    return { success: false, message: 'Unknown job type' };
   }
   // Optional: Log completion
   @OnWorkerEvent('completed')

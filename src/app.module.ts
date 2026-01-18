@@ -9,44 +9,42 @@ import { BullModule } from '@nestjs/bullmq';
 import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
 import { BullMQWorkerService } from './bullmq-worker.service';
 
-
-
 import { ScheduleModule } from '@nestjs/schedule';
 import { PaymentExpirationCron } from './module/jobs/payment-expiration.cron';
 import { DisciplineModule } from './module/discipline/discipline.module';
 import { TypeServiceModule } from './module/type_service/type_service.module';
-
+import { AlunoModule } from './module/aluno/aluno.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-TypeOrmModule.forRootAsync({
-  imports: [ConfigModule],
-  inject: [ConfigService],
-  useFactory: (config: ConfigService) => {
-    const isSSL = config.get<string>('DB_SSL') === 'true';
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const isSSL = config.get<string>('DB_SSL') === 'true';
 
-    return {
-      type: 'oracle' as const,
-      host: config.get<string>('DB_HOST'),
-      port: config.get<number>('DB_PORT', 1521),
-      username: config.get<string>('DB_USERNAME'),
-      password: config.get<string>('DB_PASSWORD'),
-      sid: config.get<string>('DB_SID'),
+        return {
+          type: 'oracle' as const,
+          host: config.get<string>('DB_HOST'),
+          port: config.get<number>('DB_PORT', 1521),
+          username: config.get<string>('DB_USERNAME'),
+          password: config.get<string>('DB_PASSWORD'),
+          sid: config.get<string>('DB_SID'),
 
-      entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: false,
-      logging: ['query', 'error'],
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize: false,
+          logging: ['query', 'error'],
 
-      extra: {
-        disableInsertDefaultValues: true,
-        ...(isSSL ? { ssl: { rejectUnauthorized: true } } : {}),
+          extra: {
+            disableInsertDefaultValues: true,
+            ...(isSSL ? { ssl: { rejectUnauthorized: true } } : {}),
+          },
+        };
       },
-    };
-  },
-}),
+    }),
 
     BullModule.forRootAsync({
       imports: [ConfigModule],
@@ -63,27 +61,14 @@ TypeOrmModule.forRootAsync({
     WebhookModule,
     PaymentModule,
     DebtNegotiationModule,
+    AlunoModule,
 
-  
-   ScheduleModule.forRoot(),
-   
+    ScheduleModule.forRoot(),
 
-   
-  
-   DisciplineModule,
-   
+    DisciplineModule,
 
-   
-  
-   TypeServiceModule,
-
+    TypeServiceModule,
   ],
-  providers: [
-    BullMQWorkerService,
-    PaymentExpirationCron
-  ],
-
-
-
+  providers: [BullMQWorkerService, PaymentExpirationCron],
 })
-export class AppModule { }
+export class AppModule {}

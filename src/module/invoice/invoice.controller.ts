@@ -9,6 +9,7 @@ import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
+import { InvoiceSearchDto } from './dto/get-invoice.dto';
 
 @ApiTags('Invoices')
 @Controller('invoices')
@@ -40,8 +41,8 @@ export class InvoiceController {
   @Get()
   @ApiOperation({ summary: 'Retorna todas as faturas com paginação' })
   @ApiResponse({ status: 200, "description": 'Lista de faturas retornada com sucesso.' })
-  async findAll(@Query() paginationQuery: PaginationQueryDto): Promise<PagedResult<Invoice>> {
-    return this.invoiceService.findAll(paginationQuery);
+  async findAll(@Query() paginationQuery: InvoiceSearchDto): Promise<PagedResult<Invoice>> {
+    return this.invoiceService.findInvoices(paginationQuery);
   }
 
 
@@ -78,31 +79,19 @@ export class InvoiceController {
     return this.invoiceService.findOne(Codigo);
   }
 
- /*
-  // ------------------------------------
-  // 4. UPDATE (PATCH :id) - CORRIGIDO O NaN
-  // ------------------------------------
-  @Patch(':id')
-  @ApiOperation({ summary: 'Atualiza uma fatura existente' })
-  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura a ser atualizada', "type": Number })
-  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' }) // Adicionado 400
-  @ApiResponse({ status: 200, "description": 'Fatura atualizada com sucesso.', "type": Invoice })
-  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
-  async update(@Param('id', ParseIntPipe) Codigo: number, @Body() updateInvoiceDto: UpdateInvoiceDto): Promise<Invoice> {
-    return this.invoiceService.update(Codigo, "update"InvoiceDto);
-  }
-  ------------------------------------
-  // 5. REMOVE (DELETE :id) - CORRIGIDO O NaN
-  // ------------------------------------
-  @Delete(':id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Remove uma fatura pelo Código' })
-  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura a ser removida', "type": Number })
-  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' }) // Adicionado 400
-  @ApiResponse({ status: 204, "description": 'Fatura removida com sucesso.' })
-  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
-  async remove(@Param('id', ParseIntPipe) Codigo: number): Promise<void> {
-    await this.invoiceService.remove(Codigo);
-  }
+/**
+   * Lista os itens de uma factura pelo ID da factura
    */
+  @Get(':id/itens')
+  async findInvoiceItens(
+    @Param('id', ParseIntPipe) invoiceId: number,
+  ) {
+    const itens = await this.invoiceService.findInvoiceItens(invoiceId);
+
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Itens da factura listados com sucesso',
+      data: itens,
+    };
+  }
 }

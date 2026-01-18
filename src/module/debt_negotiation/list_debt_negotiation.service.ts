@@ -3,19 +3,27 @@ import { DataSource } from 'typeorm';
 import { GetDebtNegotiationFilterDto } from './dto/find-deb-negotation.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 
- export interface PagedResult<T> {
+export interface DebtNegotiationStats {
+  totalDividas: number;
+  totalPrimeiroValorApagar: number;
+  totalRestante: number;
+}
+
+export interface PagedResult<T> {
   data: T[];
   total: number;
   page: number;
   limit: number;
   totalPages: number;
+  stats?: DebtNegotiationStats;
 }
 
 @Injectable()
 export class ListDebtNegotiationService {
   constructor(private readonly dataSource: DataSource) {}
   async findNegotiations(
-    filter:GetDebtNegotiationFilterDto): Promise<PagedResult<any>> {
+    filter: GetDebtNegotiationFilterDto,
+  ): Promise<PagedResult<any>> {
     const {
       limit = 10,
       page = 1,
@@ -27,7 +35,9 @@ export class ListDebtNegotiationService {
 
     // Validações mínimas (ajuste conforme sua regra de negócio)
     if (!codigoAnoLectivo) {
-      throw new BadRequestException('O ano letivo é obrigatório para listar negociações.');
+      throw new BadRequestException(
+        'O ano letivo é obrigatório para listar negociações.',
+      );
     }
 
     const startRow = (page - 1) * limit + 1;
@@ -50,31 +60,33 @@ export class ListDebtNegotiationService {
             nd.PRIMEIROVALORAPAGAR          AS primeiro_valor_pagar,
             nd.VALORPRESTACOES              AS valor_prestacao,
             nd.VALORRESTANTE                AS valor_restante,
-            
+
             -- campos úteis extras (opcional - pode remover se não precisar)
             nd.CODIGO_ANO_LECTIVO           AS ano_lectivo,
             nd.TIPO_NEGOCIACAO_ID           AS tipo_negociacao_id,
             c.FACULDADE_ID                  AS faculdade_id,
-            
+            f.DESIGNACAO                    AS faculdade,
+
             ROW_NUMBER() OVER (
                 ORDER BY nd.VALOR_DIVIDA DESC, m.codigo
             ) AS rn
         FROM FK2_NEGOCIACAO_DIVIDAS nd
-        INNER JOIN FK2_TB_MATRICULAS m 
+        INNER JOIN FK2_TB_MATRICULAS m
                ON m.codigo = nd.CODIGO_MATRICULA
-        INNER JOIN FK2_TB_ADMISSAO a 
+        INNER JOIN FK2_TB_ADMISSAO a
                ON a.codigo = m.CODIGO_ALUNO
-        INNER JOIN FK2_TB_PREINSCRICAO p 
+        INNER JOIN FK2_TB_PREINSCRICAO p
                ON p.codigo = a.PRE_INCRICAO
-        LEFT  JOIN FK2_TB_CURSOS c 
+        LEFT  JOIN FK2_TB_CURSOS c
                ON c.codigo = m.CODIGO_CURSO
-        LEFT  JOIN FK2_MESES mi 
+        LEFT  JOIN FK2_MESES mi
                ON mi.codigo = nd.ID_MES_INICIAL
-        LEFT  JOIN FK2_MESES mf 
+        LEFT  JOIN FK2_MESES mf
                ON mf.codigo = nd.ID_MES_FINAL
-        LEFT  JOIN FK2_FACTURA fa 
+        LEFT  JOIN FK2_FACTURA fa
                ON fa.codigo = nd.CODIGO_FATURA
-        
+        LEFT JOIN FK2_TB_FACULDADE f on f.codigo = c.FACULDADE_ID
+
         WHERE 1=1
           AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
           AND (:codigoCurso IS NULL          OR c.codigo = :codigoCurso)
@@ -99,11 +111,11 @@ export class ListDebtNegotiationService {
     const countSql = `
       SELECT COUNT(*) AS TOTAL
       FROM FK2_NEGOCIACAO_DIVIDAS nd
-      INNER JOIN FK2_TB_MATRICULAS m 
+      INNER JOIN FK2_TB_MATRICULAS m
              ON m.codigo = nd.CODIGO_MATRICULA
-      LEFT  JOIN FK2_TB_CURSOS c 
+      LEFT  JOIN FK2_TB_CURSOS c
              ON c.codigo = m.CODIGO_CURSO
-      
+
       WHERE 1=1
         AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
         AND (:codigoCurso IS NULL          OR c.codigo = :codigoCurso)
@@ -111,7 +123,34 @@ export class ListDebtNegotiationService {
         AND (:faculdadeId IS NULL          OR c.FACULDADE_ID = :faculdadeId)
     `;
 
+    /* =============================================
+   QUERY DE ESTATÍSTICAS (SUM)
+   ============================================= */
+    const statsSql = `
+  SELECT
+      COALESCE(SUM(nd.VALOR_DIVIDA), 0)        AS total_dividas,
+      COALESCE(SUM(nd.PRIMEIROVALORAPAGAR), 0) AS total_primeiro_valor_apagar,
+      COALESCE(SUM(nd.VALORRESTANTE), 0)       AS total_restante
+  FROM FK2_NEGOCIACAO_DIVIDAS nd
+  INNER JOIN FK2_TB_MATRICULAS m
+         ON m.codigo = nd.CODIGO_MATRICULA
+  LEFT  JOIN FK2_TB_CURSOS c
+         ON c.codigo = m.CODIGO_CURSO
+
+  WHERE 1=1
+    AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
+    AND (:codigoCurso IS NULL      OR c.codigo = :codigoCurso)
+    AND (:tipoNegociacaoId IS NULL OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
+    AND (:faculdadeId IS NULL      OR c.FACULDADE_ID = :faculdadeId)
+`;
+
     const totalResult = await this.dataSource.query(countSql, {
+      codigoAnoLectivo,
+      codigoCurso: codigoCurso ?? null,
+      tipoNegociacaoId: tipoNegociacaoId ?? null,
+      faculdadeId: faculdadeId ?? null,
+    } as any);
+    const [statsResult] = await this.dataSource.query(statsSql, {
       codigoAnoLectivo,
       codigoCurso: codigoCurso ?? null,
       tipoNegociacaoId: tipoNegociacaoId ?? null,
@@ -127,6 +166,13 @@ export class ListDebtNegotiationService {
       page,
       limit,
       totalPages,
+      stats: {
+        totalDividas: Number(statsResult?.TOTAL_DIVIDAS ?? 0),
+        totalPrimeiroValorApagar: Number(
+          statsResult?.TOTAL_PRIMEIRO_VALOR_APAGAR ?? 0,
+        ),
+        totalRestante: Number(statsResult?.TOTAL_RESTANTE ?? 0),
+      },
     };
   }
 }

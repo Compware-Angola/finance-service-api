@@ -18,6 +18,7 @@ import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { InvoiceSearchDto } from './dto/get-invoice.dto';
+import { normalizeParam } from '../util/normalize-util';
 
 //0 - pendente,
 //1 - validado
@@ -232,7 +233,7 @@ export class InvoiceService {
      * @returns Um objeto contendo a lista de faturas, total e informações de paginação.
      */
 async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
-  const { search, anoLectivo, codigoMatricula, reference, limit = 10, page = 1,status } = filter;
+  const { anoLectivo, codigoMatricula, reference, limit = 10, page = 1,status } = filter;
 
   const startRow = (page - 1) * limit + 1;
   const endRow = page * limit;
@@ -242,24 +243,13 @@ async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
   const dataQueryParams: any = { startRow, endRow };
   const countQueryParams: any = {};
 
-  if (search) {
-    whereConditions.push(`(
-      LOWER(p.Nome_Completo) LIKE LOWER(:search) OR
-      LOWER(f.Descricao) LIKE LOWER(:search) OR
-      LOWER(c.designacao) LIKE LOWER(:search) OR
-      LOWER(po.designacao) LIKE LOWER(:search) OR
-      LOWER(f.CodigoMatricula) LIKE LOWER(:search) OR
-       LOWER(f.Referencia) LIKE LOWER(:search) 
-    
-    )`);
-    dataQueryParams.search = `%${search}%`;
-    countQueryParams.search = `%${search}%`;
-  }
-  if(status){
-       whereConditions.push(`f.estado = :estado`);
-    dataQueryParams.estado = status;
-    countQueryParams.estado = status;
-  }
+ const estado = normalizeParam(status);
+if (estado !== undefined && estado !== null) {
+  whereConditions.push(`f.estado = :estado`);
+  dataQueryParams.estado = status;
+  countQueryParams.estado = status;
+}
+
 
   if (anoLectivo) {
     whereConditions.push(`f.ano_lectivo = :anoLectivo`);
@@ -278,6 +268,7 @@ async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
     dataQueryParams.reference = reference;
     countQueryParams.reference = reference;
   }
+console.log(whereConditions);
 
   const whereClause = whereConditions.length > 0 ? 'AND ' + whereConditions.join(' AND ') : '';
 

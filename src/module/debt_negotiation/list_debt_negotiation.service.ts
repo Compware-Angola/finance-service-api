@@ -60,7 +60,7 @@ export class ListDebtNegotiationService {
             nd.PRIMEIROVALORAPAGAR          AS primeiro_valor_pagar,
             nd.VALORPRESTACOES              AS valor_prestacao,
             nd.VALORRESTANTE                AS valor_restante,
-
+            nd.CODIGO_FATURA                AS codigo_factura,
             -- campos úteis extras (opcional - pode remover se não precisar)
             nd.CODIGO_ANO_LECTIVO           AS ano_lectivo,
             nd.TIPO_NEGOCIACAO_ID           AS tipo_negociacao_id,

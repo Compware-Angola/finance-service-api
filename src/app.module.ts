@@ -14,11 +14,18 @@ import { PaymentExpirationCron } from './module/jobs/payment-expiration.cron';
 import { DisciplineModule } from './module/discipline/discipline.module';
 import { TypeServiceModule } from './module/type_service/type_service.module';
 import { AlunoModule } from './module/aluno/aluno.module';
+import { HttpModule } from '@nestjs/axios';
 
 @Module({
+
+
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+    }),
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 5
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -71,4 +78,4 @@ import { AlunoModule } from './module/aluno/aluno.module';
   ],
   providers: [BullMQWorkerService, PaymentExpirationCron],
 })
-export class AppModule {}
+export class AppModule { }

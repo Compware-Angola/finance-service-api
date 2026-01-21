@@ -233,7 +233,7 @@ export class InvoiceService {
      * @returns Um objeto contendo a lista de faturas, total e informações de paginação.
      */
   async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
-    const { anoLectivo, codigoMatricula, reference, limit = 10, page = 1, status } = filter;
+    const { anoLectivo, codigoMatricula, reference, limit = 10, page = 1, status,codigoFatura } = filter;
 
     const startRow = (page - 1) * limit + 1;
     const endRow = page * limit;
@@ -257,6 +257,13 @@ export class InvoiceService {
       countQueryParams.anoLectivo = anoLectivo;
     }
 
+     if (codigoFatura) {
+      whereConditions.push(`f.Codigo = :codigoFatura`);
+      dataQueryParams.codigoFatura = codigoFatura;
+      countQueryParams.codigoFatura = codigoFatura;
+    }
+
+
     if (codigoMatricula) {
       whereConditions.push(`f.CodigoMatricula = :codigoMatricula`);
       dataQueryParams.codigoMatricula = codigoMatricula;
@@ -268,7 +275,7 @@ export class InvoiceService {
       dataQueryParams.reference = reference;
       countQueryParams.reference = reference;
     }
-    console.log(whereConditions);
+  
 
     const whereClause = whereConditions.length > 0 ? 'AND ' + whereConditions.join(' AND ') : '';
 

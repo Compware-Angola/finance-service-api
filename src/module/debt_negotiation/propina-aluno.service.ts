@@ -103,7 +103,7 @@ const mapped = result.map(r => ({
 
 private async getPropinaByCurso(
   nomeCurso: string,
-  cacuaco: string,        // ← STRING!
+  cacuaco: string,      
   ano_lectivo: number,
 ): Promise<PropinaResult | null> {
   const result = await this.dataSource.query(`

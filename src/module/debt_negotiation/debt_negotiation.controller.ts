@@ -1,4 +1,4 @@
-// src/debt-negotiation/debt-negotiation.controller.ts
+
 import {
   Controller,
   Get,
@@ -68,7 +68,7 @@ export class DebtNegotiationController {
   @ApiResponse({ status: 400, "description": 'Parâmetros inválidos' })
   @ApiResponse({ status: 404, "description": 'Aluno não encontrado' })
   async getDebt(@Query(ValidationPipe) query: GetDebtDto) {
-    const { matricula, preinscricaoId, tipoCandidatura } = query;
+    const { matricula, preinscricaoId, tipo } = query;
 
     // Validação extra (opcional)
     if (!matricula || !preinscricaoId) {
@@ -78,7 +78,7 @@ export class DebtNegotiationController {
     return this.debtNegotiationService.getDebt(
       matricula,
       preinscricaoId,
-      tipoCandidatura
+      tipo
     );
   }
 }

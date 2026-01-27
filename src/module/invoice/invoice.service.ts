@@ -18,6 +18,7 @@ import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { InvoiceSearchDto } from './dto/get-invoice.dto';
+import { normalizeParam } from '../util/normalize-util';
 
 //0 - pendente,
 //1 - validado
@@ -27,7 +28,7 @@ import { InvoiceSearchDto } from './dto/get-invoice.dto';
 export class InvoiceService {
   constructor(
     @InjectQueue('invoice_service')
-  
+
     private readonly invoiceQueue: Queue,
 
     @InjectRepository(Invoice)
@@ -43,7 +44,7 @@ export class InvoiceService {
     @InjectRepository(InvoiceItem)
     private readonly invoiceItemRepository: Repository<InvoiceItem>,
     private readonly hashService: InvoiceNumberingAndHashService,
-      private readonly dataSource: DataSource,
+    private readonly dataSource: DataSource,
   ) { Invoice.setRepository(this.invoiceRepository); InvoiceItem.setRepository(this.invoiceItemRepository) }
   /**
    * Cria e salva uma nova fatura no banco de dados, "incluindo" a geração de hash e sequenciamento.
@@ -231,91 +232,107 @@ export class InvoiceService {
      * @param paginationQuery O DTO com os parâmetros de paginação (page e limit).
      * @returns Um objeto contendo a lista de faturas, total e informações de paginação.
      */
-async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
-  const { search, anoLectivo, codigoMatricula, reference, limit = 10, page = 1,status } = filter;
+  async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
+    const { anoLectivo, codigoMatricula, reference, limit = 10, page = 1, status,codigoFatura } = filter;
 
-  const startRow = (page - 1) * limit + 1;
-  const endRow = page * limit;
+    const startRow = (page - 1) * limit + 1;
+    const endRow = page * limit;
 
-  // WHERE dinâmico
-  const whereConditions: string[] = [];
-  const dataQueryParams: any = { startRow, endRow };
-  const countQueryParams: any = {};
+    // WHERE dinâmico
+    const whereConditions: string[] = [];
+    const dataQueryParams: any = { startRow, endRow };
+    const countQueryParams: any = {};
 
-  if (search) {
-    whereConditions.push(`(
-      LOWER(p.Nome_Completo) LIKE LOWER(:search) OR
-      LOWER(f.Descricao) LIKE LOWER(:search) OR
-      LOWER(c.designacao) LIKE LOWER(:search) OR
-      LOWER(po.designacao) LIKE LOWER(:search) OR
-      LOWER(f.CodigoMatricula) LIKE LOWER(:search) OR
-       LOWER(f.Referencia) LIKE LOWER(:search) 
-    
-    )`);
-    dataQueryParams.search = `%${search}%`;
-    countQueryParams.search = `%${search}%`;
-  }
-  if(status){
-       whereConditions.push(`f.estado = :estado`);
-    dataQueryParams.estado = status;
-    countQueryParams.estado = status;
-  }
+    const estado = normalizeParam(status);
+    if (estado !== undefined && estado !== null) {
+      whereConditions.push(`f.estado = :estado`);
+      dataQueryParams.estado = status;
+      countQueryParams.estado = status;
+    }
 
-  if (anoLectivo) {
-    whereConditions.push(`f.ano_lectivo = :anoLectivo`);
-    dataQueryParams.anoLectivo = anoLectivo;
-    countQueryParams.anoLectivo = anoLectivo;
-  }
 
-  if (codigoMatricula) {
-    whereConditions.push(`f.CodigoMatricula = :codigoMatricula`);
-    dataQueryParams.codigoMatricula = codigoMatricula;
-    countQueryParams.codigoMatricula = codigoMatricula;
-  }
+    if (anoLectivo) {
+      whereConditions.push(`f.ano_lectivo = :anoLectivo`);
+      dataQueryParams.anoLectivo = anoLectivo;
+      countQueryParams.anoLectivo = anoLectivo;
+    }
 
-  if (reference) {
-    whereConditions.push(`f.Referencia = :reference`);
-    dataQueryParams.reference = reference;
-    countQueryParams.reference = reference;
-  }
+     if (codigoFatura) {
+      whereConditions.push(`f.Codigo = :codigoFatura`);
+      dataQueryParams.codigoFatura = codigoFatura;
+      countQueryParams.codigoFatura = codigoFatura;
+    }
 
-  const whereClause = whereConditions.length > 0 ? 'AND ' + whereConditions.join(' AND ') : '';
 
-  // ===== QUERY DADOS =====
-  const dataSql = `
-    SELECT *
-    FROM (
-      SELECT
-        f.Codigo AS codigo,
-        f.DataFactura AS data_factura,
-        f.TotalPreco AS total_preco,
-        f.CodigoMatricula AS codigo_matricula,
-        f.Referencia AS referencia,
-        f.Descricao AS descricao,
-        f.estado AS estado,
-        p.Nome_Completo AS nome_aluno,
-        c.designacao AS curso,
-        po.designacao AS polo,
-       ano.Designacao               AS ano_lectivo,
+    if (codigoMatricula) {
+      whereConditions.push(`f.CodigoMatricula = :codigoMatricula`);
+      dataQueryParams.codigoMatricula = codigoMatricula;
+      countQueryParams.codigoMatricula = codigoMatricula;
+    }
+
+    if (reference) {
+      whereConditions.push(`f.Referencia = :reference`);
+      dataQueryParams.reference = reference;
+      countQueryParams.reference = reference;
+    }
+  
+
+    const whereClause = whereConditions.length > 0 ? 'AND ' + whereConditions.join(' AND ') : '';
+
+    // ===== QUERY DADOS =====
+    const dataSql = `
+SELECT *
+FROM (
+    SELECT
+        f.Codigo                          AS codigo,
+        f.DataFactura                     AS data_factura,
+        f.TotalPreco                      AS total_preco,
+        f.CodigoMatricula                 AS codigo_matricula,
+        f.Referencia                      AS referencia,
+        f.Descricao                       AS descricao,
+        f.estado                          AS estado,
+        p.Nome_Completo                   AS nome_aluno,
+        c.designacao                      AS curso,
+        po.designacao                     AS polo,
+        ano.Designacao                    AS ano_lectivo,
+        
+        -- Concatenar os serviços
+        LISTAGG(ts.Descricao, ' • ') 
+            WITHIN GROUP (ORDER BY ts.Descricao)   AS servicos,          -- ou ORDER BY fi.Codigo se quiseres pela ordem dos itens
+        
+        LISTAGG(TO_CHAR(ts.Codigo), ', ') 
+            WITHIN GROUP (ORDER BY ts.Codigo)      AS codigos_servicos,
+        
+        -- opcional
+        COUNT(fi.Codigo)                  AS qtd_itens,
+        
         ROW_NUMBER() OVER (ORDER BY f.Codigo DESC) AS rn
-      FROM FK2_FACTURA f
-      LEFT JOIN FK2_TB_MATRICULAS m ON m.Codigo = f.CodigoMatricula
-      LEFT JOIN FK2_TB_ADMISSAO a ON a.codigo = m.Codigo_Aluno
-      LEFT JOIN FK2_TB_PREINSCRICAO p ON p.Codigo = a.pre_incricao
-      LEFT JOIN FK2_TB_CURSOS c ON c.codigo = m.Codigo_Curso
-      LEFT JOIN FK2_POLOS po ON po.id = f.polo_id
-      LEFT JOIN FK2_TB_ANO_LECTIVO ano
-             ON ano.Codigo = f.ano_lectivo
-      WHERE 1=1
-      ${whereClause}
-    )
-    WHERE rn BETWEEN :startRow AND :endRow
+    FROM FK2_FACTURA f
+    LEFT JOIN FK2_TB_MATRICULAS       m   ON m.Codigo = f.CodigoMatricula
+    LEFT JOIN FK2_TB_ADMISSAO         a   ON a.codigo = m.Codigo_Aluno
+    LEFT JOIN FK2_TB_PREINSCRICAO     p   ON p.Codigo = a.pre_incricao
+    LEFT JOIN FK2_TB_CURSOS           c   ON c.codigo = m.Codigo_Curso
+    LEFT JOIN FK2_POLOS               po  ON po.id = f.polo_id
+    LEFT JOIN FK2_TB_ANO_LECTIVO      ano ON ano.Codigo = f.ano_lectivo
+    
+    LEFT JOIN FK2_FACTURA_ITEMS       fi  ON fi.CodigoFactura = f.Codigo
+    LEFT JOIN FK2_TB_TIPO_SERVICOS    ts  ON ts.Codigo = fi.CodigoProduto
+
+    WHERE 1=1
+    ${whereClause}
+
+    GROUP BY
+        f.Codigo, f.DataFactura, f.TotalPreco, f.CodigoMatricula,
+        f.Referencia, f.Descricao, f.estado,
+        p.Nome_Completo, c.designacao, po.designacao, ano.Designacao
+) t
+WHERE rn BETWEEN :startRow AND :endRow
   `;
 
-  const rawResults = await this.dataSource.query(dataSql, dataQueryParams);
+    const rawResults = await this.dataSource.query(dataSql, dataQueryParams);
 
-  // ===== QUERY TOTAL =====
-  const countSql = `
+    // ===== QUERY TOTAL =====
+    const countSql = `
     SELECT COUNT(*) AS total
     FROM FK2_FACTURA f
     LEFT JOIN FK2_TB_MATRICULAS m ON m.Codigo = f.CodigoMatricula
@@ -327,21 +344,21 @@ async findInvoices(filter: InvoiceSearchDto): Promise<PagedResult<any>> {
     ${whereClause}
   `;
 
-  const totalResult = await this.dataSource.query(countSql, countQueryParams);
+    const totalResult = await this.dataSource.query(countSql, countQueryParams);
 
-  const total = Number(totalResult[0]?.TOTAL ?? 0);
-  const totalPages = Math.ceil(total / limit);
+    const total = Number(totalResult[0]?.TOTAL ?? 0);
+    const totalPages = Math.ceil(total / limit);
 
-  return {
-    data: toLowerCaseKeys(rawResults),
-    total,
-    page,
-    limit,
-    totalPages,
-  };
-}
-async findInvoiceItens(invoiceId: number) {
-  const sql = `
+    return {
+      data: toLowerCaseKeys(rawResults),
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+  async findInvoiceItens(invoiceId: number) {
+    const sql = `
     SELECT
       fi.Codigo                AS codigoItem,
       fi.CodigoFactura         AS codigoFactura,
@@ -368,12 +385,12 @@ async findInvoiceItens(invoiceId: number) {
     WHERE fi.CodigoFactura = :invoiceId
   `;
 
-  const params = [invoiceId];
+    const params = [invoiceId];
 
-  const results = await this.dataSource.query(sql, params);
+    const results = await this.dataSource.query(sql, params);
 
-  return toLowerCaseKeys(results);
-}
+    return toLowerCaseKeys(results);
+  }
 
 
 
@@ -382,32 +399,32 @@ async findInvoiceItens(invoiceId: number) {
   }
 
 
-async findByEnrollmentCode(
-  filterQuery: InvoiceFilterEnrollmentDto
-): Promise<PagedResult<any>> {
+  async findByEnrollmentCode(
+    filterQuery: InvoiceFilterEnrollmentDto
+  ): Promise<PagedResult<any>> {
 
-  const {
-    limit = 10,
-    page = 1,
-    codigoMatricula,
-    academicYear,
-    status,
-  } = filterQuery;
+    const {
+      limit = 10,
+      page = 1,
+      codigoMatricula,
+      academicYear,
+      status,
+    } = filterQuery;
 
-  if (!codigoMatricula || !academicYear) {
-    throw new BadRequestException(
-      'Código da matrícula e ano letivo são obrigatórios.'
-    );
-  }
+    if (!codigoMatricula || !academicYear) {
+      throw new BadRequestException(
+        'Código da matrícula e ano letivo são obrigatórios.'
+      );
+    }
 
-  // Oracle pagination (ROW_NUMBER)
-  const startRow = (page - 1) * limit + 1;
-  const endRow = page * limit;
+    // Oracle pagination (ROW_NUMBER)
+    const startRow = (page - 1) * limit + 1;
+    const endRow = page * limit;
 
-  /* ============================
-     QUERY PAGINADA (DADOS)
-     ============================ */
-  const dataSql = `
+    /* ============================
+       QUERY PAGINADA (DADOS)
+       ============================ */
+    const dataSql = `
   SELECT *
   FROM (
       SELECT
@@ -519,21 +536,21 @@ async findByEnrollmentCode(
   WHERE rn BETWEEN :startRow AND :endRow
   `;
 
-  const rawResults = await this.dataSource.query(dataSql, {
-    codigoMatricula,
-    academicYear,
-    status: status ?? null,
-    startRow,
-    endRow,
-  } as any);
+    const rawResults = await this.dataSource.query(dataSql, {
+      codigoMatricula,
+      academicYear,
+      status: status ?? null,
+      startRow,
+      endRow,
+    } as any);
 
-  console.log(status,rawResults);
-  
 
-  /* ============================
-     QUERY TOTAL (COUNT CORRETO)
-     ============================ */
-  const countSql = `
+
+
+    /* ============================
+       QUERY TOTAL (COUNT CORRETO)
+       ============================ */
+    const countSql = `
     SELECT COUNT(DISTINCT f.Codigo) AS TOTAL
     FROM FK2_FACTURA f
     LEFT JOIN FK2_FACTURA_ITEMS fi
@@ -547,25 +564,25 @@ async findByEnrollmentCode(
         AND (:status IS NULL OR f.estado = :status)
   `;
 
-  const totalResult = await this.dataSource.query(countSql, {
-    codigoMatricula,
-    academicYear,
-    status: status ?? null,
-  } as any);
+    const totalResult = await this.dataSource.query(countSql, {
+      codigoMatricula,
+      academicYear,
+      status: status ?? null,
+    } as any);
 
-  const total = Number(totalResult[0]?.TOTAL ?? 0);
-  const totalPages  = Math.ceil(total / limit) ;
+    const total = Number(totalResult[0]?.TOTAL ?? 0);
+    const totalPages = Math.ceil(total / limit);
 
-  const groupedInvoices = groupInvoices(rawResults);
+    const groupedInvoices = groupInvoices(rawResults);
 
-  return {
-    data: groupedInvoices,
-    total,
-    page,
-    limit,
-    totalPages,
-  };
-}
+    return {
+      data: groupedInvoices,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
 
 
 
@@ -692,13 +709,13 @@ function groupInvoices(rows: any[]): any[] {
         ano_lectivo: row.ANO_ANO_LECTIVO,
 
         // ================= ALUNO =================
-     
-          NomeCompleto: row.NOME_COMPLETO_ALUNO,
-          BI: row.BI_ALUNO,
-          Email: row.EMAIL_ALUNO,
-          Contactos: row.CONTACTOS_TELEFONICOS,
-          DataNascimento: row.DATA_NASCIMENTO,
-       
+
+        NomeCompleto: row.NOME_COMPLETO_ALUNO,
+        BI: row.BI_ALUNO,
+        Email: row.EMAIL_ALUNO,
+        Contactos: row.CONTACTOS_TELEFONICOS,
+        DataNascimento: row.DATA_NASCIMENTO,
+
 
         // ================= LISTAS =================
         itens: [],

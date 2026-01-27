@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus, ParseIntPipe } from '@nestjs/common'; // Importação do ParseIntPipe
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus, ParseIntPipe, UseGuards } from '@nestjs/common'; // Importação do ParseIntPipe
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 
 import { InvoiceService } from './invoice.service';
@@ -10,6 +10,10 @@ import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
 import { InvoiceSearchDto } from './dto/get-invoice.dto';
+import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
+import { PermissionsGuard } from 'src/common/secret/permissions.guard';
+import { RequiredPermissions } from 'src/common/pipes/permissions.decorator';
+import { PermissionTypeDetails } from 'src/common/enums/permission.type';
 
 @ApiTags('Invoices')
 @Controller('invoices')
@@ -39,6 +43,8 @@ export class InvoiceController {
   // 2. FIND ALL (GET) - COM PAGINAÇÃO
   // ------------------------------------
   @Get()
+    @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+  //@RequiredPermissions(PermissionTypeDetails)
   @ApiOperation({ summary: 'Retorna todas as faturas com paginação' })
   @ApiResponse({ status: 200, "description": 'Lista de faturas retornada com sucesso.' })
   async findAll(@Query() paginationQuery: InvoiceSearchDto): Promise<PagedResult<Invoice>> {

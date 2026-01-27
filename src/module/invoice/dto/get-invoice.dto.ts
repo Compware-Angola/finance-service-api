@@ -14,6 +14,11 @@ export class InvoiceSearchDto  extends PaginationQueryDto{
   @IsNumber()
    @Type(() => Number)
   anoLectivo?: number;
+   @ApiPropertyOptional({ type: Number, description: 'Codigo da Factura' })
+  @IsOptional()
+  @IsNumber()
+   @Type(() => Number)
+  codigoFatura?: number;
 
   @ApiPropertyOptional({ type: Number, description: 'Código da matrícula' })
   @IsOptional()

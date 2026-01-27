@@ -4,9 +4,8 @@ import { ApiProperty } from '@nestjs/swagger';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 
 export class GetDebtNegotiationFilterDto extends PaginationQueryDto {
-  
-  @ApiProperty({ 
-    description: 'Código do ano letivo (obrigatório)', 
+  @ApiProperty({
+    description: 'Código do ano letivo (obrigatório)',
     example: 23,
     required: true,
     type: Number,
@@ -45,4 +44,23 @@ export class GetDebtNegotiationFilterDto extends PaginationQueryDto {
   @IsOptional()
   @Type(() => Number)
   faculdadeId?: number;
+
+  @ApiProperty({
+    description: 'codigo de matricula',
+    example: 2,
+    required: false,
+    type: Number,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  codigoMatricula?: number;
+
+  @ApiProperty({
+    description: 'Nome do Aluno',
+    example: 'Penda',
+    required: false,
+    type: String,
+  })
+  @IsOptional()
+  nome?: string;
 }

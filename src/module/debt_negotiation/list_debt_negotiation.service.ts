@@ -31,6 +31,8 @@ export class ListDebtNegotiationService {
       codigoAnoLectivo,
       tipoNegociacaoId,
       faculdadeId,
+      codigoMatricula,
+      nome,
     } = filter;
 
     // Validações mínimas (ajuste conforme sua regra de negócio)
@@ -40,60 +42,56 @@ export class ListDebtNegotiationService {
       );
     }
 
-    const startRow = (page - 1) * limit + 1;
-    const endRow = page * limit;
+    const offset = (page - 1) * limit;
 
     /* =============================================
        QUERY PRINCIPAL PAGINADA
        ============================================= */
     const dataSql = `
-    SELECT *
-    FROM (
-        SELECT
-            m.codigo                        AS codigo_matricula,
-            p.NOME_COMPLETO                 AS nome,
-            c.designacao                    AS curso,
-            nd.VALOR_DIVIDA                 AS valor_divida,
-            nd.QTD_PRESTACOES               AS prestacoes,
-            mi.mes                          AS mes_inicial,
-            mf.mes                          AS mes_final,
-            nd.PRIMEIROVALORAPAGAR          AS primeiro_valor_pagar,
-            nd.VALORPRESTACOES              AS valor_prestacao,
-            nd.VALORRESTANTE                AS valor_restante,
-            nd.CODIGO_FATURA                AS codigo_factura,
-            -- campos úteis extras (opcional - pode remover se não precisar)
-            nd.CODIGO_ANO_LECTIVO           AS ano_lectivo,
-            nd.TIPO_NEGOCIACAO_ID           AS tipo_negociacao_id,
-            c.FACULDADE_ID                  AS faculdade_id,
-            f.DESIGNACAO                    AS faculdade,
-
-            ROW_NUMBER() OVER (
-                ORDER BY nd.VALOR_DIVIDA DESC, m.codigo
-            ) AS rn
-        FROM FK2_NEGOCIACAO_DIVIDAS nd
-        INNER JOIN FK2_TB_MATRICULAS m
-               ON m.codigo = nd.CODIGO_MATRICULA
-        INNER JOIN FK2_TB_ADMISSAO a
-               ON a.codigo = m.CODIGO_ALUNO
-        INNER JOIN FK2_TB_PREINSCRICAO p
-               ON p.codigo = a.PRE_INCRICAO
-        LEFT  JOIN FK2_TB_CURSOS c
-               ON c.codigo = m.CODIGO_CURSO
-        LEFT  JOIN FK2_MESES mi
-               ON mi.codigo = nd.ID_MES_INICIAL
-        LEFT  JOIN FK2_MESES mf
-               ON mf.codigo = nd.ID_MES_FINAL
-        LEFT  JOIN FK2_FACTURA fa
-               ON fa.codigo = nd.CODIGO_FATURA
-        LEFT JOIN FK2_TB_FACULDADE f on f.codigo = c.FACULDADE_ID
-
-        WHERE 1=1
-          AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
-          AND (:codigoCurso IS NULL          OR c.codigo = :codigoCurso)
-          AND (:tipoNegociacaoId IS NULL     OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
-          AND (:faculdadeId IS NULL          OR c.FACULDADE_ID = :faculdadeId)
-    )
-    WHERE rn BETWEEN :startRow AND :endRow
+    SELECT
+    nd.id,
+    m.codigo                        AS codigo_matricula,
+    p.NOME_COMPLETO                 AS nome,
+    c.designacao                    AS curso,
+    nd.VALOR_DIVIDA                 AS valor_divida,
+    nd.QTD_PRESTACOES               AS prestacoes,
+    nd.CREATED_AT                   AS data_criacao,
+    mi.designacao                          AS mes_inicial,
+    mf.designacao                          AS mes_final,
+    nd.PRIMEIROVALORAPAGAR          AS primeiro_valor_pagar,
+    nd.VALORPRESTACOES              AS valor_prestacao,
+    nd.VALORRESTANTE                AS valor_restante,
+    nd.CODIGO_FATURA                AS codigo_factura,
+    nd.CODIGO_ANO_LECTIVO           AS ano_lectivo,
+    nd.TIPO_NEGOCIACAO_ID           AS tipo_negociacao_id,
+    c.FACULDADE_ID                  AS faculdade_id,
+    f.DESIGNACAO                    AS faculdade
+FROM FK2_NEGOCIACAO_DIVIDAS nd
+INNER JOIN FK2_TB_MATRICULAS m
+       ON m.codigo = nd.CODIGO_MATRICULA
+INNER JOIN FK2_TB_ADMISSAO a
+       ON a.codigo = m.CODIGO_ALUNO
+INNER JOIN FK2_TB_PREINSCRICAO p
+       ON p.codigo = a.PRE_INCRICAO
+LEFT  JOIN FK2_TB_CURSOS c
+       ON c.codigo = m.CODIGO_CURSO
+LEFT  JOIN fk2_meses_calendario mi
+       ON mi.id = nd.ID_MES_INICIAL
+LEFT  JOIN fk2_meses_calendario mf
+       ON mf.id = nd.ID_MES_FINAL
+LEFT  JOIN FK2_FACTURA fa
+       ON fa.codigo = nd.CODIGO_FATURA
+LEFT  JOIN FK2_TB_FACULDADE f
+       ON f.codigo = c.FACULDADE_ID
+WHERE 1=1
+  AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
+  AND (:codigoCurso IS NULL      OR c.codigo = :codigoCurso)
+  AND (:tipoNegociacaoId IS NULL OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
+  AND (:faculdadeId IS NULL      OR c.FACULDADE_ID = :faculdadeId)
+  AND (:codigoMatricula IS NULL  OR m.codigo = :codigoMatricula)
+  AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
+ORDER BY nd.CREATED_AT ASC
+OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
     `;
 
     const rawResults = await this.dataSource.query(dataSql, {
@@ -101,8 +99,10 @@ export class ListDebtNegotiationService {
       codigoCurso: codigoCurso ?? null,
       tipoNegociacaoId: tipoNegociacaoId ?? null,
       faculdadeId: faculdadeId ?? null,
-      startRow,
-      endRow,
+      codigoMatricula: codigoMatricula ?? null,
+      nome: nome ?? null,
+      offset,
+      limit,
     } as any);
 
     /* =============================================
@@ -113,6 +113,10 @@ export class ListDebtNegotiationService {
       FROM FK2_NEGOCIACAO_DIVIDAS nd
       INNER JOIN FK2_TB_MATRICULAS m
              ON m.codigo = nd.CODIGO_MATRICULA
+      INNER JOIN FK2_TB_ADMISSAO a
+       ON a.codigo = m.CODIGO_ALUNO
+      INNER JOIN FK2_TB_PREINSCRICAO p
+       ON p.codigo = a.PRE_INCRICAO
       LEFT  JOIN FK2_TB_CURSOS c
              ON c.codigo = m.CODIGO_CURSO
 
@@ -121,6 +125,8 @@ export class ListDebtNegotiationService {
         AND (:codigoCurso IS NULL          OR c.codigo = :codigoCurso)
         AND (:tipoNegociacaoId IS NULL     OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
         AND (:faculdadeId IS NULL          OR c.FACULDADE_ID = :faculdadeId)
+        AND (:codigoMatricula IS NULL  OR m.codigo = :codigoMatricula)
+        AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
     `;
 
     /* =============================================
@@ -134,6 +140,10 @@ export class ListDebtNegotiationService {
   FROM FK2_NEGOCIACAO_DIVIDAS nd
   INNER JOIN FK2_TB_MATRICULAS m
          ON m.codigo = nd.CODIGO_MATRICULA
+  INNER JOIN FK2_TB_ADMISSAO a
+       ON a.codigo = m.CODIGO_ALUNO
+  INNER JOIN FK2_TB_PREINSCRICAO p
+       ON p.codigo = a.PRE_INCRICAO
   LEFT  JOIN FK2_TB_CURSOS c
          ON c.codigo = m.CODIGO_CURSO
 
@@ -142,6 +152,8 @@ export class ListDebtNegotiationService {
     AND (:codigoCurso IS NULL      OR c.codigo = :codigoCurso)
     AND (:tipoNegociacaoId IS NULL OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
     AND (:faculdadeId IS NULL      OR c.FACULDADE_ID = :faculdadeId)
+    AND (:codigoMatricula IS NULL  OR m.codigo = :codigoMatricula)
+    AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
 `;
 
     const totalResult = await this.dataSource.query(countSql, {
@@ -149,12 +161,16 @@ export class ListDebtNegotiationService {
       codigoCurso: codigoCurso ?? null,
       tipoNegociacaoId: tipoNegociacaoId ?? null,
       faculdadeId: faculdadeId ?? null,
+      codigoMatricula: codigoMatricula ?? null,
+      nome: nome ?? null,
     } as any);
     const [statsResult] = await this.dataSource.query(statsSql, {
       codigoAnoLectivo,
       codigoCurso: codigoCurso ?? null,
       tipoNegociacaoId: tipoNegociacaoId ?? null,
       faculdadeId: faculdadeId ?? null,
+      codigoMatricula: codigoMatricula ?? null,
+      nome: nome ?? null,
     } as any);
 
     const total = Number(totalResult[0]?.TOTAL ?? 0);

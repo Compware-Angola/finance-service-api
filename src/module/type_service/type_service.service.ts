@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { FilterTypeServiceDto } from './dto/filter-type-service.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { CreateTypeServiceDto } from './dto/create-type_service.dto';
+import { UpdateTypeServiceDto } from './dto/update-type_service.dto';
 
 @Injectable()
 export class TypeServiceService {
@@ -80,5 +82,130 @@ export class TypeServiceService {
     const result = await this.dataSource.query(sql, params);
 
     return await toLowerCaseKeys(result);
+  }
+
+  async create(createDto: CreateTypeServiceDto) {
+    const sql = `
+      INSERT INTO FK2_TB_TIPO_SERVICOS (
+        TAXA_IVA_ID,
+        MOTIVO_ISENCAO_IVA_CODIGO,
+        PRECO,
+        DESCRICAO,
+        TIPOSERVICO,
+        DATACRIACAO,
+        ESTADO,
+        DATA,
+        DISPONIBILIZAR_ALUNO,
+        CODIGO_GRADE_CURRILULAR,
+        MESTRADO,
+        CANAL,
+        POLO_ID,
+        CACUACO,
+        CODIGO_ANO_LECTIVO,
+        VALOR_ANTERIOR,
+        VISUALIZAR_NO_PORTAL,
+        SIGLA,
+        ESTADO_SOLICITACAO,
+        TIPO_CANDIDATURA
+      )
+      VALUES (
+        :taxaIvaId,
+        :motivoIsencaoIvaCodigo,
+        :preco,
+        :descricao,
+        :tipoServico,
+        SYSDATE,
+        :estado,
+        TO_DATE(:data, 'YYYY-MM-DD'),
+        :disponibilizarAluno,
+        :codigoGradeCurricular,
+        :mestrado,
+        :canal,
+        :poloId,
+        :cacuaco,
+        :codigoAnoLectivo,
+        :valorAnterior,
+        :visualizarNoPortal,
+        :sigla,
+        :estadoSolicitacao,
+        :tipoCandidatura
+      )
+    `;
+
+    const params: any = {
+      taxaIvaId: createDto.taxaIvaId,
+      motivoIsencaoIvaCodigo: createDto.motivoIsencaoIvaCodigo,
+      preco: createDto.preco,
+      descricao: createDto.descricao ?? null,
+      tipoServico: createDto.tipoServico ?? null,
+      estado: (createDto.estado ?? true) ? 'Ativo' : 'Inativo',
+      data: createDto.data
+        ? new Date(createDto.data).toISOString().split('T')[0]
+        : null,
+      disponibilizarAluno:
+        (createDto.disponibilizarAluno ?? true) ? 'SIM' : 'NAO',
+      codigoGradeCurricular: createDto.codigoGradeCurricular ?? null,
+      mestrado: createDto.mestrado ? 'SIM' : 'NAO',
+      canal: createDto.canal ?? null,
+      poloId: createDto.poloId,
+      cacuaco: createDto.cacuaco ? 'SIM' : 'NAO',
+      codigoAnoLectivo: createDto.codigoAnoLectivo,
+      valorAnterior: createDto.valorAnterior ?? null,
+      visualizarNoPortal:
+        (createDto.visualizarNoPortal ?? true) ? 'SIM' : 'NAO',
+      sigla: createDto.sigla,
+      estadoSolicitacao: createDto.estadoSolicitacao ?? null,
+      tipoCandidatura: createDto.tipoCandidatura ?? null,
+    };
+
+    await this.dataSource.query(sql, params);
+  }
+
+  async update(codigo: number, updateDto: UpdateTypeServiceDto) {
+    const setClauses: string[] = [];
+    const params: any = { codigo };
+
+    if (updateDto.taxaIvaId !== undefined) {
+      setClauses.push('TAXA_IVA_ID = :taxaIvaId');
+      params.taxaIvaId = updateDto.taxaIvaId;
+    }
+
+    if (updateDto.preco !== undefined) {
+      setClauses.push('PRECO = :preco');
+      params.preco = updateDto.preco;
+    }
+
+    if (updateDto.descricao !== undefined) {
+      setClauses.push('DESCRICAO = :descricao');
+      params.descricao = updateDto.descricao;
+    }
+
+    if (updateDto.estado !== undefined) {
+      setClauses.push('ESTADO = :estado');
+      params.estado = updateDto.estado ? 'Ativo' : 'Inativo';
+    }
+
+    if (updateDto.poloId !== undefined) {
+      setClauses.push('POLO_ID = :poloId');
+      params.poloId = updateDto.poloId;
+    }
+
+    if (updateDto.motivoIsencaoIvaCodigo !== undefined) {
+      setClauses.push('MOTIVO_ISENCAO_IVA_CODIGO = :motivoIsencaoIvaCodigo');
+      params.motivoIsencaoIvaCodigo = updateDto.motivoIsencaoIvaCodigo;
+    }
+
+    if (updateDto.codigoAnoLectivo !== undefined) {
+      setClauses.push('CODIGO_ANO_LECTIVO = :codigoAnoLectivo');
+      params.codigoAnoLectivo = updateDto.codigoAnoLectivo;
+    }
+
+    const sql = `
+      UPDATE FK2_TB_TIPO_SERVICOS 
+      SET ${setClauses.join(', ')}
+      WHERE CODIGO = :codigo
+    `;
+
+    await this.dataSource.query(sql, params);
   }
 }

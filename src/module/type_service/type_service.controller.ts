@@ -11,6 +11,7 @@ import { TypeServiceService } from './type_service.service';
 import { CreateTypeServiceDto } from './dto/create-type_service.dto';
 import { UpdateTypeServiceDto } from './dto/update-type_service.dto';
 import { FilterTypeServiceDto } from './dto/filter-type-service.dto';
+import { FilterTypeServiceAllDto } from './dto/filter-type-service-all.dto';
 
 @Controller('type-service')
 export class TypeServiceController {
@@ -18,6 +19,10 @@ export class TypeServiceController {
   @Get()
   findTipoServicosDropdown(@Query() filters: FilterTypeServiceDto) {
     return this.typeServiceService.findTipoServicosDropdown(filters);
+  }
+    @Get('all')
+   findTipoServicos(@Query() filters: FilterTypeServiceAllDto) {
+    return this.typeServiceService.findTipoServicos(filters);
   }
 
   @Post()

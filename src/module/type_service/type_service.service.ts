@@ -99,6 +99,8 @@ export class TypeServiceService {
 
   /** 🔍 Filtros */
   whereConditions.push('TS.SIGLA IS NOT NULL');
+whereConditions.push(`UPPER(TS.SIGLA) <> UPPER('PROP')`);
+
 
   if (sigla) {
     whereConditions.push('UPPER(TS.SIGLA) = UPPER(:sigla)');
@@ -131,6 +133,97 @@ export class TypeServiceService {
     );
     params.visualizarNoPortal = visualizarNoPortal;
   }
+
+  const whereClause =
+    whereConditions.length > 0
+      ? 'WHERE ' + whereConditions.join(' AND ')
+      : '';
+
+  /** 📊 Total de registos */
+  const countSql = `
+    SELECT COUNT(1) TOTAL
+    FROM FK2_TB_TIPO_SERVICOS TS
+    ${whereClause}
+  `;
+
+  const [{ TOTAL }] = await this.dataSource.query(countSql, params);
+
+  /** 📄 Paginação */
+  const offset = (page - 1) * limit;
+
+  params.offset = offset;
+  params.limit = limit;
+
+  const sql = `
+    SELECT
+      TS.CODIGO,
+      TS.SIGLA,
+      TS.DESCRICAO,
+      TS.PRECO,
+      TS.TIPOSERVICO,
+      TS.CODIGO_ANO_LECTIVO,
+      TS.ESTADO,
+      TS.DATA,
+      TS.DATACRIACAO,
+      TS.DISPONIBILIZAR_ALUNO,
+      TS.VISUALIZAR_NO_PORTAL,
+      TS.POLO_ID,
+      TS.CANAL,
+      TS.MESTRADO,
+      TS.CODIGO_GRADE_CURRILULAR,
+      TS.TIPO_CANDIDATURA
+    FROM FK2_TB_TIPO_SERVICOS TS
+    ${whereClause}
+    ORDER BY TS.CODIGO ASC
+    OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+  `;
+
+  const result = await this.dataSource.query(sql, params);
+
+  return {
+    data: await toLowerCaseKeys(result),
+    total: Number(TOTAL),
+    page,
+    limit,
+    lastPage: Math.ceil(TOTAL / limit),
+  };
+}
+  async findTipoMonthlyFee({
+  codigoAnoLectivo,
+  estado,
+  descricao,
+  page = 1,
+  limit = 10,
+}: FilterTypeServiceAllDto) {
+  const whereConditions: string[] = [];
+  const params: any = {};
+  const sigla = 'PROP';
+
+  /** 🔍 Filtros */
+  whereConditions.push('TS.SIGLA IS NOT NULL');
+
+  if (sigla) {
+    whereConditions.push('UPPER(TS.SIGLA) = UPPER(:sigla)');
+    params.sigla = sigla;
+  }
+
+  if (descricao) {
+    whereConditions.push('UPPER(TS.DESCRICAO) LIKE UPPER(:descricao)');
+    params.descricao = `%${descricao}%`;
+  }
+
+  if (codigoAnoLectivo !== undefined) {
+    whereConditions.push('TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo');
+    params.codigoAnoLectivo = codigoAnoLectivo;
+  }
+
+  if (estado !== undefined) {
+    whereConditions.push('TS.ESTADO = :estado');
+    params.estado = estado;
+  }
+
+
+
 
   const whereClause =
     whereConditions.length > 0
@@ -311,5 +404,8 @@ export class TypeServiceService {
     `;
 
     await this.dataSource.query(sql, params);
+  }
+  async delete(codigo:number){
+  
   }
 }

@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Query,
+  Put,
 } from '@nestjs/common';
 import { TypeServiceService } from './type_service.service';
 import { CreateTypeServiceDto } from './dto/create-type_service.dto';
@@ -24,13 +25,17 @@ export class TypeServiceController {
    findTipoServicos(@Query() filters: FilterTypeServiceAllDto) {
     return this.typeServiceService.findTipoServicos(filters);
   }
+  @Get('monthly-fee')
+  findTipoMonthlyFee(@Query() filters: FilterTypeServiceAllDto) {
+    return this.typeServiceService.findTipoMonthlyFee(filters);
+  }
 
   @Post()
   create(@Body() createDto: CreateTypeServiceDto) {
     return this.typeServiceService.create(createDto);
   }
 
-  @Patch(':codigo')
+  @Put(':codigo')
   update(
     @Param('codigo') codigo: number,
     @Body() updateDto: UpdateTypeServiceDto,

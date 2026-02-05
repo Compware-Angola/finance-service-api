@@ -15,6 +15,7 @@ import { DisciplineModule } from './module/discipline/discipline.module';
 import { TypeServiceModule } from './module/type_service/type_service.module';
 import { AlunoModule } from './module/aluno/aluno.module';
 import { HttpModule } from '@nestjs/axios';
+import { SharedModule } from './module/shared/shared.module';
 
 @Module({
 
@@ -75,6 +76,8 @@ import { HttpModule } from '@nestjs/axios';
     DisciplineModule,
 
     TypeServiceModule,
+
+    SharedModule,
   ],
   providers: [BullMQWorkerService, PaymentExpirationCron],
 })

@@ -32,8 +32,15 @@ export class UpdateTypeServiceDto {
   @IsString()
   descricao?: string;
 
+   @ApiPropertyOptional({ example: 'ANUAL', description: 'Tipo de Servico' })
+  @IsOptional()
+  @IsString()
+  tipoServico?: string;
+
   @ApiPropertyOptional({ example: true, description: 'Estado do serviço' })
   @IsOptional()
   @IsBoolean()
   estado?: boolean;
+
+  
 }

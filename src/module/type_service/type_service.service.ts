@@ -88,6 +88,7 @@ export class TypeServiceService {
   sigla,
   codigoAnoLectivo,
   estado,
+  polo,
   tipoServico,
   visualizarNoPortal,
   descricao,
@@ -105,6 +106,15 @@ whereConditions.push(`UPPER(TS.SIGLA) <> UPPER('PROP')`);
   if (sigla) {
     whereConditions.push('UPPER(TS.SIGLA) = UPPER(:sigla)');
     params.sigla = sigla;
+  }
+   if (polo !== undefined && polo !=3) {
+    whereConditions.push('TS.POLO_ID = :polo');
+    params.polo = polo;
+  }
+    if (polo !== undefined && polo ==4) {
+      //Estado para indefinido
+    whereConditions.push('TS.POLO_ID = NULL');
+    params.polo = polo;
   }
 
   if (descricao) {
@@ -168,11 +178,17 @@ whereConditions.push(`UPPER(TS.SIGLA) <> UPPER('PROP')`);
       TS.DISPONIBILIZAR_ALUNO,
       TS.VISUALIZAR_NO_PORTAL,
       TS.POLO_ID,
+      TS.TAXA_IVA_ID,
+      TS.MOTIVO_ISENCAO_IVA_CODIGO,
       TS.CANAL,
       TS.MESTRADO,
       TS.CODIGO_GRADE_CURRILULAR,
-      TS.TIPO_CANDIDATURA
+      TS.TIPO_CANDIDATURA,
+      POLO.DESIGNACAO AS polo,
+      al.DESIGNACAO    AS ano_lectivo
     FROM FK2_TB_TIPO_SERVICOS TS
+    LEFT JOIN FK2_POLOS POLO ON POLO.ID =TS.POLO_ID
+    LEFT JOIN  FK2_TB_ANO_LECTIVO  al ON al.CODIGO = TS.CODIGO_ANO_LECTIVO
     ${whereClause}
     ORDER BY TS.CODIGO ASC
     OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
@@ -191,6 +207,7 @@ whereConditions.push(`UPPER(TS.SIGLA) <> UPPER('PROP')`);
   async findTipoMonthlyFee({
   codigoAnoLectivo,
   estado,
+  polo,
   descricao,
   page = 1,
   limit = 10,
@@ -206,7 +223,14 @@ whereConditions.push(`UPPER(TS.SIGLA) <> UPPER('PROP')`);
     whereConditions.push('UPPER(TS.SIGLA) = UPPER(:sigla)');
     params.sigla = sigla;
   }
-
+  if (polo !== undefined && polo !=3) {
+    whereConditions.push('TS.POLO_ID = :polo');
+    params.polo = polo;
+  }
+    if (polo !== undefined && polo ==4) {
+    whereConditions.push('TS.POLO_ID = :polo');
+    params.polo = polo;
+  }
   if (descricao) {
     whereConditions.push('UPPER(TS.DESCRICAO) LIKE UPPER(:descricao)');
     params.descricao = `%${descricao}%`;
@@ -259,11 +283,15 @@ whereConditions.push(`UPPER(TS.SIGLA) <> UPPER('PROP')`);
       TS.DISPONIBILIZAR_ALUNO,
       TS.VISUALIZAR_NO_PORTAL,
       TS.POLO_ID,
+        TS.TAXA_IVA_ID,
+        TS.MOTIVO_ISENCAO_IVA_CODIGO,
       TS.CANAL,
       TS.MESTRADO,
       TS.CODIGO_GRADE_CURRILULAR,
-      TS.TIPO_CANDIDATURA
+      TS.TIPO_CANDIDATURA,
+      POLO.DESIGNACAO AS polo
     FROM FK2_TB_TIPO_SERVICOS TS
+    LEFT JOIN FK2_POLOS POLO ON POLO.ID =TS.POLO_ID
     ${whereClause}
     ORDER BY TS.CODIGO ASC
     OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
@@ -385,6 +413,11 @@ whereConditions.push(`UPPER(TS.SIGLA) <> UPPER('PROP')`);
     if (updateDto.poloId !== undefined) {
       setClauses.push('POLO_ID = :poloId');
       params.poloId = updateDto.poloId;
+    }
+    if(updateDto.tipoServico !== undefined){
+     setClauses.push('TIPOSERVICO = :tipoServico');
+      params.tipoServico = updateDto.tipoServico;
+
     }
 
     if (updateDto.motivoIsencaoIvaCodigo !== undefined) {

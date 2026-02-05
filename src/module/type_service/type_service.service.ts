@@ -113,7 +113,7 @@ whereConditions.push(`UPPER(TS.SIGLA) <> UPPER('PROP')`);
   }
     if (polo !== undefined && polo ==4) {
       //Estado para indefinido
-    whereConditions.push('TS.POLO_ID = NULL');
+    whereConditions.push('TS.POLO_ID =:polo');
     params.polo = polo;
   }
 

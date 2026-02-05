@@ -39,7 +39,7 @@ async function bootstrap() {
   );
 
   // Porta
-  const port = process.env.PORT ?? 3002;
+  const port = process.env.PORT as any;
   await app.listen(port);
 
   console.log(`🚀 API Listening on port ${port}.`);

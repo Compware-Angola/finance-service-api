@@ -28,6 +28,15 @@ export class FilterTypeServiceAllDto {
   @IsNumber()
   codigoAnoLectivo?: number;
 
+    @ApiPropertyOptional({
+    description: 'Código do Polo',
+    example: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  polo?: number;
+
   @ApiPropertyOptional({
     description: 'Estado do serviço (0 = Inativo, 1 = Ativo)',
     example: 'Ativo',

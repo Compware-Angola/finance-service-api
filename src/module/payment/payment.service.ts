@@ -7,7 +7,8 @@ import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { InvoiceService } from '../invoice/invoice.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
-import { StudentPaymentItemDto, StudentPaymentsQueryDto } from './dto/student-payment.dto';
+import { StudentPaymentDetailItemDto, StudentPaymentItemDto, StudentPaymentsQueryDto } from './dto/student-payment.dto';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 
 
 @Injectable()
@@ -224,63 +225,98 @@ export class PaymentService {
             limit = 10
         } = query;
 
-        const queryBuilder = this.dataSource.createQueryBuilder()
-            .select('f.Codigo', 'CodigoFactura')
-            .addSelect('f.Descricao', 'DescricaoFactura')
-            .addSelect('f.DataFactura', 'DataFactura')
-            .addSelect('f.ValorAPagar', 'ValorAPagar')
-            .addSelect('f.TotalPreco', 'TotalPreco')
-            .addSelect('f.TotalMulta', 'TotalMulta')
-            .addSelect('f.estado', 'EstadoFactura')
-            .addSelect("LISTAGG(DISTINCT tp.Descricao, ', ') WITHIN GROUP (ORDER BY tp.Descricao)", 'Servicos')
-            .addSelect("LISTAGG(DISTINCT p.Codigo, ', ') WITHIN GROUP (ORDER BY p.Codigo)", 'Pagamentos')
-            .addSelect('SUM(p.valor_depositado)', 'TotalPago')
-            .from('UMA_FACTURA', 'f')
-            .leftJoin('UMA_FACTURA_ITEMS', 'fi', 'f.Codigo = fi.CodigoFactura')
-            .leftJoin('UMA_TB_TIPO_SERVICOS', 'tp', 'fi.CodigoProduto = tp.Codigo')
-            .leftJoin('UMA_TB_PAGAMENTOS', 'p', 'p.codigo_factura = f.Codigo AND p.AnoLectivo = :anoLectivo', {
-                anoLectivo
-            })
-            .where('f.estado = :estado', { estado: 1 });
-        queryBuilder.andWhere(
-            new Brackets((qb) => {
-                qb.where('f.CodigoMatricula = :matricula', { matricula: codigoMatricula })
-                    .orWhere('f.codigo_preinscricao = :preInscricao', { preInscricao: codigoPreInscricao });
-            }),
-        );
-        queryBuilder
-            .groupBy('f.Codigo')
-            .addGroupBy('f.Descricao')
-            .addGroupBy('f.DataFactura')
-            .addGroupBy('f.ValorAPagar')
-            .addGroupBy('f.TotalPreco')
-            .addGroupBy('f.TotalMulta')
-            .addGroupBy('f.estado')
-            .orderBy('f.DataFactura', 'DESC');
-        const totalQuery = await this.dataSource
-            .createQueryBuilder()
-            .select('COUNT(*)', 'count')
-            .from(`(${queryBuilder.getQuery()})`, 'subquery')
-            .setParameters(queryBuilder.getParameters())
-            .getRawOne();
+        const offset = (page - 1) * limit;
 
-        const totalItems = Number(totalQuery.count);
 
-        // 2. Obter os dados paginados
-        const data = await queryBuilder
-            .offset((page - 1) * limit)
-            .limit(limit)
-            .getRawMany();
+        const searchFilter = `f."CodigoMatricula" = ${codigoMatricula} OR f."codigo_preinscricao" = ${codigoPreInscricao}`;
 
+        const baseQuery = `
+        FROM UMA_FACTURA f
+        LEFT JOIN UMA_TB_PAGAMENTOS p ON p."codigo_factura" = f."Codigo" AND p."AnoLectivo" = :anoLectivo
+        LEFT JOIN UMA_FACTURA_ITEMS fi ON f."Codigo" = fi."CodigoFactura"
+        LEFT JOIN UMA_TB_TIPO_SERVICOS tp ON fi."CodigoProduto" = tp."Codigo"
+        WHERE f."estado" = 1 
+        AND (${searchFilter})
+        GROUP BY 
+            f."Codigo", f."Descricao", f."DataFactura", 
+            f."ValorAPagar", f."TotalPreco", f."TotalMulta", f."estado"
+    `;
+
+        const sqlData = `
+        SELECT 
+            f."Codigo" AS "CodigoFactura",
+            f."Descricao" AS "DescricaoFactura",
+            f."DataFactura",
+            f."ValorAPagar",
+            f."TotalPreco",
+            f."TotalMulta",
+            f."estado" AS "EstadoFactura",
+            LISTAGG(DISTINCT tp."Descricao", ', ') WITHIN GROUP (ORDER BY tp."Descricao") AS "Servicos",
+            LISTAGG(DISTINCT p."Codigo", ', ') WITHIN GROUP (ORDER BY p."Codigo") AS "Pagamentos",
+            SUM(p."valor_depositado") AS "TotalPago"
+        ${baseQuery}
+        ORDER BY f."DataFactura" DESC
+        OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+    `;
+
+        const sqlCount = `
+        SELECT COUNT(*) AS TOTAL FROM (
+            SELECT f."Codigo" ${baseQuery}
+        )
+    `;
+
+        const [result, countResult] = await Promise.all([
+            this.dataSource.query(sqlData, [anoLectivo]),
+            this.dataSource.query(sqlCount, [anoLectivo])
+        ]);
+
+        const total = Number(countResult[0]?.TOTAL || 0);
 
         return {
-            data: data as StudentPaymentItemDto[],
-            total: totalItems,
+            data: result as StudentPaymentItemDto[],
+            total,
             page,
             limit,
-            totalPages: Math.ceil(totalItems / limit),
-
+            totalPages: Math.ceil(total / limit),
         };
     }
+    async studentPaymentsDetails(
+        facturaCode: number,
+    ): Promise<StudentPaymentDetailItemDto[]> {
+        const sql = `
+        SELECT
+            f.CODIGO AS CodigoFactura,
+            f.DATAFACTURA AS DataFactura,
+            f.REFERENCIA,
+            f.CODIGOMATRICULA,
+            f.CODIGO_PREINSCRICAO,
+            f.VALORAPAGAR,
+            f.TOTALPRECO,
+            f.TOTALMULTA,
+            f.TOTALIVA,
+            DBMS_LOB.SUBSTR(f.OBS, 4000, 1) AS ObservacaoFactura,
+            DBMS_LOB.SUBSTR(tp.DESCRICAO, 4000, 1) AS Servico,
+            ffi.QUANTIDADE,
+            ffi.PRECO,
+            ffi.VALOR_IVA,
+            ffi.MULTA,
+            ffi.TOTAL,
+            ffi.VALOR_PAGO
+        FROM FK2_FACTURA f
+        INNER JOIN FK2_FACTURA_ITEMS ffi 
+                ON f.CODIGO = ffi.CODIGOFACTURA
+        INNER JOIN FK2_TB_TIPO_SERVICOS tp 
+                ON ffi.CODIGOPRODUTO = tp.CODIGO
+        WHERE f.CODIGO = :facturaCode
+        ORDER BY DBMS_LOB.SUBSTR(tp.DESCRICAO, 4000, 1)
+    `;
+
+
+        return await this.dataSource.query(sql, [facturaCode]);
+
+
+
+    }
+
 }
 

@@ -70,3 +70,61 @@ export class StudentPaymentResponseDto {
     @ApiProperty({ example: 2 })
     totalPages: number;
 }
+
+
+
+export class StudentPaymentDetailItemDto {
+    @ApiProperty({ example: 421495 })
+    CodigoFactura: number;
+
+    @ApiProperty({ example: '2025-01-10T00:00:00.000Z' })
+    DataFactura: Date;
+
+    @ApiProperty({ example: 'PROP-2025-0001' })
+    Referencia: string;
+
+    @ApiProperty({ example: 1234 })
+    CodigoMatricula: number;
+
+    @ApiProperty({ example: 5678, nullable: true })
+    CodigoPreInscricao: number | null;
+
+    @ApiProperty({ example: 150000 })
+    ValorAPagar: number;
+
+    @ApiProperty({ example: 140000 })
+    TotalPreco: number;
+
+    @ApiProperty({ example: 5000 })
+    TotalMulta: number;
+
+    @ApiProperty({ example: 5000 })
+    TotalIva: number;
+
+    @ApiProperty({
+        example: 'Pagamento da propina do 1º semestre',
+        nullable: true,
+    })
+    ObservacaoFactura: string | null;
+
+    @ApiProperty({ example: 'Propina' })
+    Servico: string;
+
+    @ApiProperty({ example: 1 })
+    Quantidade: number;
+
+    @ApiProperty({ example: 140000 })
+    Preco: number;
+
+    @ApiProperty({ example: 5000 })
+    ValorIva: number;
+
+    @ApiProperty({ example: 5000 })
+    Multa: number;
+
+    @ApiProperty({ example: 150000 })
+    Total: number;
+
+    @ApiProperty({ example: 100000 })
+    ValorPago: number;
+}

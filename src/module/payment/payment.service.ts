@@ -7,8 +7,8 @@ import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { InvoiceService } from '../invoice/invoice.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
-import { StudentPaymentDetailItemDto, StudentPaymentItemDto, StudentPaymentsQueryDto } from './dto/student-payment.dto';
-import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
+
 
 
 @Injectable()
@@ -216,64 +216,84 @@ export class PaymentService {
         return this.paymentRepository.findOne({ where: { N_Operacao_Bancaria2 } });
     }
 
-    async studentPayments(query: StudentPaymentsQueryDto): Promise<PagedResult<StudentPaymentItemDto>> {
+    async studentPayments(query: StudentPaymentsQueryDto) {
         const {
             codigoMatricula,
             codigoPreInscricao,
             anoLectivo,
+            codigoFactura,
             page = 1,
             limit = 10
         } = query;
 
         const offset = (page - 1) * limit;
+        const queryParams: any[] = [];
 
 
-        const searchFilter = `f."CodigoMatricula" = ${codigoMatricula} OR f."codigo_preinscricao" = ${codigoPreInscricao}`;
+        let whereClause = `f."ESTADO" = 1`;
+
+
+        const idFilters: string[] = [];
+        if (codigoMatricula) {
+            queryParams.push(codigoMatricula);
+            idFilters.push(`f."CODIGOMATRICULA" = :${queryParams.length}`);
+        }
+        if (codigoPreInscricao) {
+            queryParams.push(codigoPreInscricao);
+            idFilters.push(`f."CODIGO_PREINSCRICAO" = :${queryParams.length}`);
+        }
+
+        if (idFilters.length > 0) {
+            whereClause += ` AND (${idFilters.join(' OR ')})`;
+        }
+
+        if (codigoFactura) {
+            queryParams.push(codigoFactura);
+            whereClause += ` AND f."CODIGO" = :${queryParams.length}`;
+        }
+
+        if (anoLectivo) {
+            queryParams.push(anoLectivo);
+            whereClause += ` AND f."ANO_LECTIVO" = :${queryParams.length}`;
+        }
+
 
         const baseQuery = `
-        FROM UMA_FACTURA f
-        LEFT JOIN UMA_TB_PAGAMENTOS p ON p."codigo_factura" = f."Codigo" AND p."AnoLectivo" = :anoLectivo
-        LEFT JOIN UMA_FACTURA_ITEMS fi ON f."Codigo" = fi."CodigoFactura"
-        LEFT JOIN UMA_TB_TIPO_SERVICOS tp ON fi."CodigoProduto" = tp."Codigo"
-        WHERE f."estado" = 1 
-        AND (${searchFilter})
+        FROM FK2_FACTURA f
+        WHERE ${whereClause}
         GROUP BY 
-            f."Codigo", f."Descricao", f."DataFactura", 
-            f."ValorAPagar", f."TotalPreco", f."TotalMulta", f."estado"
+            f."CODIGO", f."DATAFACTURA", 
+            f."VALORAPAGAR", f."TOTALPRECO", f."TOTALMULTA", f."ESTADO"
     `;
 
         const sqlData = `
         SELECT 
-            f."Codigo" AS "CodigoFactura",
-            f."Descricao" AS "DescricaoFactura",
-            f."DataFactura",
-            f."ValorAPagar",
-            f."TotalPreco",
-            f."TotalMulta",
-            f."estado" AS "EstadoFactura",
-            LISTAGG(DISTINCT tp."Descricao", ', ') WITHIN GROUP (ORDER BY tp."Descricao") AS "Servicos",
-            LISTAGG(DISTINCT p."Codigo", ', ') WITHIN GROUP (ORDER BY p."Codigo") AS "Pagamentos",
-            SUM(p."valor_depositado") AS "TotalPago"
+            f."CODIGO" AS "CodigoFactura",
+            f."DATAFACTURA",
+            f."VALORAPAGAR",
+            f."TOTALPRECO",
+            f."TOTALMULTA",
+            f."ESTADO" AS "EstadoFactura"
         ${baseQuery}
-        ORDER BY f."DataFactura" DESC
+        ORDER BY f."DATAFACTURA" DESC
         OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     `;
 
         const sqlCount = `
         SELECT COUNT(*) AS TOTAL FROM (
-            SELECT f."Codigo" ${baseQuery}
-        )
+            SELECT f."CODIGO" ${baseQuery}
+        ) t
     `;
 
         const [result, countResult] = await Promise.all([
-            this.dataSource.query(sqlData, [anoLectivo]),
-            this.dataSource.query(sqlCount, [anoLectivo])
+            this.dataSource.query(sqlData, queryParams),
+            this.dataSource.query(sqlCount, queryParams)
         ]);
 
         const total = Number(countResult[0]?.TOTAL || 0);
 
         return {
-            data: result as StudentPaymentItemDto[],
+            data: result,
             total,
             page,
             limit,
@@ -282,7 +302,7 @@ export class PaymentService {
     }
     async studentPaymentsDetails(
         facturaCode: number,
-    ): Promise<StudentPaymentDetailItemDto[]> {
+    ) {
         const sql = `
         SELECT
             f.CODIGO AS CodigoFactura,

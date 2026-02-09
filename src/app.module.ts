@@ -10,7 +10,6 @@ import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiatio
 import { BullMQWorkerService } from './bullmq-worker.service';
 
 import { ScheduleModule } from '@nestjs/schedule';
-import { PaymentExpirationCron } from '../../scheduled-tasks-service/src/module/finance/job/payment-expiration.cron';
 import { DisciplineModule } from './module/discipline/discipline.module';
 import { TypeServiceModule } from './module/type_service/type_service.module';
 import { AlunoModule } from './module/aluno/aluno.module';
@@ -80,6 +79,6 @@ import { MonthlyFeePenaltyCronTest } from './module/jobs/payment-monthly-fee';
 
     SharedModule,
   ],
-  providers: [BullMQWorkerService, PaymentExpirationCron,MonthlyFeePenaltyCronTest],
+  providers: [BullMQWorkerService,MonthlyFeePenaltyCronTest],
 })
 export class AppModule { }

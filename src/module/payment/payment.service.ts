@@ -1,13 +1,16 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { Brackets, DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { Payment } from './entities/payment.entity';
-import { DetailedPaymentInvoiceItemResult } from './dto/payment-invoice-item-result.interface';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { InvoiceService } from '../invoice/invoice.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
+import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
+
+
+
 @Injectable()
 export class PaymentService {
     private anoAtualPrincipal: number;
@@ -18,7 +21,7 @@ export class PaymentService {
         private readonly invoiceService: InvoiceService,
         private dataSource: DataSource,
     ) { this.initAnoAtual(); }
-      private async initAnoAtual() {
+    private async initAnoAtual() {
         this.anoAtualPrincipal = await this.anoLectivoUtil.getAnoAtualId();
     }
 
@@ -31,91 +34,91 @@ export class PaymentService {
      * @param paginationQuery O DTO de paginação (limit e page).
      * @returns Uma Promise que resolve para um PagedResult contendo os resultados planos.
      */
-async findInvoicesAndItemsDetailedFlat(
-  anoLectivo: string,
-  codigoPreInscricao: string,
-  paginationQuery: PaginationQueryDto,
-): Promise<PagedResult<any>> {
-  const { limit = 10, page = 1 } = paginationQuery;
-  const skip = (page - 1) * limit;
+    async findInvoicesAndItemsDetailedFlat(
+        anoLectivo: string,
+        codigoPreInscricao: string,
+        paginationQuery: PaginationQueryDto,
+    ): Promise<PagedResult<any>> {
+        const { limit = 10, page = 1 } = paginationQuery;
+        const skip = (page - 1) * limit;
 
-  const baseQuery = this.paymentRepository
-    .createQueryBuilder('p')
-    .innerJoin('UMA_FACTURA', 'f', '"p"."codigo_factura" = "f"."Codigo"')
-    .innerJoin('UMA_FACTURA_ITEMS', 'fi', '"f"."Codigo" = "fi"."CodigoFactura"')
-    .innerJoin('UMA_TB_TIPO_SERVICOS', 'tp', '"fi"."CodigoProduto" = "tp"."Codigo"')
-    .where('REGEXP_LIKE(TRIM("p"."AnoLectivo"), \'^[0-9]+$\')')
-    .andWhere('REGEXP_LIKE(TRIM("p"."Codigo_PreInscricao"), \'^[0-9]+$\')')
-    .andWhere('TRIM("p"."AnoLectivo") = :anoLectivo', { anoLectivo })
-    .andWhere('TRIM("p"."Codigo_PreInscricao") = :codigoPreInscricao', { codigoPreInscricao })
-    .andWhere('"f"."estado" = :status', { status: 1 });
+        const baseQuery = this.paymentRepository
+            .createQueryBuilder('p')
+            .innerJoin('UMA_FACTURA', 'f', '"p"."codigo_factura" = "f"."Codigo"')
+            .innerJoin('UMA_FACTURA_ITEMS', 'fi', '"f"."Codigo" = "fi"."CodigoFactura"')
+            .innerJoin('UMA_TB_TIPO_SERVICOS', 'tp', '"fi"."CodigoProduto" = "tp"."Codigo"')
+            .where('REGEXP_LIKE(TRIM("p"."AnoLectivo"), \'^[0-9]+$\')')
+            .andWhere('REGEXP_LIKE(TRIM("p"."Codigo_PreInscricao"), \'^[0-9]+$\')')
+            .andWhere('TRIM("p"."AnoLectivo") = :anoLectivo', { anoLectivo })
+            .andWhere('TRIM("p"."Codigo_PreInscricao") = :codigoPreInscricao', { codigoPreInscricao })
+            .andWhere('"f"."estado" = :status', { status: 1 });
 
-  // CONTAGEM
-  const totalResult = await baseQuery
-    .select('COUNT(DISTINCT("p"."Codigo"))', 'cnt')
-    .getRawOne();
+        // CONTAGEM
+        const totalResult = await baseQuery
+            .select('COUNT(DISTINCT("p"."Codigo"))', 'cnt')
+            .getRawOne();
 
-  const total = Number(totalResult?.cnt || 0);
-  const totalPages = Math.ceil(total / limit);
+        const total = Number(totalResult?.cnt || 0);
+        const totalPages = Math.ceil(total / limit);
 
-  if (total === 0) {
-    return { data: [], total, page, limit, totalPages };
-  }
+        if (total === 0) {
+            return { data: [], total, page, limit, totalPages };
+        }
 
-  const results = await baseQuery
-    .select([
-      // PAGAMENTO
-      '"p"."Codigo" AS "CodigoPagamento"',
-      '"p"."Data" AS "DataPagamento"',
-      '"p"."N_Operacao_Bancaria" AS "p_N_Operacao_Bancaria"',
-      '"p"."valor_depositado" AS "p_valor_depositado"',
-      '"p"."status_pagamento" AS "p_status_pagamento"',
-      '"p"."created_at" AS "DataRegistoPagamento"',
-      '"p"."statusMovimento" AS "p_statusMovimento"',
-      '"p"."ContaMovimentada" AS "p_ContaMovimentada"',
-      '"p"."forma_pagamento" AS "p_forma_pagamento"',
+        const results = await baseQuery
+            .select([
+                // PAGAMENTO
+                '"p"."Codigo" AS "CodigoPagamento"',
+                '"p"."Data" AS "DataPagamento"',
+                '"p"."N_Operacao_Bancaria" AS "p_N_Operacao_Bancaria"',
+                '"p"."valor_depositado" AS "p_valor_depositado"',
+                '"p"."status_pagamento" AS "p_status_pagamento"',
+                '"p"."created_at" AS "DataRegistoPagamento"',
+                '"p"."statusMovimento" AS "p_statusMovimento"',
+                '"p"."ContaMovimentada" AS "p_ContaMovimentada"',
+                '"p"."forma_pagamento" AS "p_forma_pagamento"',
 
-      // FATURA
-      '"f"."Codigo" AS "CodigoFactura"',
-      '"f"."Descricao" AS "Descricao_factura"',
-      '"f"."DataFactura" AS "f_DataFactura"',
-      '"f"."Referencia" AS "f_Referencia"',
-      '"f"."estado" AS "EstadoFactura"',
-      '"f"."ValorAPagar" AS "f_ValorAPagar"',
-      '"f"."TotalPreco" AS "TotalBrutoFactura"',
-      '"f"."TotalMulta" AS "TotalMultaFactura"',
+                // FATURA
+                '"f"."Codigo" AS "CodigoFactura"',
+                '"f"."Descricao" AS "Descricao_factura"',
+                '"f"."DataFactura" AS "f_DataFactura"',
+                '"f"."Referencia" AS "f_Referencia"',
+                '"f"."estado" AS "EstadoFactura"',
+                '"f"."ValorAPagar" AS "f_ValorAPagar"',
+                '"f"."TotalPreco" AS "TotalBrutoFactura"',
+                '"f"."TotalMulta" AS "TotalMultaFactura"',
 
-      // ITEM
-      '"fi"."codigo" AS "CodigoItem"',
-      '"fi"."CodigoProduto" AS "CodigoProduto"',
-      '"fi"."OBS" AS "ObservacaoItem"',
-      '"fi"."Quantidade" AS "Quantidade"',
-      '"fi"."preco" AS "PrecoUnitario"',
-      '"fi"."Total" AS "TotalItem"',
-      '"fi"."Mes" AS "MesReferencia"',
-      '"fi"."Multa" AS "MultaItem"',
-      '"fi"."valor_pago" AS "valor_pago"',
-      '"fi"."taxa_iva" AS "taxa_iva"',
+                // ITEM
+                '"fi"."codigo" AS "CodigoItem"',
+                '"fi"."CodigoProduto" AS "CodigoProduto"',
+                '"fi"."OBS" AS "ObservacaoItem"',
+                '"fi"."Quantidade" AS "Quantidade"',
+                '"fi"."preco" AS "PrecoUnitario"',
+                '"fi"."Total" AS "TotalItem"',
+                '"fi"."Mes" AS "MesReferencia"',
+                '"fi"."Multa" AS "MultaItem"',
+                '"fi"."valor_pago" AS "valor_pago"',
+                '"fi"."taxa_iva" AS "taxa_iva"',
 
-      // PRODUTO
-      '"tp"."Descricao" AS "Descricao_produto"',
-    ])
-    // .distinct(true) 
-   // .offset(skip)
-   // .limit(limit)
-    .orderBy('"p"."DataRegisto"', 'DESC')
-    .addOrderBy('"f"."DataFactura"', 'DESC')
-    .addOrderBy('"fi"."codigo"', 'ASC')
-    .getRawMany();
+                // PRODUTO
+                '"tp"."Descricao" AS "Descricao_produto"',
+            ])
+            // .distinct(true) 
+            // .offset(skip)
+            // .limit(limit)
+            .orderBy('"p"."DataRegisto"', 'DESC')
+            .addOrderBy('"f"."DataFactura"', 'DESC')
+            .addOrderBy('"fi"."codigo"', 'ASC')
+            .getRawMany();
 
-  return {
-    data: results,
-    total,
-    page,
-    limit,
-    totalPages,
-  };
-}
+        return {
+            data: results,
+            total,
+            page,
+            limit,
+            totalPages,
+        };
+    }
     async createPayment(dto: CreatePaymentDto) {
         const anoCorrente = this.anoAtualPrincipal;
         const { status_pagamento, N_Operacao_Bancaria, N_Operacao_Bancaria2, AnoLectivo, ...rest } = dto;
@@ -212,4 +215,128 @@ async findInvoicesAndItemsDetailedFlat(
     async findPaymentByN_Operacao_Bancaria2(N_Operacao_Bancaria2: string): Promise<Payment | null> {
         return this.paymentRepository.findOne({ where: { N_Operacao_Bancaria2 } });
     }
+
+    async studentPayments(query: StudentPaymentsQueryDto) {
+        const {
+            codigoMatricula,
+            codigoPreInscricao,
+            anoLectivo,
+            codigoFactura,
+            page = 1,
+            limit = 10
+        } = query;
+
+        const offset = (page - 1) * limit;
+        const queryParams: any[] = [];
+
+
+        let whereClause = `f."ESTADO" = 1`;
+
+
+        const idFilters: string[] = [];
+        if (codigoMatricula) {
+            queryParams.push(codigoMatricula);
+            idFilters.push(`f."CODIGOMATRICULA" = :${queryParams.length}`);
+        }
+        if (codigoPreInscricao) {
+            queryParams.push(codigoPreInscricao);
+            idFilters.push(`f."CODIGO_PREINSCRICAO" = :${queryParams.length}`);
+        }
+
+        if (idFilters.length > 0) {
+            whereClause += ` AND (${idFilters.join(' OR ')})`;
+        }
+
+        if (codigoFactura) {
+            queryParams.push(codigoFactura);
+            whereClause += ` AND f."CODIGO" = :${queryParams.length}`;
+        }
+
+        if (anoLectivo) {
+            queryParams.push(anoLectivo);
+            whereClause += ` AND f."ANO_LECTIVO" = :${queryParams.length}`;
+        }
+
+
+        const baseQuery = `
+        FROM FK2_FACTURA f
+        WHERE ${whereClause}
+        GROUP BY 
+            f."CODIGO", f."DATAFACTURA", 
+            f."VALORAPAGAR", f."TOTALPRECO", f."TOTALMULTA", f."ESTADO"
+    `;
+
+        const sqlData = `
+        SELECT 
+            f."CODIGO" AS "CodigoFactura",
+            f."DATAFACTURA",
+            f."VALORAPAGAR",
+            f."TOTALPRECO",
+            f."TOTALMULTA",
+            f."ESTADO" AS "EstadoFactura"
+        ${baseQuery}
+        ORDER BY f."DATAFACTURA" DESC
+        OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+    `;
+
+        const sqlCount = `
+        SELECT COUNT(*) AS TOTAL FROM (
+            SELECT f."CODIGO" ${baseQuery}
+        ) t
+    `;
+
+        const [result, countResult] = await Promise.all([
+            this.dataSource.query(sqlData, queryParams),
+            this.dataSource.query(sqlCount, queryParams)
+        ]);
+
+        const total = Number(countResult[0]?.TOTAL || 0);
+
+        return {
+            data: result,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        };
+    }
+    async studentPaymentsDetails(
+        facturaCode: number,
+    ) {
+        const sql = `
+        SELECT
+            f.CODIGO AS CodigoFactura,
+            f.DATAFACTURA AS DataFactura,
+            f.REFERENCIA,
+            f.CODIGOMATRICULA,
+            f.CODIGO_PREINSCRICAO,
+            f.VALORAPAGAR,
+            f.TOTALPRECO,
+            f.TOTALMULTA,
+            f.TOTALIVA,
+            DBMS_LOB.SUBSTR(f.OBS, 4000, 1) AS ObservacaoFactura,
+            DBMS_LOB.SUBSTR(tp.DESCRICAO, 4000, 1) AS Servico,
+            ffi.QUANTIDADE,
+            ffi.PRECO,
+            ffi.VALOR_IVA,
+            ffi.MULTA,
+            ffi.TOTAL,
+            ffi.VALOR_PAGO
+        FROM FK2_FACTURA f
+        INNER JOIN FK2_FACTURA_ITEMS ffi 
+                ON f.CODIGO = ffi.CODIGOFACTURA
+        INNER JOIN FK2_TB_TIPO_SERVICOS tp 
+                ON ffi.CODIGOPRODUTO = tp.CODIGO
+        WHERE f.CODIGO = :facturaCode
+        ORDER BY DBMS_LOB.SUBSTR(tp.DESCRICAO, 4000, 1)
+    `;
+
+
+        return await this.dataSource.query(sql, [facturaCode]);
+
+
+
+    }
+
 }
+

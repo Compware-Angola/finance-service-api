@@ -8,8 +8,8 @@ export class MonthlyFeePenaltyCronTest {
 
   constructor(private readonly dataSource: DataSource) {}
 
-  @Cron('*/10 * * * * *') // a cada 10 segundos para teste
-  // @Cron('30 1 * * *')   // descomenta para produção
+ // @Cron('*/10 * * * * *') // a cada 10 segundos para teste
+ @Cron('30 1 * * *')   // descomenta para produção
   async applyProgressiveLateFees() {
     this.logger.log('⚠️ MODO TESTE - Aplicação de multas progressivas (máx 2 por nível)');
 

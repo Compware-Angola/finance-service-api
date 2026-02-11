@@ -52,10 +52,7 @@ export class DiscountService {
         FETCH FIRST 1 ROWS ONLY
     `;
 
-    const checkParams = [
-      createDto.codigoMatricula,
-      createDto.codigoInstituicao,
-    ];
+    const checkParams = [createDto.codigoMatricula];
 
     const result = await this.dataSource.query(checkSql, checkParams);
 

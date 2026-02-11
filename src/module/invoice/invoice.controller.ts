@@ -44,7 +44,7 @@ export class InvoiceController {
   // ------------------------------------
   @Get()
     @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-  //@RequiredPermissions(PermissionTypeDetails)
+  @RequiredPermissions(PermissionTypeDetails.FACTURAS.sigla)
   @ApiOperation({ summary: 'Retorna todas as faturas com paginação' })
   @ApiResponse({ status: 200, "description": 'Lista de faturas retornada com sucesso.' })
   async findAll(@Query() paginationQuery: InvoiceSearchDto): Promise<PagedResult<Invoice>> {

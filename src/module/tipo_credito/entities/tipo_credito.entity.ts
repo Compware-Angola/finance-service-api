@@ -8,6 +8,8 @@ export class TipoCredito {
     designacao: string
     @Column({ name: 'CREATED_AT', type: 'timestamp', nullable: true })
     createdAt?: Date
+    @Column({ name: 'DELETED_AT', type: 'timestamp', nullable: true })
+    deleteAt?: Date
     @Column({ name: 'UPDATED_AT', type: 'timestamp', nullable: true })
     updatedAt?: Date
     @Column({ name: 'SIGLA', type: 'varchar2', length: 10 })

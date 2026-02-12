@@ -26,35 +26,8 @@ export class TipoCreditoController {
   }
 
   @Get()
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Número da página (default: 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Quantidade de itens por página (default: 10)',
-  })
-  @ApiQuery({
-    name: 'search',
-    required: false,
-    type: String,
-    description: 'Filtra tipos de crédito que contenham este texto na designação',
-  })
-  findAll(
-    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
-    @Query('search') search?: string,
-  ) {
-    const dto: FilterTipoCreditoDto = {
-      page,
-      limit,
-      search,
-    }
-    return this.service.findAll(dto)
+  findAll(@Query() query: FilterTipoCreditoDto) {
+    return this.service.findAll(query);
   }
 
   @Get(':id')
@@ -73,5 +46,20 @@ export class TipoCreditoController {
   @Delete(':id')
   delete(@Param('id', ParseIntPipe) id: number) {
     return this.service.delete(id)
+  }
+
+  @Put(':id/restore')
+  restore(@Param('id', ParseIntPipe) id: number) {
+    return this.service.restore(id)
+  }
+
+  @Put(':id/active')
+  active(@Param('id', ParseIntPipe) id: number) {
+    return this.service.active(id)
+  }
+
+  @Put(':id/inactive')
+  inactive(@Param('id', ParseIntPipe) id: number) {
+    return this.service.inactive(id)
   }
 }

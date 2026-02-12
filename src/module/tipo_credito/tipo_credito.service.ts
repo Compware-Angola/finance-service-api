@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Repository, IsNull, Like } from 'typeorm'
+import { Repository, IsNull, Like, FindOptionsWhere } from 'typeorm'
 import { CreateTipoCreditoDto, FilterTipoCreditoDto } from './dto/create-tipo_credito.dto'
 import { TipoCredito } from './entities/tipo_credito.entity'
 import { DataSource } from 'typeorm'
@@ -27,13 +27,21 @@ export class TipoCreditoService {
     return this.repo.save(novo)
   }
   async findAll(filter: FilterTipoCreditoDto) {
-    const { page = 1, limit = 10, search } = filter
+    const { page = 1, limit = 10, search, status = 1, deleted = false } = filter
     const skip = (page - 1) * limit
-
+    const where: FindOptionsWhere<TipoCredito> = {}
+    if (search) {
+      where.designacao = Like(`%${search}%`)
+      where.sigla = Like(`%${search}%`)
+    }
+    if (status) {
+      where.status = status
+    }
+    if (deleted) {
+      where.deleteAt = IsNull()
+    }
     const [data, total] = await this.repo.findAndCount({
-      where: search
-        ? { designacao: Like(`%${search}%`), sigla: Like(`%${search}%`), status: 1 }
-        : { status: 1 },
+      where,
       order: { codigo: 'ASC' },
       skip,
       take: limit,
@@ -82,7 +90,30 @@ export class TipoCreditoService {
 
   async delete(id: number) {
     const tipo = await this.findOne(id)
-    this.repo.remove(tipo.data)
+    tipo.data.deleteAt = new Date()
+    tipo.data.status = 0
+    await this.repo.save(tipo.data)
     return { message: 'Tipo de crédito eliminado com sucesso' }
+  }
+
+  async restore(id: number) {
+    const tipo = await this.findOne(id)
+    tipo.data.deleteAt = undefined
+    tipo.data.status = 1
+    await this.repo.save(tipo.data)
+    return { message: 'Tipo de crédito restaurado com sucesso' }
+  }
+  async active(id: number) {
+    const tipo = await this.findOne(id)
+    tipo.data.status = 1
+    await this.repo.save(tipo.data)
+    return { message: 'Tipo de crédito ativado com sucesso' }
+  }
+
+  async inactive(id: number) {
+    const tipo = await this.findOne(id)
+    tipo.data.status = 0
+    await this.repo.save(tipo.data)
+    return { message: 'Tipo de crédito inativado com sucesso' }
   }
 }

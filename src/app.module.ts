@@ -16,18 +16,19 @@ import { AlunoModule } from './module/aluno/aluno.module';
 import { HttpModule } from '@nestjs/axios';
 import { SharedModule } from './module/shared/shared.module';
 import { MonthlyFeePenaltyCronTest } from './module/jobs/payment-monthly-fee';
+import { DiscountModule } from './module/discount/discount.module';
+
 import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
 
+
 @Module({
-
-
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
     HttpModule.register({
       timeout: 5000,
-      maxRedirects: 5
+      maxRedirects: 5,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -80,7 +81,8 @@ import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
     TipoCreditoModule,
 
     SharedModule,
+    DiscountModule,
   ],
   providers: [BullMQWorkerService, MonthlyFeePenaltyCronTest],
 })
-export class AppModule { }
+export class AppModule {}

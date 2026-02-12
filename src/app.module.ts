@@ -18,6 +18,9 @@ import { SharedModule } from './module/shared/shared.module';
 import { MonthlyFeePenaltyCronTest } from './module/jobs/payment-monthly-fee';
 import { DiscountModule } from './module/discount/discount.module';
 
+import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
+
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -75,6 +78,7 @@ import { DiscountModule } from './module/discount/discount.module';
     DisciplineModule,
 
     TypeServiceModule,
+    TipoCreditoModule,
 
     SharedModule,
     DiscountModule,

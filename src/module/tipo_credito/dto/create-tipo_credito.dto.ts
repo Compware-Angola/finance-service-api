@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import { Type } from 'class-transformer';
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator'
 
 export class CreateTipoCreditoDto {
     @ApiProperty({
@@ -20,25 +21,35 @@ export class CreateTipoCreditoDto {
     sigla: string
 }
 
+
+
 export class FilterTipoCreditoDto {
-    @ApiPropertyOptional({
-        required: false,
-        type: String,
-        description: 'Filtra tipos de crédito que contenham este texto na designação',
-    })
-    search?: string
-    @ApiPropertyOptional({
-        default: 1,
-        required: false,
-        type: Number,
-        description: 'Número da página (default: 1)',
-    })
-    page?: number
-    @ApiPropertyOptional({
-        default: 10,
-        required: false,
-        type: Number,
-        description: 'Quantidade de itens por página (default: 10)',
-    })
-    limit?: number
+    @ApiPropertyOptional({ description: 'Pesquisa por designação' })
+    @IsOptional()
+    @IsString()
+    search?: string;
+
+    @ApiPropertyOptional({ default: 1 })
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    page?: number;
+
+    @ApiPropertyOptional({ default: 10 })
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    limit?: number;
+
+    @ApiPropertyOptional({ default: 1 })
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    status?: number;
+
+    @ApiPropertyOptional({ default: false })
+    @IsOptional()
+    @Type(() => Boolean) // Garante a conversão para Boolean
+    @IsBoolean()
+    deleted?: boolean;
 }

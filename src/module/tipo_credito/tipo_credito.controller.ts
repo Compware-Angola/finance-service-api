@@ -14,7 +14,7 @@ import {
 import { CreateTipoCreditoDto, FilterTipoCreditoDto } from './dto/create-tipo_credito.dto'
 import { UpdateTipoCreditoDto } from './dto/update-tipo_credito.dto'
 import { TipoCreditoService } from './tipo_credito.service'
-import { ApiQuery } from '@nestjs/swagger'
+
 
 @Controller('tipos-credito')
 export class TipoCreditoController {

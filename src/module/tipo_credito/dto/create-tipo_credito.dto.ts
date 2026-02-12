@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator'
 
 export class CreateTipoCreditoDto {
@@ -47,9 +47,13 @@ export class FilterTipoCreditoDto {
     @IsNumber()
     status?: number;
 
-    @ApiPropertyOptional({ default: false })
+    @ApiPropertyOptional()
     @IsOptional()
-    @Type(() => Boolean) // Garante a conversão para Boolean
+    @Transform(({ value }) => {
+        if (value === 'true' || value === true) return true;
+        if (value === 'false' || value === false) return false;
+        return value;
+    })
     @IsBoolean()
     deleted?: boolean;
 }

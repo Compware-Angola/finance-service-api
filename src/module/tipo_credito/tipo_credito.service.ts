@@ -29,15 +29,16 @@ export class TipoCreditoService {
   async findAll(filter: FilterTipoCreditoDto) {
     const { page = 1, limit = 10, search, status = 1, deleted = false } = filter
     const skip = (page - 1) * limit
+    console.log(deleted)
     const where: FindOptionsWhere<TipoCredito> = {}
     if (search) {
       where.designacao = Like(`%${search}%`)
-      where.sigla = Like(`%${search}%`)
+
     }
-    if (status) {
+    if (!deleted && status) {
       where.status = status
     }
-    if (deleted) {
+    if (!deleted) {
       where.deleteAt = IsNull()
     }
     const [data, total] = await this.repo.findAndCount({
@@ -89,24 +90,27 @@ export class TipoCreditoService {
 
 
   async delete(id: number) {
-    const tipo = await this.findOne(id)
-    tipo.data.deleteAt = new Date()
-    tipo.data.status = 0
-    await this.repo.save(tipo.data)
+    const tipo = await this.repo.findOne({ where: { codigo: id } })
+    if (!tipo) throw new NotFoundException('Tipo de crédito não encontrado')
+    tipo.deleteAt = new Date()
+    tipo.status = 0
+    await this.repo.save(tipo)
     return { message: 'Tipo de crédito eliminado com sucesso' }
   }
 
   async restore(id: number) {
-    const tipo = await this.findOne(id)
-    tipo.data.deleteAt = undefined
-    tipo.data.status = 1
-    await this.repo.save(tipo.data)
+    const tipo = await this.repo.findOne({ where: { codigo: id } })
+    if (!tipo) throw new NotFoundException('Tipo de crédito não encontrado')
+    tipo.deleteAt = null as any;
+    tipo.status = 1;
+    await this.repo.save(tipo)
     return { message: 'Tipo de crédito restaurado com sucesso' }
   }
   async active(id: number) {
-    const tipo = await this.findOne(id)
-    tipo.data.status = 1
-    await this.repo.save(tipo.data)
+    const tipo = await this.repo.findOne({ where: { codigo: id } })
+    if (!tipo) throw new NotFoundException('Tipo de crédito não encontrado')
+    tipo.status = 1
+    await this.repo.save(tipo)
     return { message: 'Tipo de crédito ativado com sucesso' }
   }
 

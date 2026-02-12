@@ -25,6 +25,16 @@ import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: (() => {
+        switch (process.env.NODE_ENV) {
+          case 'production':
+            return '.env.prod';       
+          case 'preprod':
+            return '.env.preprod';    
+          default:
+            return '.env.dev';        
+        }
+      })(),
     }),
     HttpModule.register({
       timeout: 5000,

@@ -23,7 +23,6 @@ import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
 
 @Module({
   imports: [
- 
        ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: (() => {

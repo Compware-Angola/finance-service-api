@@ -80,7 +80,7 @@ export class InvoiceService {
         if (!isNaN(lastNum)) nextNumber = lastNum + 1;
       }
 
-      const codigoGerado = nextNumber;
+     // const codigoGerado = nextNumber;
 
 
       // 🔹 Referência (usa parâmetro ou gera nova)
@@ -128,7 +128,7 @@ export class InvoiceService {
       const invoiceToCreate = em.create(
         this.invoiceRepository.target,
         {
-          Codigo: codigoGerado,
+         
           DataFactura: new Date(),
           TotalPreco: invoiceData.TotalPreco,
           CodigoMatricula: invoiceData.CodigoMatricula!,

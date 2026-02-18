@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, DeepPartial, EntityManager, IsNull, Repository } from 'typeorm';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -7,7 +7,7 @@ import { Invoice } from './entities/invoice.entity';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { InvoiceFilterEnrollmentDto } from './dto/Invoice-filter-enrollment-code.dto';
-
+import * as oracledb from 'oracledb';
 import { InvoiceNumberingAndHashService } from './invoice-numbering-hash.service';
 import { TypeInvoiceDocument } from './entities/type.invoice.document.entity';
 import { AcademicYear } from './entities/academic.year.entity';
@@ -26,6 +26,7 @@ import { normalizeParam } from '../util/normalize-util';
 //3 - eliminado
 @Injectable()
 export class InvoiceService {
+    private readonly logger = new Logger(InvoiceService.name);
   constructor(
     @InjectQueue('invoice_service')
 
@@ -52,181 +53,289 @@ export class InvoiceService {
    * @returns A fatura criada.
    */
 
-  async create(
-    createInvoiceDto: CreateInvoiceDto,
-    referenceParams?: string,
-    dueDateParams?: string,
-    // 🔥 Manager opcional → permite transação externa (ex: createMonthlyPaymentReferences)
-    transactionalEntityManager?: EntityManager,
-  ): Promise<Invoice> {
 
-    // Se não vier manager, "cria" uma transação interna (compatibilidade total)
-    const manager = transactionalEntityManager || this.invoiceRepository.manager;
-
-    return await manager.transaction(async (em) => {
-      const { itens, ...invoiceData } = createInvoiceDto;
-      // 1. GERAR CÓDIGO SEQUENCIAL
-      const lastInvoice = await em
-        .createQueryBuilder(Invoice, 'i')
-        .select('i.Codigo', 'i_Codigo')
-        .where("REGEXP_LIKE(i.Codigo, '^[0-9]+$')")
-        .orderBy('TO_NUMBER(i.Codigo)', 'DESC')
-        .limit(1)
-        .getRawOne();
-
-      let nextNumber = 1;
-      if (lastInvoice?.i_Codigo) {
-        const lastNum = Number(lastInvoice.i_Codigo);
-        if (!isNaN(lastNum)) nextNumber = lastNum + 1;
-      }
-
-     // const codigoGerado = nextNumber;
-
-
-      // 🔹 Referência (usa parâmetro ou gera nova)
-      const referencia: string =
-        referenceParams || (await genearateKeyNumber(9));
-
-      // 🔹 Data de vencimento (aceita string ou Date)
-      const dueDate: string =
-        dueDateParams || (await generateDueDate(10));
-
-      // 1. Tipo de documento
-      const tipoDocumentoId = createInvoiceDto.tipo_documento_factura_id || 2;
-      const document = await em.findOne(this.typeInvoiceDocumentRepository.target, {
-        where: { id: tipoDocumentoId },
-      });
-      if (!document) {
-        throw new NotFoundException('Tipo de documento inválido.');
-      }
-      const tipoDocumentoSigla = document.sigla;
-
-      // 2. Ano letivo ativo
-      const academicYear = await em.findOne(this.academicYearRepository.target, {
-        where: { estado: 'Activo' },
-      });
-      if (!academicYear) {
-        throw new NotFoundException('Ano letivo não definido no sistema.');
-      }
-      const anoLetivoDesignacao = academicYear.Designacao;
-      const anoLetivoId = academicYear.Codigo;
-
-      // 3. Polo
-      const poloId = createInvoiceDto.polo_id || 1;
-
-      // 4. Gerar hash + numeração (usando o mesmo manager para consistência)
-      const hashData = await this.hashService.generateInvoiceHashData(
-        createInvoiceDto.TotalPreco,
-        tipoDocumentoId,
-        anoLetivoId,
-        poloId,
-        tipoDocumentoSigla,
-        anoLetivoDesignacao,
-
-      );
-
-      const invoiceToCreate = em.create(
-        this.invoiceRepository.target,
-        {
-         
-          DataFactura: new Date(),
-          TotalPreco: invoiceData.TotalPreco,
-          CodigoMatricula: invoiceData.CodigoMatricula!,
-          Referencia: referencia,
-          Desconto: invoiceData.Desconto ?? 0,
-          totalIVA: invoiceData.totalIVA ?? 0,
-          TotalMulta: invoiceData.TotalMulta ?? 0,
-          ValorAPagar: invoiceData.ValorAPagar ?? invoiceData.TotalPreco,
-          Descricao: invoiceData.Descricao ?? '',
-          codigoDescricao: invoiceData.codigo_descricao ?? 101,
-          NextFactura: hashData.numeracaoFactura,
-          next: hashData.numeracaoFactura,
-          textoHash: hashData.plaintext,
-          //hashValor: hashData.hashValor, reduzi porque nao aceita todo ele
-          hashValor: hashData.hashValor.slice(0, 255),
-          dataVencimento: dueDate,
-          poloId: invoiceData.polo_id,
-          canal: invoiceData.canal ?? 3,
-          anoLectivo: anoLetivoId,
-          estado: 0,
-          numSequenciaFactura: hashData.numSequenciaFactura,
-          tipoDocumentoFacturaId: tipoDocumentoId,
-          Troco: 0,
-          ValorEntregue: 0,
-          ValorAPagarExtenso: '',
-          obs: '',
-          contaCorrente: '',
-          corrente: 0,
-          codigoPreinscricao: invoiceData.codigo_preinscricao ?? null,
-          totalIncidencia: invoiceData.total_incidencia ?? null,
-          totalRetencao: invoiceData.total_retencao ?? null,
-          ValorEntregueMltCX: 0,
-          faturaReference: '',
-        } as DeepPartial<Invoice>,
-      );
-
-
-      const savedInvoice = await em.save(invoiceToCreate);
-
-      // 6. Itens da fatura (se existirem)
-      if (itens?.length) {
-        const invoiceItems: InvoiceItem[] = [];
-
-        // 1. Buscar o último código usado (uma vez)
-        const ultimoItem = await em
-          .createQueryBuilder(InvoiceItem, 'i')
-          .select('i.codigo', 'i_codigo')
-          .where("REGEXP_LIKE(i.codigo, '^[0-9]+$')")
-          .orderBy('TO_NUMBER(i.codigo)', 'DESC')
-          .limit(1)
-          .getRawOne();
-
-        let ultimoNumero = 0;
-        if (ultimoItem?.i_codigo) {
-          ultimoNumero = Number(ultimoItem.i_codigo);
-        }
-
-        // 2. Gerar códigos sequenciais para cada item
-        for (let i = 0; i < itens.length; i++) {
-          const item = itens[i];
-          ultimoNumero += 1; // Incrementa a cada item
-          const codigoGerado = ultimoNumero;
-          console.log(`CÓDIGO GERADO PARA ITEM ${i + 1}:`, codigoGerado);
-
-          const invoiceItem = em.create(this.invoiceItemRepository.target, {
-           // codigo: codigoGerado,
-            CodigoProduto: item.CodigoProduto,
-            CodigoFactura: savedInvoice.Codigo,
-            quantidade: item.Quantidade ?? 1, // default 1 se não enviar
-            total: item.Total ?? 0,
-            obs: (item.obs ?? `Item fatura ${savedInvoice.Codigo}`).substring(0, 45),
-            taxaIva: item.taxaIva ?? 0,
-            valorIva: item.valorIva ?? 0,
-            preco: item.preco ?? 0,
-            retencao: item.retencao ?? 0,
-            incidencia: item.incidencia ?? 0,
-            valorDesconto: item.valorDesconto ?? 0,
-            descontoProduto: item.descontoProduto ?? 0,
-            mes: item.mes ?? null,          // null se não enviado
-            multa: item.multa ?? 0,
-            mesTempId: item.mesTempId ?? null, // null evita DEFAULT
-            codigoAnoLectivo: savedInvoice.anoLectivo,
-            estado: item.estado ?? 0,
-            valorPago: item.valorPago ?? 0,
-            valorATransportar: item.valorATransportar?.toString() ?? null,
-          } as DeepPartial<InvoiceItem>,);
-
-
-          invoiceItems.push(invoiceItem);
-        }
-
-        // 3. Salvar todos os itens de uma vez
-        await em.save(invoiceItems);
-      }
-
-      return savedInvoice;
-    });
+// No teu service (ex: InvoiceService)
+async create(
+  createInvoiceDto: CreateInvoiceDto,
+  referenceParams?: string,
+  dueDateParams?: string,
+  transactionalEntityManager?: EntityManager,
+): Promise<Invoice> {
+  // Caso 1: Transação externa (já veio manager → não commit/rollback aqui)
+  if (transactionalEntityManager) {
+    return this.createInternal(
+      createInvoiceDto,
+      referenceParams,
+      dueDateParams,
+      transactionalEntityManager,
+    );
   }
+
+  // Caso 2: Transação interna (criamos e controlamos o queryRunner)
+  const queryRunner = this.dataSource.createQueryRunner();
+
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
+
+  try {
+    const result = await this.createInternal(
+      createInvoiceDto,
+      referenceParams,
+      dueDateParams,
+      queryRunner.manager,
+    );
+
+    await queryRunner.commitTransaction();
+    return result;
+  } catch (err) {
+    await queryRunner.rollbackTransaction();
+    this.logger.error('Erro ao criar fatura (transação interna)', err?.stack);
+
+    if (err instanceof NotFoundException || err instanceof BadRequestException) {
+      throw err;
+    }
+
+    throw new InternalServerErrorException(
+      'Erro interno ao criar fatura. Verifique os dados e tente novamente.',
+    );
+  } finally {
+    await queryRunner.release();
+  }
+}
+
+/**
+ * Lógica principal de criação da fatura e itens.
+ * Sempre recebe um EntityManager válido (interno ou externo).
+ */
+private async createInternal(
+  createInvoiceDto: CreateInvoiceDto,
+  referenceParams: string | undefined,
+  dueDateParams: string | undefined,
+  manager: EntityManager,
+): Promise<Invoice> {
+  const { itens, ...invoiceData } = createInvoiceDto;
+
+  // 1. Referência e data de vencimento
+  const referencia = referenceParams || (await genearateKeyNumber(9)); // ajusta o nome/método se for diferente
+  const dataVencimento = dueDateParams || (await generateDueDate(10)); // ajusta se for diferente
+
+  // 2. Validar tipo de documento da fatura
+  const tipoDocId = createInvoiceDto.tipo_documento_factura_id ?? 2;
+  const tipoDoc = await manager.findOne(this.typeInvoiceDocumentRepository.target, {
+    where: { id: tipoDocId },
+    select: ['sigla'],
+  });
+
+  if (!tipoDoc) {
+    throw new NotFoundException(`Tipo de documento de fatura com ID ${tipoDocId} não encontrado.`);
+  }
+
+  const tipoDocumentoSigla = tipoDoc.sigla;
+
+  // 3. Ano letivo activo
+  const anoLetivo = await manager.findOne(this.academicYearRepository.target, {
+    where: { estado: 'Activo' },
+    select: ['Codigo', 'Designacao'],
+  });
+
+  if (!anoLetivo) {
+    throw new NotFoundException('Não existe ano letivo activo configurado no sistema.');
+  }
+
+  // 4. Gerar dados do hash/numeração da fatura
+  const hashData = await this.hashService.generateInvoiceHashData(
+    invoiceData.TotalPreco ?? 0,
+    tipoDocId,
+    anoLetivo.Codigo,
+    invoiceData.polo_id ?? 1,
+    tipoDocumentoSigla,
+    anoLetivo.Designacao,
+  );
+
+  // 5. Inserir a fatura (CODIGO gerado automaticamente pela sequence + trigger)
+  const insertResult = await manager.query(`
+    INSERT INTO FK2_FACTURA (
+      DATAFACTURA,
+      TOTALPRECO,
+      CODIGOMATRICULA,
+      REFERENCIA,
+      DESCONTO,
+      TOTALIVA,
+      TOTALMULTA,
+      TOTAL_INCIDENCIA,
+      TOTAL_RETENCAO,
+      VALORAPAGAR,
+      VALORENTREGUE,
+      VALORAPAGAREXTENSO,
+      DESCRICAO,
+      VALORENTREGUEMLTCX,
+      CODIGO_DESCRICAO,
+      NEXTFACTURA,
+      NEXT,
+      TEXTO_HASH,
+      DATAVENCIMENTO,
+      POLO_ID,
+      OBS,
+      HASHVALOR,
+      CONTACORRENTE,
+      FATURAREFERENCE,
+      CANAL,
+      ANO_LECTIVO,
+      ESTADO,
+      CORRENTE,
+      CODIGO_PREINSCRICAO,
+      NUMSEQUENCIAFACTURA,
+      TIPO_DOCUMENTO_FACTURA_ID
+    ) VALUES (
+      SYSDATE,
+      :totalPreco,
+      :codigoMatricula,
+      :referencia,
+      :desconto,
+      :totalIva,
+      :totalMulta,
+      :totalIncidencia,
+      :totalRetencao,
+      :valorAPagar,
+      0,
+      :valorAPagarExtenso,
+      :descricao,
+      0,
+      :codigoDescricao,
+      :nextFactura,
+      :next,
+      :textoHash,
+      :dataVencimento,
+      :poloId,
+      :obs,
+      :hashValor,
+      :contaCorrente,
+      :faturaReference,
+      :canal,
+      :anoLectivo,
+      0,
+      0,
+      :codigoPreInscricao,
+      :numSequenciaFactura,
+      :tipoDocumentoFacturaId
+    )
+   
+     RETURNING CODIGO INTO :outId
+  `, {
+    totalPreco: invoiceData.TotalPreco ?? 0,
+    codigoMatricula: invoiceData.CodigoMatricula ?? null,
+    referencia,
+    desconto: invoiceData.Desconto ?? 0,
+    totalIva: invoiceData.totalIVA ?? 0,
+    totalMulta: invoiceData.TotalMulta ?? 0,
+    totalIncidencia: invoiceData.total_incidencia ?? 0,
+    totalRetencao: invoiceData.total_retencao ?? 0,
+    valorAPagar: invoiceData.ValorAPagar ?? (invoiceData.TotalPreco ?? 0),
+    valorAPagarExtenso: '', // podes implementar função para gerar por extenso
+    descricao: invoiceData.Descricao ?? '',
+    codigoDescricao: invoiceData.codigo_descricao ?? 101,
+    nextFactura: hashData.numeracaoFactura,
+    next: hashData.numeracaoFactura,
+    textoHash: hashData.plaintext,
+    dataVencimento:new Date(dataVencimento),
+    poloId: invoiceData.polo_id ?? 1,
+    obs:  '',
+    hashValor: hashData.hashValor?.slice(0, 255) ?? '',
+    contaCorrente: '',
+    faturaReference: '',
+    canal: invoiceData.canal ?? 3,
+    anoLectivo: anoLetivo.Codigo,
+    codigoPreInscricao: invoiceData.codigo_preinscricao ?? null,
+    numSequenciaFactura: hashData.numSequenciaFactura,
+    tipoDocumentoFacturaId: tipoDocId,
+    outId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
+  
+  } as any);
+
+  const codigoGerado = insertResult.outId[0];
+
+  if (!codigoGerado) {
+    throw new InternalServerErrorException('Falha ao recuperar o CODIGO gerado automaticamente para a fatura.');
+  }
+
+  // 6. Recarregar a fatura completa
+  const savedInvoice = await manager.findOneOrFail(this.invoiceRepository.target, {
+    where: { Codigo: codigoGerado },
+  });
+
+  // 7. Inserir os itens da fatura (se existirem)
+  if (itens && itens?.length > 0) {
+    for (const itemDto of itens) {
+      await manager.query(`
+        INSERT INTO FK2_FACTURA_ITEMS (
+          CODIGOPRODUTO,
+          CODIGOFACTURA,
+          QUANTIDADE,
+          TOTAL,
+          OBS,
+          TAXA_IVA,
+          VALOR_IVA,
+          PRECO,
+          RETENCAO,
+          INCIDENCIA,
+          VALOR_DESCONTO,
+          DESCONTOPRODUTO,
+          MES,
+          MULTA,
+          MES_TEMP_ID,
+          CODIGO_ANOLECTIVO,
+          ESTADO,
+          VALOR_PAGO,
+          VALOR_A_TRANSPORTAR
+        ) VALUES (
+          :codigoProduto,
+          :codigoFactura,
+          :quantidade,
+          :total,
+          :obs,
+          :taxaIva,
+          :valorIva,
+          :preco,
+          :retencao,
+          :incidencia,
+          :valorDesconto,
+          :descontoProduto,
+          :mes,
+          :multa,
+          :mesTempId,
+          :codigoAnoLectivo,
+          :estado,
+          :valorPago,
+          :valorATransportar
+        )
+      `, {
+        codigoProduto: itemDto.CodigoProduto,
+        codigoFactura: codigoGerado,
+        quantidade: itemDto.Quantidade ?? 1,
+        total: itemDto.Total ?? 0,
+        obs: (itemDto.obs ?? `Item da fatura ${codigoGerado}`).substring(0, 45),
+        taxaIva: itemDto.taxaIva ?? 0,
+        valorIva: itemDto.valorIva ?? 0,
+        preco: itemDto.preco ?? 0,
+        retencao: itemDto.retencao ?? 0,
+        incidencia: itemDto.incidencia ?? 0,
+        valorDesconto: itemDto.valorDesconto ?? 0,
+        descontoProduto: itemDto.descontoProduto ?? 0,
+        mes: itemDto.mes ?? null,
+        multa: itemDto.multa ?? 0,
+        mesTempId: itemDto.mesTempId ?? null,
+        codigoAnoLectivo: savedInvoice.anoLectivo,
+        estado: itemDto.estado ?? 0,
+        valorPago: itemDto.valorPago ?? 0,
+        valorATransportar: itemDto.valorATransportar?.toString() ?? null,
+      } as any);
+    }
+  }
+
+  return savedInvoice;
+}
+
+
   /**
      * Retorna todas as faturas com paginação.
      * @param paginationQuery O DTO com os parâmetros de paginação (page e limit).

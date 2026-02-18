@@ -194,7 +194,7 @@ export class InvoiceService {
           console.log(`CÓDIGO GERADO PARA ITEM ${i + 1}:`, codigoGerado);
 
           const invoiceItem = em.create(this.invoiceItemRepository.target, {
-            codigo: codigoGerado,
+           // codigo: codigoGerado,
             CodigoProduto: item.CodigoProduto,
             CodigoFactura: savedInvoice.Codigo,
             quantidade: item.Quantidade ?? 1, // default 1 se não enviar

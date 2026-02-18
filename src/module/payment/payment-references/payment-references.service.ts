@@ -1,14 +1,14 @@
-import { BadGatewayException, Injectable, NotFoundException } from '@nestjs/common'
+import { BadGatewayException, BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common'
 import { CreatePaymentReferenceDto } from './dto/create-payment-reference.dto'
 import { generateDueDate } from '../../util/generate-due-date'
 import { generateReferenceNumber } from '../../util/generate-refence-number'
 import { AppyPayUtil } from '../../util/appypay/appy-pay-util'
 import { InvoiceService } from '../../invoice/invoice.service'
 import { CreateInvoiceDto } from '../../invoice/dto/create-invoice.dto'
-import { AppyPayWebhookDto } from '../../webhook/dto/appypay-webhook.dto'
+import * as oracledb from 'oracledb';
 import { InjectRepository } from '@nestjs/typeorm'
 import { PaymentReferences } from './entities/payment-reference.entity'
-import { DeepPartial, EntityManager, Repository } from 'typeorm'
+import { DataSource, DeepPartial, EntityManager, Repository } from 'typeorm'
 import { RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto'
 import { InvoiceItem } from '../../invoice/entities/InvoiceIten.entity'
 import { MesTemp } from './entities/mes-temp.entity'
@@ -19,7 +19,7 @@ import { Queue } from 'bullmq'
 @Injectable()
 export class PaymentReferencesService {
   private readonly appyPayUtil: AppyPayUtil
-
+  private readonly logger = new Logger(PaymentReferencesService.name);
 
   constructor(
     @InjectQueue('payment_reference_service')
@@ -30,7 +30,7 @@ export class PaymentReferencesService {
     private readonly paymentReferencesRepository: Repository<PaymentReferences>,
     @InjectRepository(InvoiceItem)
     private readonly invoiceItemRepository: Repository<InvoiceItem>,
-
+    private readonly dataSource: DataSource,
     @InjectRepository(AcademicYear)
 
     private readonly academicYearRepository: Repository<AcademicYear>,
@@ -156,85 +156,165 @@ export class PaymentReferencesService {
   }
 
 
+
+  // No teu service (ex: PaymentReferencesService)
   async registerPaymentReference(
     dto: RegisterPaymentReferenceDto,
-    manager?: EntityManager
+    manager?: EntityManager,
   ): Promise<PaymentReferences> {
-    const mgr = manager || this.paymentReferencesRepository.manager;
+    // Caso 1: Transação externa (já veio manager → não commit/rollback aqui)
+    if (manager) {
+      return this.registerPaymentReferenceInternal(dto, manager);
+    }
 
-    return await mgr.transaction(async (trx) => {
-      let attempts = 0;
-      const MAX_ATTEMPTS = 5;
+    // Caso 2: Transação interna (criamos e controlamos o queryRunner)
+    const queryRunner = this.dataSource.createQueryRunner();
 
-      while (attempts < MAX_ATTEMPTS) {
-        try {
-          // 1. GERAR ID SEQUENCIAL (começa em 90000)
-          const ultimoId = await trx
-            .createQueryBuilder(PaymentReferences, 'r')
-            .select('r.id', 'r_id')
-            .where("REGEXP_LIKE(r.id, '^[0-9]+$')")
-            .orderBy('TO_NUMBER(r.id)', 'DESC')
-            .limit(1)
-            .getRawOne();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-     
+    try {
+      const result = await this.registerPaymentReferenceInternal(dto, queryRunner.manager);
 
+      await queryRunner.commitTransaction();
+      return result;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error('Erro ao registar referência de pagamento (transação interna)', err?.stack);
 
-          let nextId = 90000;
-          if (ultimoId?.r_id) {
-            const lastNum = Number(ultimoId.r_id);
-            if (!isNaN(lastNum) && lastNum >= 90000) {
-              nextId = lastNum + 1;
-            }
-          }
-
-          const idGerado = nextId;
-
-          const sourceId = await this.generateNextSourceId();
-
-          const entity = trx.create(PaymentReferences, {
-            id: idGerado, // se id for string na entidade
-            sourceId: sourceId ?? '',
-            startDate: dto.startDate ? new Date(dto.startDate) : new Date(),
-            endDate: dto.endDate ? new Date(dto.endDate) : new Date(),
-
-            paymentId: dto.paymentId ?? null,
-            facturaCodigo: dto.facturaCodigo,
-            entityId: dto.entityId,
-            reference: dto.reference,
-            referenceId: dto.referenceId,
-            merchantTransactionId: dto.merchantTransactionId,
-            amount: dto.amount ?? 0,
-            status: dto.status ?? 'Pending',
-            webhook: dto.webhook ?? '',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          } as DeepPartial<PaymentReferences>);
-
-
-          // 4. Salvar
-          const saved = await trx.save(entity);
-          console.log('REFERÊNCIA CRIADA COM SUCESSO:', saved.id);
-          return saved;
-
-        } catch (error: any) {
-          attempts++;
-          const isUniqueError =
-            error.message?.includes('unique constraint') ||
-            error.message?.includes('ORA-00001');
-
-          if (isUniqueError && attempts < MAX_ATTEMPTS) {
-            console.warn(`Conflito de unicidade (tentativa ${attempts})`);
-            continue; // tenta novamente com novo sourceId
-          }
-
-          console.error('Erro ao salvar PaymentReferences:', error);
-          throw error;
-        }
+      if (err instanceof NotFoundException || err instanceof BadRequestException) {
+        throw err;
       }
 
-      throw new Error('Falha ao gerar referência única após várias tentativas');
-    });
+      throw new InternalServerErrorException(
+        'Erro interno ao registar referência de pagamento. Tente novamente.',
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Lógica principal de registo da referência.
+   * Sempre recebe um EntityManager válido.
+   */
+  private async registerPaymentReferenceInternal(
+    dto: RegisterPaymentReferenceDto,
+    manager: EntityManager,
+  ): Promise<PaymentReferences> {
+    let attempts = 0;
+    const MAX_ATTEMPTS = 5;
+
+    while (attempts < MAX_ATTEMPTS) {
+      try {
+        const ultimoSource = await manager.query(`
+  SELECT SOURCE_ID,
+         TO_NUMBER(REGEXP_SUBSTR(SOURCE_ID, '^\\d+')) AS parte_numerica
+  FROM FK2_PAGAMENTO_POR_REFERENCIAS
+  WHERE REGEXP_LIKE(SOURCE_ID, '^\\d+REF\\d$')  -- exemplo: 414527REF1
+  ORDER BY parte_numerica DESC
+  FETCH FIRST 1 ROW ONLY
+`);
+
+        let nextSourceId = 90000;
+        if (ultimoSource?.length > 0 && ultimoSource[0].PARTE_NUMERICA) {
+          const lastNum = Number(ultimoSource[0].PARTE_NUMERICA);
+          if (!isNaN(lastNum) && lastNum >= 90000) {
+            nextSourceId = lastNum + 1;
+          }
+        }
+
+        const sourceIdGerado = `${nextSourceId}REF1`;
+
+        // 2. INSERT nativo com RETURNING para pegar o ID gerado
+        const insertResult = await manager.query(`
+        INSERT INTO FK2_PAGAMENTO_POR_REFERENCIAS (
+          SOURCE_ID,
+          FACTURA_CODIGO,
+          ENTITY_ID,
+          REFERENCE,
+          REFERENCE_ID,
+          MERCHANT_TRANSACTION_ID,
+          AMOUNT,
+          START_DATE,
+          END_DATE,
+          STATUS_,
+          WEBHOOK,
+          CREATED_AT,
+          UPDATED_AT,
+          PAYMENT_ID
+        ) VALUES (
+          :sourceId,
+          :facturaCodigo,
+          :entityId,
+          :reference,
+          :referenceId,
+          :merchantTransactionId,
+          :amount,
+          :startDate,
+          :endDate,
+          :status,
+          :webhook,
+          SYSDATE,
+          SYSDATE,
+          :paymentId
+        )
+        RETURNING ID INTO :outId
+      `, {
+          sourceId: sourceIdGerado,
+          facturaCodigo: dto.facturaCodigo ?? null,
+          entityId: dto.entityId ?? null,
+          reference: dto.reference ?? null,
+          referenceId: dto.referenceId ?? null,
+          merchantTransactionId: dto.merchantTransactionId ?? null,
+          amount: dto.amount ?? 0,
+          startDate: dto.startDate ? new Date(dto.startDate) : new Date(),
+          endDate: dto.endDate ? new Date(dto.endDate) : new Date(),
+          status: dto.status ?? 'Pending',
+          webhook: dto.webhook ?? '',
+          paymentId: dto.paymentId ?? null,
+          outId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER }
+        } as any);
+
+        const idGerado = insertResult.outId?.[0];
+
+        if (!idGerado) {
+          throw new Error('Falha ao recuperar o ID gerado automaticamente');
+        }
+
+        // 3. Recarregar a entidade completa com o ID gerado
+        const saved = await manager.findOneOrFail(PaymentReferences, {
+          where: { id: idGerado },
+        });
+
+        this.logger.log(`Referência criada com sucesso: SOURCE_ID=${sourceIdGerado} | ID=${saved.id}`);
+
+        return saved;
+
+      } catch (error: any) {
+        attempts++;
+
+        // Detectar conflito de unicidade (principalmente no SOURCE_ID)
+        const isUniqueViolation =
+          error.message?.includes('unique constraint') ||
+          error.message?.includes('ORA-00001') ||
+          error.code === '23505'; // código genérico de unique violation
+
+        if (isUniqueViolation && attempts < MAX_ATTEMPTS) {
+          this.logger.warn(`Conflito de unicidade em SOURCE_ID (tentativa ${attempts}/${MAX_ATTEMPTS})`);
+          continue; // tenta novamente → novo SOURCE_ID
+        }
+
+        this.logger.error('Erro ao inserir referência de pagamento (raw query)', error);
+        throw error instanceof InternalServerErrorException
+          ? error
+          : new InternalServerErrorException('Erro ao registar referência de pagamento');
+      }
+    }
+
+    throw new InternalServerErrorException(
+      'Falha ao gerar SOURCE_ID único após várias tentativas. Tente novamente mais tarde.',
+    );
   }
 
   async createMonthlyPaymentReferences(

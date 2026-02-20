@@ -20,6 +20,7 @@ import { DiscountModule } from './module/discount/discount.module';
 import { IsencaoModule } from './module/isencao/isencao.module';
 
 import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
+import { PaymentTfcModule } from './module/payment-tfc/payment-tfc.module';
 
 
 @Module({
@@ -95,6 +96,7 @@ import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
     SharedModule,
     DiscountModule,
     IsencaoModule,
+    PaymentTfcModule,
   ],
   providers: [BullMQWorkerService],
 })

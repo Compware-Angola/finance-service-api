@@ -1,0 +1,370 @@
+import { BadRequestException } from '@nestjs/common';
+import { DataSource, Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
+import { MesTemp } from '../payment-references/entities/mes-temp.entity';
+import { TestMonthlyDTO } from './dto/test-monthly.dto';
+import { obterMulta } from 'src/module/util/obter-multa';
+import {
+  BolsaParams,
+  CalcularDescontoParams,
+  CalcularValorMensalidadeParams,
+  MesTempResponse,
+  ObterBolseiroParams,
+} from './types';
+import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
+import { formatDisplay } from 'src/module/util/format-date';
+
+export class MonthlyFeesDiscountService {
+  constructor(
+    private dataSource: DataSource,
+    @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
+  ) {}
+  //Informações para gerar as mensalidades
+
+  private async obterBolseiro({
+    anoLectivo,
+    codigoMatricula,
+    semestre,
+  }: ObterBolseiroParams) {
+    const sqlBolseiro = `
+    select
+      desconto
+    from
+    fk2_tb_bolseiros
+    where 1=1
+    and codigo_matricula  = :codigoMatricula
+    and codigo_anolectivo = :anoLectivo
+    and semestre = :semestre
+    `;
+
+    const resultado = await this.dataSource.query(sqlBolseiro, {
+      anoLectivo,
+      codigoMatricula,
+      semestre,
+    } as any);
+
+    const row = resultado?.[0];
+    if (!row) {
+      return {
+        bolseiro: false,
+        desconto: 0,
+      };
+    }
+    const desconto = row.DESCONTO;
+    const novoDesconto = desconto == 0 ? 1 : desconto / 100;
+    return {
+      bolseiro: true,
+      desconto: novoDesconto,
+    };
+  }
+
+  private async obterDescontoNormal({
+    anoLectivo,
+    codigoMatricula,
+    mesTemp,
+  }: BolsaParams) {
+    const sqlBolseiro = `
+      select de.TAXA as VALOR_DESCONTO
+      from FK2_TB_DESCONTOS_ALUNOO da
+      inner join FK2_DESCONTOS_ESPECIAIS de on  da.CODIGO_TIPO_DESCONTO = de.id
+      where 1=1
+      and da.codigo_matricula = :codigoMatricula
+      and da.codigo_anolectivo = :anoLectivo
+      and da.afectacao = 'Pagamento de Propina'
+      and (da.semestre = :semestre or da.semestre = 3)
+      and da.deleted_at is null
+      FETCH FIRST 1 ROWS ONLY
+    `;
+    const resultado = await this.dataSource.query(sqlBolseiro, {
+      semestre: mesTemp.semestre,
+      anoLectivo,
+      codigoMatricula,
+    } as any);
+    const row = resultado?.[0];
+    if (row) {
+      const taxa = Number(row.VALOR_DESCONTO ?? 0);
+      return {
+        temDesconto: true,
+        desconto: taxa / 100,
+      };
+    }
+    return {
+      temDesconto: false,
+      desconto: 0,
+    };
+  }
+
+  private async obterMensalidade(
+    codigoMatricula: number,
+    anoLectivo: number,
+  ): Promise<number> {
+    //Aqui eu obtenho as informações
+    const sqlObterInfoAluno = `
+      select c.designacao     as curso,
+       nvl(p.polo_id,1)       as polo
+      from fk2_tb_matriculas m
+      inner join fk2_tb_cursos        c on c.codigo = m.codigo_curso
+      inner join fk2_tb_admissao      a on a.codigo = m.codigo_aluno
+      inner join fk2_tb_preinscricao  p on p.codigo = a.pre_incricao
+      where m.codigo = :codigoMatricula
+    `;
+    const resultObterInfoAluno = await this.dataSource.query(
+      sqlObterInfoAluno,
+      {
+        codigoMatricula,
+      } as any,
+    );
+
+    const row = resultObterInfoAluno?.[0];
+    if (!row) {
+      throw new BadRequestException('Nenhuma informação encontrada');
+    }
+
+    const curso = row?.CURSO;
+    const polo = row?.POLO;
+    console.log(curso);
+    const sqlMensalidade = `
+        select PRECO
+        from FK2_TB_TIPO_SERVICOS
+        where 1=1
+        and  DESCRICAO   LIKE 'Propina ' || :curso || '%'
+        and CODIGO_ANO_LECTIVO = :anoLectivo
+        and POLO_ID = :polo
+        and ESTADO = 'Ativo'
+        order by DATA desc
+        FETCH FIRST 1 ROW ONLY
+    `;
+    const sqlResultadoMensalidade = await this.dataSource.query(
+      sqlMensalidade,
+      {
+        curso,
+        polo,
+        anoLectivo,
+      } as any,
+    );
+    const rowMensalidade = sqlResultadoMensalidade?.[0];
+    if (!rowMensalidade) {
+      throw new BadRequestException('Nenhuma mensalidade encontrada');
+    }
+
+    return rowMensalidade.PRECO;
+  }
+
+  private async obterDescontoEspecial(
+    codigoMatricula: number,
+    dataInicial: Date,
+  ) {
+    //obter informações gerais do aluno
+    const sqlAluno = `
+      select
+          c.codigo                        as curso,
+          c.sigla                         as sigla,
+          p.CODIGO_TURNO	                as turno,
+          nvl(p.polo_id,1)                as polo
+      from fk2_tb_matriculas m
+      inner join fk2_tb_cursos        c on c.codigo = m.codigo_curso
+      inner join fk2_tb_admissao      a on a.codigo = m.codigo_aluno
+      inner join fk2_tb_preinscricao  p on p.codigo = a.pre_incricao
+      where m.codigo = :codigoMatricula
+    `;
+    const resultado = await this.dataSource.query(sqlAluno, {
+      codigoMatricula,
+    } as any);
+    const rowAluno = resultado?.[0];
+    if (!rowAluno) {
+      throw new BadRequestException('Informações do aluno não encontrado');
+    }
+
+    if (rowAluno.SIGLA == 'EAP') {
+      const sqlDescontoAgro = `SELECT
+              TAXA,
+              DESCRICAO,
+              DATA_INICIO,
+              DATA_FIM
+              FROM FK2_DESCONTOS_ESPECIAIS
+               where SIGLA = 'DAP50_AGRO_2324'
+               and  TO_DATE(:dataTemp, 'YYYY-MM-DD') BETWEEN DATA_INICIO AND DATA_FIM
+              `;
+      const resultadoAgro = await this.dataSource.query(sqlDescontoAgro, {
+        dataTemp: formatDisplay(dataInicial),
+      } as any);
+      console.log('Agro', resultadoAgro);
+      const rowAgro = resultadoAgro?.[0];
+      if (rowAgro) {
+        const taxa = Number(rowAgro.TAXA ?? 0);
+
+        return {
+          temDesconto: true,
+          desconto: taxa / 100,
+        };
+      }
+    } else if (rowAluno.TURNO == 6) {
+      const sqlDescontoNoturno = `
+      SELECT
+        TAXA,
+        DESCRICAO,
+        DATA_INICIO,
+        DATA_FIM
+      FROM FK2_DESCONTOS_ESPECIAIS
+      where SIGLA = 'DEN20_POSLAB'
+      and  TO_DATE(:dataTemp, 'YYYY-MM-DD') BETWEEN DATA_INICIO AND DATA_FIM
+      `;
+      const resultadoDescontoNoturno = await this.dataSource.query(
+        sqlDescontoNoturno,
+        {
+          dataTemp: formatDisplay(dataInicial),
+        } as any,
+      );
+
+      const rowDescontoNoturno = resultadoDescontoNoturno?.[0];
+      if (rowDescontoNoturno) {
+        const taxa = Number(rowDescontoNoturno.TAXA ?? 0);
+        return {
+          temDesconto: true,
+          desconto: taxa / 100,
+        };
+      }
+    }
+    return {
+      temDesconto: false,
+      desconto: 0,
+    };
+  }
+  private async calcularDesconto({
+    anoLectivo,
+    codigoMatricula,
+    mesTemp,
+  }: CalcularDescontoParams) {
+    const bolseiro = await this.obterBolseiro({
+      anoLectivo: anoLectivo,
+      codigoMatricula: codigoMatricula,
+      semestre: mesTemp.semestre,
+    });
+    if (bolseiro.bolseiro == true) return bolseiro.desconto;
+
+    //Verificar desconto de especias
+    const descontoEspecial = await this.obterDescontoEspecial(
+      codigoMatricula,
+      mesTemp.data_limite,
+    );
+    if (descontoEspecial.temDesconto == true) return descontoEspecial.desconto;
+
+    //Desconto normal
+    const descontoNormal = await this.obterDescontoNormal({
+      anoLectivo,
+      codigoMatricula,
+      mesTemp,
+    });
+    if (descontoNormal.temDesconto == true) return descontoNormal.desconto;
+    return 0;
+  }
+  private async calcularValorMensalidade({
+    anoLectivo,
+    codigoMatricula,
+    mesTemp,
+  }: CalcularValorMensalidadeParams) {
+    const percentagemMulta = obterMulta(
+      mesTemp.data_limite,
+      mesTemp.data_final,
+    );
+    const mensalidade = await this.obterMensalidade(
+      codigoMatricula,
+      anoLectivo,
+    );
+
+    const PercentagemDesconto = await this.calcularDesconto({
+      anoLectivo,
+      codigoMatricula,
+      mesTemp,
+    });
+    const eBolseiro = PercentagemDesconto == 1 ? true : false;
+    const multa = eBolseiro ? 0 : mensalidade * percentagemMulta;
+    const desconto = mensalidade * PercentagemDesconto;
+    console.log('multa: ', multa);
+    console.log('desconto: ', desconto);
+    console.log('mensalidade: ', mensalidade);
+
+    const novaMensalidade = mensalidade + multa - desconto;
+    const statusPagamento = eBolseiro ? 1 : 0;
+    const valorPago = eBolseiro ? desconto : 0;
+    return {
+      mes_temp_id: mesTemp.id,
+      mes: mesTemp.designacao,
+      data_inicial: null,
+      data_final: mesTemp.data_final,
+      data_limite: mesTemp.data_limite,
+      data_final_desconto: null,
+      id_item: 0,
+      id_tipo_servico: 0,
+      descricao_servico: '',
+      tipo_servico: '',
+      codigo_matricula: codigoMatricula,
+      ano_lectivo_fatura: anoLectivo,
+      estado_fatura: '0',
+      reference: '',
+      ValorAPagar: novaMensalidade,
+      valorEntregue: 0,
+      data_vencimento: null,
+      codigo_factura: 0,
+      total_preco_fatura: 0,
+      desconto: desconto,
+      semestre: mesTemp.semestre,
+      multa: multa,
+      total_item: novaMensalidade,
+      valor_pago: valorPago,
+      mensalidade: mensalidade,
+      total: novaMensalidade,
+      total_preco: mensalidade,
+      status_pagamento: statusPagamento,
+    };
+  }
+  async generatePayment({
+    codAnoLectivo,
+    codigo_matricula,
+    status,
+  }: TestMonthlyDTO) {
+    const sqlMesTemp = `
+     select
+            DATA_LIMITE,
+            DATA_FINAL,
+            DATA_INICIAL,
+            SEMESTRE,
+            ID,
+            DESIGNACAO,
+            PRESTACAO
+     from fk2_mes_temp tp
+     where 1=1
+     and tp.ano_lectivo = :codAnoLectivo
+     and tp.activo = 1
+     and tp.id not in ( select it.mes_temp_id
+     from fk2_factura ft
+     inner JOIN fk2_factura_items it
+     on ft.codigo = it.codigofactura
+     where ft.codigomatricula = :codigo_matricula
+     and it.mes_temp_id is not null
+     and ft.ano_lectivo = :codAnoLectivo)
+    `;
+    const resultado = await this.dataSource.query(sqlMesTemp, {
+      codAnoLectivo,
+      codigo_matricula,
+    } as any);
+    const mesTemps: MesTempResponse[] = toLowerCaseKeys(resultado);
+    const pagamentos: any = [];
+    for (const mesTemp of mesTemps) {
+      const result = await this.calcularValorMensalidade({
+        anoLectivo: codAnoLectivo,
+        codigoMatricula: codigo_matricula,
+        mesTemp: mesTemp,
+      });
+
+      if (status == 'pending' && result.status_pagamento == 0)
+        pagamentos.push(result);
+      else if (status == 'paid' && result.status_pagamento == 1) {
+        pagamentos.push(result);
+      } else if (status == 'all' || status == undefined) {
+        pagamentos.push(result);
+      }
+    }
+    return pagamentos;
+  }
+}

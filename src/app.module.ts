@@ -15,7 +15,7 @@ import { TypeServiceModule } from './module/type_service/type_service.module';
 import { AlunoModule } from './module/aluno/aluno.module';
 import { HttpModule } from '@nestjs/axios';
 import { SharedModule } from './module/shared/shared.module';
-import { MonthlyFeePenaltyCronTest } from './module/jobs/payment-monthly-fee';
+
 import { DiscountModule } from './module/discount/discount.module';
 import { IsencaoModule } from './module/isencao/isencao.module';
 
@@ -96,6 +96,6 @@ import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
     DiscountModule,
     IsencaoModule,
   ],
-  providers: [BullMQWorkerService, MonthlyFeePenaltyCronTest],
+  providers: [BullMQWorkerService],
 })
 export class AppModule {}

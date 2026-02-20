@@ -400,6 +400,10 @@ FROM (
         f.Referencia                      AS referencia,
         f.Descricao                       AS descricao,
         f.estado                          AS estado,
+        f.valorapagar                      AS valor_pagar,
+        f.totalmulta                      AS total_multa,
+        f.totaliva                         AS total_iva,
+        f.TOTAL_INCIDENCIA                 AS total_incidencia,
         p.Nome_Completo                   AS nome_aluno,
         c.designacao                      AS curso,
         po.designacao                     AS polo,
@@ -431,9 +435,22 @@ FROM (
     ${whereClause}
 
     GROUP BY
-        f.Codigo, f.DataFactura, f.TotalPreco, f.CodigoMatricula,
-        f.Referencia, f.Descricao, f.estado,
-        p.Nome_Completo, c.designacao, po.designacao, ano.Designacao
+   
+    f.Codigo,
+    f.DataFactura,
+    f.TotalPreco,
+    f.valorapagar,
+    f.totalmulta,
+    f.totaliva,
+    f.TOTAL_INCIDENCIA,
+    f.CodigoMatricula,
+    f.Referencia,
+    f.Descricao,
+    f.estado,
+    p.Nome_Completo,
+    c.designacao,
+    po.designacao,
+    ano.Designacao
 ) t
 WHERE rn BETWEEN :startRow AND :endRow
   `;
@@ -476,6 +493,7 @@ WHERE rn BETWEEN :startRow AND :endRow
       fi.obs,
       fi.PRECO,
       fi.TOTAL,
+      fi.multa  AS multa,
 
       ts.Descricao             AS descricaoServico,
       ts.Codigo                AS codigoServico,

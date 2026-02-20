@@ -15,6 +15,7 @@ import { MesTemp } from './entities/mes-temp.entity'
 import { AcademicYear } from 'src/module/invoice/entities/academic.year.entity'
 import { InjectQueue } from '@nestjs/bullmq'
 import { Queue } from 'bullmq'
+import { InvoiceItemDto } from 'src/module/invoice/dto/create-invoice-itens.dto'
 
 @Injectable()
 export class PaymentReferencesService {
@@ -388,7 +389,27 @@ export class PaymentReferencesService {
           }
 
 
-          // ---- Criação da Fatura ----
+      
+            const invoiceItemData: InvoiceItemDto  = {
+            CodigoProduto: item.CodigoProduto,
+            Quantidade: 1,
+            Total: item.Total,
+            obs: `Mensalidade de ${mes.designacao}`,
+            taxaIva: item.taxaIva,
+            valorIva: item.valorIva,
+            preco: payments.amount,
+            retencao: item.retencao,
+            incidencia: item.incidencia,
+            valorDesconto: item.valorDesconto,
+            descontoProduto: item.descontoProduto,
+            mes: mes.designacao,
+            multa: item.multa,
+            mesTempId: mes.id,
+            estado: 0,
+            valorPago: item.valorPago,
+            valorATransportar: item.valorATransportar
+          }
+
           const createInvoiceDto: CreateInvoiceDto = {
             DataFactura: new Date().toISOString(),
             polo_id: 1,
@@ -402,13 +423,14 @@ export class PaymentReferencesService {
             canal: 3,
             CodigoMatricula: payments.enrollment?.CodigoMatricula,
             codigo_preinscricao: payments.enrollment?.codigo_preinscricao,
+            itens:[invoiceItemData] 
           };
 
           const invoice = await this.invoiceService.create(
             createInvoiceDto,
             referenceNumber,
             dueDate,
-            transactionalEntityManager // ← mesma conexão
+            transactionalEntityManager 
           );
 
           // ---- Merchant Transaction ID ----
@@ -450,34 +472,7 @@ export class PaymentReferencesService {
           console.log('CÓDIGO GERADO PARA ITEM:', codigoItemGerado);
 
           // ---- Criação do Item da Fatura ----
-          const invoiceItemData = {
-            codigo: codigoItemGerado,
-            CodigoProduto: item.CodigoProduto,
-            CodigoFactura: invoice.Codigo,
-            quantidade: item.Quantidade,
-            total: item.Total,
-            obs: `Mensalidade de ${mes.designacao}`,
-            taxaIva: item.taxaIva,
-            valorIva: item.valorIva,
-            preco: payments.amount,
-            retencao: item.retencao,
-            incidencia: item.incidencia,
-            valorDesconto: item.valorDesconto,
-            descontoProduto: item.descontoProduto,
-            mes: mes.designacao,
-            multa: item.multa,
-            mesTempId: mes.id,
-            codigoAnoLectivo: invoice.anoLectivo,
-            estado: 0,
-            valorPago: item.valorPago,
-            valorATransportar: item.valorATransportar?.toString(),
-          };
-
-          const invoiceItem = transactionalEntityManager.create(
-            this.invoiceItemRepository.target,
-            invoiceItemData
-          );
-          await transactionalEntityManager.save(invoiceItem);
+        
         }
 
         return {

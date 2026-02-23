@@ -14,6 +14,8 @@ export class PaymentTfcService {
       page = 1,
       status,
       limit = 25,
+      matriculaId,
+      nome,
     } = filters;
     const offset = (page - 1) * limit;
 
@@ -33,6 +35,13 @@ export class PaymentTfcService {
     if (status) {
       baseWhere += ` AND f.estado = ${status}`;
     }
+    //fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%'
+    if (nome) {
+      baseWhere += ` AND fn_remove_acentos(UPPER(tp.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER('${nome}')) || '%'`;
+    }
+    if (matriculaId) {
+      baseWhere += ` AND tm.codigo  = ${matriculaId}`;
+    }
 
     const sql = `
     SELECT
@@ -40,7 +49,7 @@ export class PaymentTfcService {
       tm.codigo AS matricula,
       p.codigo AS pagamento,
       tc.designacao AS curso,
-      p.estado AS estado
+      f.estado AS estado
     FROM FK2_FACTURA f
       LEFT JOIN FK2_TB_PAGAMENTOS p ON p.CODIGO_FACTURA = f.codigo
       INNER JOIN FK2_FACTURA_ITEMS it ON it.CODIGOFACTURA = f.codigo

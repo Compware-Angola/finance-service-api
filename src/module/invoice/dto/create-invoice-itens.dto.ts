@@ -22,7 +22,7 @@ export class InvoiceItemDto {
   @ApiProperty({
     description: 'Quantidade de unidades do item.',
     type: Number,
-    example: 2,
+    example: 1,
   })
   @IsNumber()
   @Min(0)

@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { Repository, IsNull, Like, FindOptionsWhere } from 'typeorm'
 import { CreateTipoCreditoDto, FilterTipoCreditoDto } from './dto/create-tipo_credito.dto'
 import { TipoCredito } from './entities/tipo_credito.entity'
-import { DataSource } from 'typeorm'
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys'
 import { UpdateTipoCreditoDto } from './dto/update-tipo_credito.dto'
 

@@ -190,6 +190,14 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsInt()
   canal?: number = 3;
+      @ApiProperty({
+    description: 'Ano lectivo.',
+    type: Number,
+    example: 1023,
+  })
+  @IsOptional()
+  @IsInt()
+  codigo_anoLectivo?: number;
 
   // --------------------------------------------------------------------------------
   // ITENS DA FATURA (ARRAY)

@@ -167,7 +167,7 @@ itensMensalidades.forEach((d) => {
     mes: d.mes_propina ?? null,
     multa: safeNumber(d.multa),
     mesTempId: d.mes_temp_id ?? undefined, 
-    
+    codigo_anoLectivo: safeNumber(d.codigo_anoLectivo ),
     estado: 0,
     valorPago: 0,
     valorATransportar: 0, 
@@ -193,7 +193,7 @@ itensServicos.forEach((d) => {
     mes: d.mes_propina ?? null,
     multa: safeNumber(d.multa),
     mesTempId: d.mes_temp_id ?? undefined,
-    
+    codigo_anoLectivo: safeNumber(d.codigo_anoLectivo ),
     estado: 0,
     valorPago: 0,
     valorATransportar: 0,

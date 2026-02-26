@@ -41,10 +41,6 @@ export class CreatePaymentDto {
   @Length(1, 1000)
   observacao?: string;
 
-  @ApiProperty({ example: 2025 })
-  @IsInt()
-  @IsPositive()
-  anoLectivo: number;
 
   @ApiPropertyOptional({ example: 150000.0 })
   @IsOptional()

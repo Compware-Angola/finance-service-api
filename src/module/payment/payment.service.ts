@@ -122,7 +122,7 @@ export class PaymentService {
     }
     async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
         const anoCorrente = this.anoAtualPrincipal;
-        const { statusPagamento, nOperacaoBancaria, nOperacaoBancaria2, anoLectivo, ...rest } = dto;
+        const { statusPagamento, nOperacaoBancaria, nOperacaoBancaria2, ...rest } = dto;
         const paymentStatus: 'concluido' = 'concluido';
 
         // Validações iniciais (fora da transação)

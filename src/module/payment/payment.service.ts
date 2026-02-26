@@ -8,6 +8,7 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { InvoiceService } from '../invoice/invoice.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
+import { DecodedUserPayload } from 'src/common/types/token-validation-response.interface';
 
 
 
@@ -119,7 +120,7 @@ export class PaymentService {
             totalPages,
         };
     }
-    async createPayment(dto: CreatePaymentDto) {
+    async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
         const anoCorrente = this.anoAtualPrincipal;
         const { statusPagamento, nOperacaoBancaria, nOperacaoBancaria2, anoLectivo, ...rest } = dto;
         const paymentStatus: 'concluido' = 'concluido';
@@ -167,23 +168,25 @@ export class PaymentService {
         // Aqui você pode fazer validações adicionais, por exemplo:
         // - Verificar se o valor pago ≥ valor total da factura
         // - Decidir se é pagamento completo ou parcial
-        const  student = await this.findAlunoPreinscricaoByMatricula(invoice.CodigoMatricula);
-       
-       const finalPayload = {
-    ...rest,
+        const student = await this.findAlunoPreinscricaoByMatricula(invoice.CodigoMatricula);
 
-    anoLectivo: anoCorrente,
-    codigoFactura: dto.codigoFactura,
-    codigoPreInscricao: student?.codigo ?? dto.codigoPreInscricao ?? invoice.codigoPreinscricao ?? undefined,
-    instituicaoId: undefined,
+        const finalPayload = {
+            ...rest,
 
-    nOperacaoBancaria: nOperacaoBancaria,
-    nOperacaoBancaria2: nOperacaoBancaria2 || undefined,
+            anoLectivo: anoCorrente,
+            codigoFactura: dto.codigoFactura,
+            codigoPreInscricao: student?.codigo ?? dto.codigoPreInscricao ?? invoice.codigoPreinscricao ?? undefined,
+            instituicaoId: undefined,
 
-    statusPagamento: paymentStatus,
-    estado: 1,
-    createdAt: new Date(),
-};
+
+            nOperacaoBancaria: nOperacaoBancaria,
+            nOperacaoBancaria2: nOperacaoBancaria2 || undefined,
+            fkUtilizador: user?.sub, // Associar o pagamento ao ID do usuário autenticado
+            utilizador: user?.sub, // Campo "utilizador" para compatibilidade, também associando ao ID do usuário autenticado
+            statusPagamento: paymentStatus,
+            estado: 1,
+            createdAt: new Date(),
+        };
 
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
@@ -212,7 +215,7 @@ export class PaymentService {
             } as any);
 
             const SIGLAS_ESPECIAIS1 = ['TdM', 'IpuCricular(Anual)']; // para anual, se tiver algum desses itens, precisa de confirmação para activar a matrícula e grade curricular do aluno
-            const precisaConfirmacao = itens.some(( item: any)  => SIGLAS_ESPECIAIS1.includes(item.SiglaProduto));
+            const precisaConfirmacao = itens.some((item: any) => SIGLAS_ESPECIAIS1.includes(item.SiglaProduto));
             if (precisaConfirmacao) {
                 // Atualizar confirmação
 
@@ -242,7 +245,7 @@ export class PaymentService {
 
             }
             const SIGLAS_ESPECIAIS2 = ['SEMESTRAL']; // para anual, se tiver algum desses itens, precisa de confirmação para activar a matrícula e grade curricular do aluno
-            const precisaConfirmacaoSemestral = itens.some(( item: any) => SIGLAS_ESPECIAIS2.includes(item.SiglaProduto));
+            const precisaConfirmacaoSemestral = itens.some((item: any) => SIGLAS_ESPECIAIS2.includes(item.SiglaProduto));
             if (precisaConfirmacaoSemestral) {
                 // Atualizar confirmação
 
@@ -290,8 +293,8 @@ export class PaymentService {
             // 3. Criar o pagamento
             console.log(finalPayload);
 
-             
-            
+
+
             const payment = this.paymentRepository.create(finalPayload);
             await queryRunner.manager.save(payment);
 
@@ -435,18 +438,18 @@ export class PaymentService {
 
     }
 
-    private  async findAlunoPreinscricaoByMatricula(codigo) {
-    const sql = `select p.codigo from fk2_tb_matriculas    m
+    private async findAlunoPreinscricaoByMatricula(codigo) {
+        const sql = `select p.codigo from fk2_tb_matriculas    m
       inner join FK2_TB_ADMISSAO         a on a.codigo = m.CODIGO_ALUNO
       inner join FK2_TB_PREINSCRICAO     p on p.codigo = a.PRE_INCRICAO
       where m.codigo =  ${codigo}`;
-    const result = await this.dataSource.query(sql);
-    if (!result || result.length === 0) {
-      throw new NotFoundException('Aluno não encontrado');
+        const result = await this.dataSource.query(sql);
+        if (!result || result.length === 0) {
+            throw new NotFoundException('Aluno não encontrado');
+        }
+        const preInscricao = result[0];
+        return preInscricao;
     }
-    const preInscricao = result[0];
-    return preInscricao;
-  }
 
 }
 

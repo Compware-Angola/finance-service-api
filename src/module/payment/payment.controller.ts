@@ -1,20 +1,25 @@
-import { Controller, Get, Query, Param, ParseIntPipe, Post, Body } from '@nestjs/common';
+import { Controller, Get, Query, Param, ParseIntPipe, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
+import { PermissionsGuard } from 'src/common/secret/permissions.guard';
+import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
 
 @ApiTags('payment')
 @Controller('payment')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) { }
   @Post('create')
+    @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @ApiOperation({ summary: 'Cria um novo pagamento.' })
   @ApiResponse({ status: 201, "description": 'Pagamento criado com sucesso.' })
-  async create(@Body() createPaymentDto: CreatePaymentDto): Promise<Payment | any> {
-    return this.paymentService.createPayment(createPaymentDto);
+  async create(@Body() createPaymentDto: CreatePaymentDto, @Req() req: any): Promise<Payment | any> {
+    const user = req.user; // Obter o usuário autenticado
+    console.log('Usuário autenticado:', user);
+    return this.paymentService.createPayment(createPaymentDto, user);
   }
   @Get('get/:academicYear/:preInscritionCode')
   @ApiOperation({

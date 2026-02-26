@@ -82,11 +82,6 @@ export class CreatePaymentDto {
   @IsPositive()
   contaMovimentada?: number;
 
-  @ApiPropertyOptional({ example: 10 })
-  @IsOptional()
-  @IsInt()
-  @IsPositive()
-  utilizador?: number;
 
   @ApiPropertyOptional({ example: '2025-11-05T08:45:00Z' })
   @IsOptional()
@@ -174,11 +169,7 @@ export class CreatePaymentDto {
   @Max(1)
   corrente?: number;
 
-  @ApiPropertyOptional({ example: 15 })
-  @IsOptional()
-  @IsInt()
-  @IsPositive()
-  fkUtilizador?: number;
+
 
   @ApiProperty({
     enum: ['Y', 'N'],

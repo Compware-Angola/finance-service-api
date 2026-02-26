@@ -42,4 +42,17 @@ export class AlunoService {
 
     return toLowerCaseKeys(aluno);
   }
+
+  async findAlunoPreinscricaoByMatricula(codigo) {
+    const sql = `select p.codigo from fk2_tb_matriculas    m
+      inner join FK2_TB_ADMISSAO         a on a.codigo = m.CODIGO_ALUNO
+      inner join FK2_TB_PREINSCRICAO     p on p.codigo = a.PRE_INCRICAO
+      where m.codigo =  ${codigo}`;
+    const result = await this.dataSource.query(sql);
+    if (!result || result.length === 0) {
+      throw new NotFoundException('Aluno não encontrado');
+    }
+    const preInscricao = result[0];
+    return preInscricao;
+  }
 }

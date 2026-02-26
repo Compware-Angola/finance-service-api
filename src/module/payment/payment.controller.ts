@@ -7,19 +7,29 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
 import { PermissionsGuard } from 'src/common/secret/permissions.guard';
 import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
+import { HttpService } from '@nestjs/axios';
+import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
 
 @ApiTags('payment')
 @Controller('payment')
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) { }
+  constructor(private readonly paymentService: PaymentService,private httpService: HttpService) { }
   @Post('create')
-    @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @ApiOperation({ summary: 'Cria um novo pagamento.' })
   @ApiResponse({ status: 201, "description": 'Pagamento criado com sucesso.' })
   async create(@Body() createPaymentDto: CreatePaymentDto, @Req() req: any): Promise<Payment | any> {
     const user = req.user; // Obter o usuário autenticado
+      const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     console.log('Usuário autenticado:', user);
-    return this.paymentService.createPayment(createPaymentDto, user);
+    const payment = await this.paymentService.createPayment(createPaymentDto, user);
+        AccessLogHelper.logAccess(this.httpService, {
+      descricao: `Utilizador ${user?.nome} criou um pagamento com código de fatura ${createPaymentDto.codigoFactura}`,
+      fkUtilizadorResponsavel: user.pk_utilizador,
+      fkOperacaoLog: 7,
+      ip: ip,
+    });
+    return payment;
   }
   @Get('get/:academicYear/:preInscritionCode')
   @ApiOperation({

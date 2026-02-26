@@ -181,8 +181,8 @@ export class PaymentService {
 
             nOperacaoBancaria: nOperacaoBancaria,
             nOperacaoBancaria2: nOperacaoBancaria2 || undefined,
-            fkUtilizador: user?.sub, // Associar o pagamento ao ID do usuário autenticado
-            utilizador: user?.sub, // Campo "utilizador" para compatibilidade, também associando ao ID do usuário autenticado
+            fkUtilizador: user?.pk_utilizador, // Associar o pagamento ao ID do usuário autenticado
+            utilizador: user?.pk_utilizador, // Campo "utilizador" para compatibilidade, também associando ao ID do usuário autenticado
             statusPagamento: paymentStatus,
             estado: 1,
             createdAt: new Date(),

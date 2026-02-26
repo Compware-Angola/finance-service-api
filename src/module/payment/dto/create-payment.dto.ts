@@ -15,156 +15,103 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class CreatePaymentDto {
-@ApiProperty({
-    description: 'Data do pagamento no formato AAAA-MM-DD (ISO 8601)',
+
+  @ApiProperty({
+    description: 'Data do pagamento (AAAA-MM-DD)',
     example: '2025-11-05',
   })
-  @IsString({ message: 'Data deve ser uma string' })
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, { 
-    message: 'Data deve estar no formato AAAA-MM-DD',
-  })
-  Data: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  data: string;
 
-  @ApiPropertyOptional({
-    description: 'Número da operação bancária (único)',
-    example: 'OP123456789',
-  })
+  @ApiPropertyOptional({ example: 'OP123456789' })
   @IsOptional()
   @IsString()
   @Length(1, 25)
-  N_Operacao_Bancaria?: string;
+  nOperacaoBancaria?: string;
 
-  @ApiPropertyOptional({
-    description: 'Segundo número de operação bancária (opcional)',
-    example: 'OP987654321',
-  })
+  @ApiPropertyOptional({ example: 'OP987654321' })
   @IsOptional()
   @IsString()
   @Length(1, 25)
-  N_Operacao_Bancaria2?: string;
+  nOperacaoBancaria2?: string;
 
-  @ApiPropertyOptional({
-    description: 'Observação sobre o pagamento',
-    example: 'Pagamento via Multicaixa Express',
-  })
+  @ApiPropertyOptional({ example: 'Pagamento via Multicaixa Express' })
   @IsOptional()
   @IsString()
   @Length(1, 1000)
-  Observacao?: string;
+  observacao?: string;
 
-  @ApiProperty({
-    description: 'Ano letivo do pagamento',
-    example: 2025,
-  })
+  @ApiProperty({ example: 2025 })
   @IsInt()
   @IsPositive()
-  AnoLectivo: number;
+  anoLectivo: number;
 
-  @ApiPropertyOptional({
-    description: 'Total geral do pagamento (se aplicável)',
-    example: 150000.00,
-  })
+  @ApiPropertyOptional({ example: 150000.0 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  Totalgeral?: number;
+  totalGeral?: number;
 
-  @ApiPropertyOptional({
-    description: 'Data da operação no banco (ISO string)',
-    example: '2025-11-05T10:30:00Z',
-  })
+  @ApiPropertyOptional({ example: '2025-11-05T10:30:00Z' })
   @IsOptional()
   @IsDateString()
-  DataBanco?: string;
+  dataBanco?: string;
 
-  @ApiPropertyOptional({
-    description: 'Código da pré-inscrição associada',
-    example: 123,
-  })
+  @ApiPropertyOptional({ example: 123 })
   @IsOptional()
   @IsInt()
   @IsPositive()
-  Codigo_PreInscricao?: any;
+  codigoPreInscricao?: number;
 
-  @ApiPropertyOptional({
-    description: 'Forma de pagamento',
-    example: 'Multicaixa',
-    enum: ['Multicaixa', 'Transferência', 'Numerário', 'TPA', 'Online'],
-  })
+  @ApiPropertyOptional({ example: 'Multicaixa' })
   @IsOptional()
   @IsString()
   @Length(1, 45)
-  forma_pagamento?: string;
+  formaPagamento?: string;
 
-  @ApiProperty({
-    description: 'Valor depositado (obrigatório)',
-    example: 50000.00,
-  })
+  @ApiProperty({ example: 50000.0 })
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
-  valor_depositado: number;
+  valorDepositado: number;
 
-  @ApiPropertyOptional({
-    description: 'ID da conta movimentada',
-    example: 5,
-  })
+  @ApiPropertyOptional({ example: 5 })
   @IsOptional()
   @IsInt()
   @IsPositive()
-  ContaMovimentada?: number;
+  contaMovimentada?: number;
 
-  @ApiPropertyOptional({
-    description: 'ID do utilizador que registrou',
-    example: 10,
-  })
+  @ApiPropertyOptional({ example: 10 })
   @IsOptional()
   @IsInt()
   @IsPositive()
-  Utilizador?: number;
+  utilizador?: number;
 
-  @ApiPropertyOptional({
-    description: 'Data de registo (ISO string)',
-    example: '2025-11-05T08:45:00Z',
-  })
+  @ApiPropertyOptional({ example: '2025-11-05T08:45:00Z' })
   @IsOptional()
   @IsDateString()
-  DataRegisto?: string;
+  dataRegisto?: string;
 
-  @ApiPropertyOptional({
-    description: 'Canal do pagamento',
-    example: 3,
-    default: 3,
-  })
+  @ApiPropertyOptional({ default: 3 })
   @IsOptional()
   @IsInt()
   @Min(0)
   canal?: number;
 
-  @ApiPropertyOptional({
-    description: 'Nome do documento comprovativo (ex: recibo.pdf)',
-    example: 'recibo_123.pdf',
-  })
+  @ApiPropertyOptional({ example: 'recibo_123.pdf' })
   @IsOptional()
   @IsString()
   @Length(1, 450)
-  nome_documento?: string;
+  nomeDocumento?: string;
 
-  @ApiPropertyOptional({
-    description: 'Nome do segundo documento (se houver)',
-    example: 'comprovativo_extra.jpg',
-  })
+  @ApiPropertyOptional({ example: 'extra.jpg' })
   @IsOptional()
   @IsString()
   @Length(1, 450)
-  nome_documento2?: string;
+  nomeDocumento2?: string;
 
-  @ApiPropertyOptional({
-    description: 'Estado do pagamento',
-    example: 0,
-    default: 0,
-  })
+  @ApiPropertyOptional({ default: 0 })
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -172,101 +119,71 @@ export class CreatePaymentDto {
   estado?: number;
 
   @ApiProperty({
-    description: 'Tipo de pagamento: BOLSA ou NORMAL',
     enum: ['BOLSA', 'NORMAL'],
     default: 'NORMAL',
   })
   @IsEnum(['BOLSA', 'NORMAL'])
-  tipo_pagamento: 'BOLSA' | 'NORMAL';
+  tipoPagamento: 'BOLSA' | 'NORMAL';
 
-  @ApiPropertyOptional({
-    description: 'Código da factura associada',
-    example: 987,
-  })
+  @ApiPropertyOptional({ example: 987 })
   @IsOptional()
   @IsInt()
   @IsPositive()
-  codigo_factura?: any;
+  codigoFactura?: number;
 
-  @ApiPropertyOptional({
-    description: 'ID da instituição',
-    example: 1,
-  })
+  @ApiPropertyOptional({ example: 1 })
   @IsOptional()
   @IsInt()
   @IsPositive()
-  instituicao_id?: number;
+  instituicaoId?: number;
 
-  @ApiPropertyOptional({
-    description: 'ID da caixa (se aplicável)',
-    example: 2,
-    default: 0,
-  })
+  @ApiPropertyOptional({ default: 0 })
   @IsOptional()
   @IsInt()
   @Min(0)
-  caixa_id?: number;
+  caixaId?: number;
 
   @ApiProperty({
-    description: 'Status do pagamento no Mutue Cash',
     enum: ['pendente', 'concluido'],
     default: 'pendente',
   })
   @IsEnum(['pendente', 'concluido'])
-  status_pagamento: 'pendente' | 'concluido';
+  statusPagamento: 'pendente' | 'concluido';
 
-  @ApiPropertyOptional({
-    description: 'Data da operação (ISO string)',
-    example: '2025-11-05T11:00:00Z',
-  })
+  @ApiPropertyOptional({ example: '2025-11-05T11:00:00Z' })
   @IsOptional()
   @IsDateString()
-  data_operacao?: string;
+  dataOperacao?: string;
 
-  @ApiPropertyOptional({
-    description: 'Status do movimento',
-    example: 0,
-    default: 0,
-  })
+  @ApiPropertyOptional({ default: 0 })
   @IsOptional()
   @IsInt()
   @Min(0)
   statusMovimento?: number;
 
-  @ApiPropertyOptional({
-    description: 'Informação adicional',
-    example: 'Pagamento parcial',
-  })
+  @ApiPropertyOptional({ example: 'Pagamento parcial' })
   @IsOptional()
   @IsString()
   @Length(1, 100)
-  info_adicional?: string;
+  infoAdicional?: string;
 
-  @ApiPropertyOptional({
-    description: 'Indica se é corrente (1 = sim, 0 = não)',
-    example: 1,
-    default: 1,
-  })
+  @ApiPropertyOptional({ default: 1 })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(1)
   corrente?: number;
 
-  @ApiPropertyOptional({
-    description: 'ID do utilizador relacionado (FK)',
-    example: 15,
-  })
+  @ApiPropertyOptional({ example: 15 })
   @IsOptional()
   @IsInt()
   @IsPositive()
-  fk_utilizador?: number;
+  fkUtilizador?: number;
 
   @ApiProperty({
-    description: 'Indica se foi feito com reserva',
     enum: ['Y', 'N'],
     default: 'N',
   })
   @IsEnum(['Y', 'N'])
-  feito_com_reserva: 'Y' | 'N';
+  feitoComReserva: 'Y' | 'N';
 }

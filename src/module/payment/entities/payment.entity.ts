@@ -1,152 +1,170 @@
-// payment.entity.ts
 import {
   Entity,
   PrimaryColumn,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  BeforeInsert,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { BaseEntity } from 'src/common/base-entity';
 
-@Entity({ name: 'UMA_TB_PAGAMENTOS', })
+@Entity({ name: 'FK2_TB_PAGAMENTOS' })
 export class Payment extends BaseEntity {
-  @PrimaryColumn({ name: 'Codigo', type: 'varchar2', length: 20 }) 
-  Codigo: string;
 
-  @Column({ type: 'varchar', length: 45 })
-  Data: string;
+  /* =======================
+     IDENTIFICAÇÃO
+  ======================== */
 
-  @Column({ type: 'varchar', length: 25, nullable: true, unique: true })
-  N_Operacao_Bancaria?: string;
 
-  @Column({ type: 'varchar', length: 25, nullable: true })
-  N_Operacao_Bancaria2?: string;
+    @PrimaryGeneratedColumn({ name: 'CODIGO' })  
+  codigo: number;
 
-  @Column({ type: 'varchar', length: 1000, nullable: true })
-  Observacao?: string;
 
-  @Column({ type: 'int' })
-  AnoLectivo: number;
+  /* =======================
+     DATAS
+  ======================== */
 
-  @Column({ type: 'number', precision: 15, scale: 2, nullable: true })
-  Totalgeral?: number;
+  @Column({ name: 'DATA', type: 'timestamp' })
+  data: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
-  DataBanco?: Date;
-@Column({ name: 'Codigo_PreInscricao', type: 'varchar2', length: 20, nullable: true })
-  Codigo_PreInscricao?: string;
+  @Column({ name: 'DATABANCO', type: 'timestamp', nullable: true })
+  dataBanco?: Date;
 
-  @Column({ type: 'varchar', length: 45, nullable: true })
-  forma_pagamento?: string;
+  @Column({ name: 'DATAREGISTO', type: 'timestamp', nullable: true })
+  dataRegisto?: Date;
 
-  @Column({ type: 'number', precision: 15, scale: 2 })
-  valor_depositado: number;
+  @Column({ name: 'DATA_OPERACAO', type: 'timestamp', nullable: true })
+  dataOperacao?: Date;
 
-  @Column({ type: 'int', nullable: true })
-  ContaMovimentada?: number;
+  @CreateDateColumn({ name: 'CREATED_AT', type: 'timestamp' })
+  createdAt: Date;
 
-  @Column({ type: 'int', nullable: true })
-  Utilizador?: number;
+  @UpdateDateColumn({ name: 'UPDATED_AT', type: 'timestamp', nullable: true })
+  updatedAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
-  DataRegisto?: Date;
 
-  @Column({ type: 'int', default: 3 })
-  canal: number;
+  /* =======================
+     INFORMAÇÕES BANCÁRIAS
+  ======================== */
 
-  @Column({ type: 'varchar', length: 450, nullable: true })
-  nome_documento?: string;
+  @Column({ name: 'N_OPERACAO_BANCARIA', type: 'varchar2', length: 25, nullable: true, unique: true })
+  nOperacaoBancaria?: string;
 
-  @Column({ type: 'varchar', length: 450, nullable: true })
-  nome_documento2?: string;
+  @Column({ name: 'N_OPERACAO_BANCARIA2', type: 'varchar2', length: 25, nullable: true })
+  nOperacaoBancaria2?: string;
 
-  @Column({ type: 'int', default: 0 })
-  estado: number;
+  @Column({ name: 'CONTAMOVIMENTADA', type: 'number', nullable: true })
+  contaMovimentada?: number;
+
+  @Column({ name: 'VALOR_DEPOSITADO', type: 'number', precision: 15, scale: 2 })
+  valorDepositado: number;
+
+
+  /* =======================
+     INFORMAÇÕES ACADÉMICAS
+  ======================== */
+
+  @Column({ name: 'ANOLECTIVO', type: 'number' })
+  anoLectivo: number;
+
+  @Column({ name: 'CODIGO_PREINSCRICAO'})
+  codigoPreInscricao?: number;
+
+  @Column({ name: 'CODIGO_FACTURA', type: 'number', nullable: true })
+  codigoFactura?: number;
+
+
+  /* =======================
+     VALORES
+  ======================== */
+
+  @Column({ name: 'TOTALGERAL', type: 'number', precision: 15, scale: 2, nullable: true })
+  totalGeral?: number;
+
+
+  /* =======================
+     PAGAMENTO
+  ======================== */
+
+  @Column({ name: 'FORMA_PAGAMENTO', type: 'varchar2', length: 45, nullable: true })
+  formaPagamento?: string;
 
   @Column({
-    type: 'varchar',
+    name: 'TIPO_PAGAMENTO',
+    type: 'varchar2',
     length: 10,
     default: 'NORMAL',
-    comment: 'Verifica se o pagamento foi coberto por bolsa: BOLSA ou NORMAL',
+    comment: 'BOLSA ou NORMAL',
   })
-  tipo_pagamento: 'BOLSA' | 'NORMAL';
-
-  @Column({ type: 'int', nullable: true })
-  codigo_factura?: number;
-
-  @Column({ type: 'int', nullable: true })
-  instituicao_id?: number;
-
-  @CreateDateColumn({ type: 'timestamp' })
-  created_at: Date;
-
-  @Column({ type: 'int', default: 0 })
-  caixa_id: number;
+  tipoPagamento: 'BOLSA' | 'NORMAL';
 
   @Column({
-    type: 'varchar',
-    length: 10,
+    name: 'STATUS_PAGAMENTO',
+    type: 'varchar2',
+    length: 15,
     default: 'pendente',
-    comment: 'Usado para o mutue cash: pendente ou concluido',
+    comment: 'pendente ou concluido',
   })
-  status_pagamento: 'pendente' | 'concluido';
-
-  @UpdateDateColumn({ type: 'timestamp', nullable: true })
-  updated_at: Date;
-
-  @Column({ type: 'timestamp', nullable: true })
-  data_operacao?: Date;
-
-  @Column({ type: 'int', default: 0 })
-  statusMovimento: number;
-
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  info_adicional?: string;
-
-  @Column({ type: 'int', default: 1 })
-  corrente: number;
-
-  @Column({ type: 'int', nullable: true })
-  fk_utilizador?: number;
+  statusPagamento: 'pendente' | 'concluido';
 
   @Column({
-    type: 'varchar',
+    name: 'FEITO_COM_RESERVA',
+    type: 'varchar2',
     length: 1,
     default: 'N',
-    comment: 'Indica se o pagamento foi feito com reserva: Y ou N',
+    comment: 'Y ou N',
   })
-  feito_com_reserva: 'Y' | 'N';
+  feitoComReserva: 'Y' | 'N';
 
-  // GERA O CÓDIGO SEQUENCIAL
-  @BeforeInsert()
-  async generateCodigo() {
-    if (!this.Codigo) {
-      const repo = (this.constructor as any).repo;
-      if (!repo) throw new Error('Repositório não configurado. Use setRepository()');
 
-      console.log('GERANDO CÓDIGO DO PAGAMENTO...');
+  /* =======================
+     CONTROLO
+  ======================== */
 
-      const last = await repo
-        .createQueryBuilder('p')
-        .select('p.Codigo', 'p_codigo')
-        .where("REGEXP_LIKE(p.Codigo, '^[0-9]+$')")
-        .orderBy('TO_NUMBER(p.Codigo)', 'DESC')
-        .limit(1)
-        .getRawOne();
+  @Column({ name: 'ESTADO', type: 'number', default: 0 })
+  estado: number;
 
-      console.log('ÚLTIMO PAGAMENTO ENCONTRADO:', last);
+  @Column({ name: 'STATUSMOVIMENTO', type: 'number', default: 0 })
+  statusMovimento: number;
 
-      let nextCode = 50000; // ← Começa do 50000
-      if (last && last.p_codigo) {
-        const lastNum = Number(last.p_codigo);
-        if (!isNaN(lastNum)) {
-          nextCode = lastNum + 1;
-        }
-      }
+  @Column({ name: 'CORRENTE', type: 'number', default: 1 })
+  corrente: number;
 
-      this.Codigo = nextCode.toString();
-      console.log('CÓDIGO GERADO PARA PAGAMENTO:', this.Codigo);
-    }
-  }
+  @Column({ name: 'CANAL', type: 'number', default: 3 })
+  canal: number;
+
+  @Column({ name: 'CAIXA_ID', type: 'number', default: 0 })
+  caixaId: number;
+
+  @Column({ name: 'INSTITUICAO_ID', type: 'number', nullable: true })
+  instituicaoId?: number;
+
+
+  /* =======================
+     UTILIZADOR
+  ======================== */
+
+  @Column({ name: 'UTILIZADOR', type: 'number', nullable: true })
+  utilizador?: number;
+
+  @Column({ name: 'FK_UTILIZADOR', type: 'number', nullable: true })
+  fkUtilizador?: number;
+
+
+  /* =======================
+     DOCUMENTOS
+  ======================== */
+
+  @Column({ name: 'NOME_DOCUMENTO', type: 'varchar2', length: 450, nullable: true })
+  nomeDocumento?: string;
+
+  @Column({ name: 'NOME_DOCUMENTO2', type: 'varchar2', length: 450, nullable: true })
+  nomeDocumento2?: string;
+
+  @Column({ name: 'INFO_ADICIONAL', type: 'varchar2', length: 100, nullable: true })
+  infoAdicional?: string;
+
+  @Column({ name: 'OBSERVACAO', type: 'varchar2', length: 1000, nullable: true })
+  observacao?: string;
+
 }

@@ -127,7 +127,7 @@ export class PaymentService {
     }
     async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
         const anoCorrente = this.anoAtualPrincipal;
-        const { statusPagamento, nOperacaoBancaria, anoLectivo,...rest } = dto;
+        const { nOperacaoBancaria, anoLectivo,...rest } = dto;
      if (!nOperacaoBancaria) {
             throw new BadRequestException("Precisa de uma operação bancária");
         }
@@ -183,7 +183,7 @@ export class PaymentService {
             fkUtilizador: user?.pk_utilizador, // Associar o pagamento ao ID do usuário autenticado
             utilizador: user?.pk_utilizador, // Campo "utilizador" para compatibilidade, também associando ao ID do usuário autenticado
             statusPagamento: estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
-            estado: 1,
+            estado: estados===1 ? 2 : 1, // Atualizar o estado da factura: 1 para pago, 2 para parcialmente pago
             createdAt: new Date(),
         };
 

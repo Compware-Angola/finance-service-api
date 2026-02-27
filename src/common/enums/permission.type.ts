@@ -1,4 +1,5 @@
 export enum PermissionType {
+  LIQUIDAR_NOTA_PAGAMENTO = "LIQUIDAR_NOTA_PAGAMENTO",
   FULL_ACCESS = "FULL_ACCESS",
   ATRIBUIR_PROVA = "ATRIBUIR_PROVA",
   LANCAMENTO_NOTAS_AVALIACOES = "LANCAMENTO_NOTAS_AVALIACOES",
@@ -981,6 +982,10 @@ export const PermissionTypeDetails = {
   LISTAR_NEGOCIACAO_DIVIDA: {
     designacao: "Listar A negociação de dividas",
     sigla: "m_lis_ndiv",
+  },
+  LIQUIDAR_NOTA_PAGAMENTO: {
+    designacao: "Liquidar nota pagamentos",
+    sigla: "liq_pga",
   },
 } as const;
 

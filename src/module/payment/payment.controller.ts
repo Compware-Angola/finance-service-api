@@ -18,7 +18,7 @@ export class PaymentController {
   constructor(private readonly paymentService: PaymentService,private httpService: HttpService) { }
   @Post('create')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-  //@RequiredPermissions(PermissionTypeDetails.PAGAMENTOS.sigla,PermissionTypeDetails.FACTURAS.sigla)
+  @RequiredPermissions(PermissionTypeDetails.LIQUIDAR_NOTA_PAGAMENTO.sigla)
   @ApiOperation({ summary: 'Cria um novo pagamento.' })
   @ApiResponse({ status: 201, "description": 'Pagamento criado com sucesso.' })
   async create(@Body() createPaymentDto: CreatePaymentDto, @Req() req: any): Promise<Payment | any> {

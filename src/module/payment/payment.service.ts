@@ -9,8 +9,12 @@ import { InvoiceService } from '../invoice/invoice.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
 import { DecodedUserPayload } from 'src/common/types/token-validation-response.interface';
+import { UpdateAddDiscountDto } from '../discount/dto/update-add-discount.dto';
 
-
+export enum PaymentStatus {
+  CONCLUIDO = 'concluido',
+  PENDENTE = 'pendente',
+}
 
 @Injectable()
 export class PaymentService {
@@ -122,11 +126,8 @@ export class PaymentService {
     }
     async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
         const anoCorrente = this.anoAtualPrincipal;
-        const { statusPagamento, nOperacaoBancaria, nOperacaoBancaria2, ...rest } = dto;
-        const paymentStatus: 'concluido' = 'concluido';
-
-        // Validações iniciais (fora da transação)
-        if (!nOperacaoBancaria) {
+        const { statusPagamento, nOperacaoBancaria, ...rest } = dto;
+     if (!nOperacaoBancaria) {
             throw new BadRequestException("Precisa de uma operação bancária");
         }
 
@@ -135,13 +136,7 @@ export class PaymentService {
             throw new BadRequestException(`Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`);
         }
 
-        if (nOperacaoBancaria2) {
-            const n_op2 = await this.findPaymentByN_Operacao_Bancaria2(nOperacaoBancaria2);
-            if (n_op2) {
-                throw new BadRequestException(`Este número de Operação Bancária 2 já existe: ${nOperacaoBancaria2}`);
-            }
-        }
-
+       
         if (!dto.codigoFactura) {
             throw new BadRequestException("Precisa de uma fatura para criar um pagamento");
         }
@@ -151,6 +146,11 @@ export class PaymentService {
             throw new NotFoundException(`Fatura ${dto.codigoFactura} não encontrada`);
         }
 
+        // vrificar se já existe um pagamento associado a esta fatura
+        const existingPayment = await this.findPaymentByCodigoFactura(dto.codigoFactura);
+        const valorDepositado = dto.valorDepositado || existingPayment?.valorDepositado || 0;
+        // 1. Atualizar estado de todos os itens da factura
+        const estados = invoice.TotalPreco > valorDepositado ? 2 : 1;
         // Buscar os itens (pode ser fora da transação, pois é só leitura)
         const itens = await this.dataSource.query(`
         SELECT
@@ -177,13 +177,11 @@ export class PaymentService {
             codigoFactura: dto.codigoFactura,
             codigoPreInscricao: student?.codigo ?? dto.codigoPreInscricao ?? invoice.codigoPreinscricao ?? undefined,
             instituicaoId: undefined,
-
-
             nOperacaoBancaria: nOperacaoBancaria,
-            nOperacaoBancaria2: nOperacaoBancaria2 || undefined,
+            nOperacaoBancaria2:  undefined,
             fkUtilizador: user?.pk_utilizador, // Associar o pagamento ao ID do usuário autenticado
             utilizador: user?.pk_utilizador, // Campo "utilizador" para compatibilidade, também associando ao ID do usuário autenticado
-            statusPagamento: paymentStatus,
+            statusPagamento: estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
             estado: 1,
             createdAt: new Date(),
         };
@@ -193,8 +191,7 @@ export class PaymentService {
         await queryRunner.startTransaction();
 
         try {
-            // 1. Atualizar estado de todos os itens da factura
-            const estados = invoice.TotalPreco > dto.valorDepositado ? 1 : 2;
+
             if (estados == 1) {
                 for (const item of itens) {
                     await queryRunner.query(`
@@ -290,18 +287,28 @@ export class PaymentService {
             }
 
 
-            // 3. Criar o pagamento
-            console.log(finalPayload);
+            if (!existingPayment) {
+               const  payment = this.paymentRepository.create(finalPayload);
+                await queryRunner.manager.save(payment);
+            }else {
+                // Se já existe um pagamento para esta fatura, atualizamos o registro existente
+                const updatedPayment = {
+                    ...existingPayment,
+                    statusPagamento: PaymentStatus.CONCLUIDO,
+                    nOperacaoBancaria2: dto.nOperacaoBancaria,
+                    valorDepositado: dto.valorDepositado,
+                    formaPagamento: dto.formaPagamento,
+                    fkUtilizador: user?.pk_utilizador,
+                    utilizador: user?.pk_utilizador,
+                    createdAt: existingPayment.createdAt, 
+                    UpdateAt: new Date(),
+                }
+                await queryRunner.manager.update(Payment, { codigo: existingPayment.codigo }, updatedPayment);
+            }
 
-
-
-            const payment = this.paymentRepository.create(finalPayload);
-            await queryRunner.manager.save(payment);
-
-            // Commit de tudo
             await queryRunner.commitTransaction();
 
-            return payment;
+            return  { message: existingPayment ? 'Pagamento atualizado com sucesso' : 'Pagamento criado com sucesso' };
         } catch (error) {
             await queryRunner.rollbackTransaction();
             throw error;
@@ -311,6 +318,9 @@ export class PaymentService {
     }
     async findPaymentByN_Operacao_Bancaria(nOperacaoBancaria: string): Promise<Payment | null> {
         return this.paymentRepository.findOne({ where: { nOperacaoBancaria } });
+    }
+    async findPaymentByCodigoFactura(codigoFactura: number): Promise<Payment | null> {
+        return this.paymentRepository.findOne({ where: { codigoFactura } });
     }
     async findPaymentByN_Operacao_Bancaria2(nOperacaoBancaria2: string): Promise<Payment | null> {
         return this.paymentRepository.findOne({ where: { nOperacaoBancaria2 } });

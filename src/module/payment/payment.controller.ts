@@ -9,6 +9,8 @@ import { PermissionsGuard } from 'src/common/secret/permissions.guard';
 import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
 import { HttpService } from '@nestjs/axios';
 import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
+import { RequiredPermissions } from 'src/common/pipes/permissions.decorator';
+import { PermissionTypeDetails } from 'src/common/enums/permission.type';
 
 @ApiTags('payment')
 @Controller('payment')
@@ -16,6 +18,7 @@ export class PaymentController {
   constructor(private readonly paymentService: PaymentService,private httpService: HttpService) { }
   @Post('create')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+  @RequiredPermissions(PermissionTypeDetails.PAGAMENTOS.sigla,PermissionTypeDetails.FACTURAS.sigla)
   @ApiOperation({ summary: 'Cria um novo pagamento.' })
   @ApiResponse({ status: 201, "description": 'Pagamento criado com sucesso.' })
   async create(@Body() createPaymentDto: CreatePaymentDto, @Req() req: any): Promise<Payment | any> {

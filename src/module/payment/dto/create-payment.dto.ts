@@ -29,11 +29,7 @@ export class CreatePaymentDto {
   @Length(1, 25)
   nOperacaoBancaria?: string;
 
-  @ApiPropertyOptional({ example: 'OP987654321' })
-  @IsOptional()
-  @IsString()
-  @Length(1, 25)
-  nOperacaoBancaria2?: string;
+
 
   @ApiPropertyOptional({ example: 'Pagamento via Multicaixa Express' })
   @IsOptional()

@@ -984,6 +984,7 @@ async DividasTodosAnos(numero_matricula: number, tipo: 1 | 2): Promise<DividaDto
     const totalIVA = mesesDividas.reduce((s, d) => s + d.valor_iva, 0);
     const percentagem_retencao = (await this.parametroRepo.findOne({ where: { Descricao: 'PC', "estado": 1 } }))?.Valor || 0;
     const totalDivida = mesesDividas.reduce((s, d) => s + d.total, 0);
+  const MesesPagar = mesesDividas.filter(d => d.mes_temp_id !== null);
     const total_retencao = totalDivida * (percentagem_retencao / 100);
     const totalDividaFinal = totalDivida - total_retencao;
 
@@ -996,7 +997,7 @@ async DividasTodosAnos(numero_matricula: number, tipo: 1 | 2): Promise<DividaDto
       anoAtual: anoCorrente,
       anoCorrente: anoCorrenteObj,
       meses,
-      mesesDividas,
+      mesesDividas:MesesPagar,
       totalIVA,
       percentagem_retencao,
       totalDivida: totalDividaFinal,

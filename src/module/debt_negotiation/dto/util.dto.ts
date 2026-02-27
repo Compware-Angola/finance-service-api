@@ -104,94 +104,98 @@ export class MensalidadeItemDto {
 // === ITEM DE SERVIÇO ===
 
 export class ServicoItemDto {
-
-  // Campos que são números inteiros
-  @ApiProperty({ description: 'Código da Grade Curricular (e.g., 668).', "type": Number })
-  @IsInt() 
+  @ApiProperty({ type: Number })
+  @IsInt()
   codGradeCurricular: number;
 
-  @ApiProperty({ description: 'Código da Factura Outros Serviços (e.g., 586248).', "type": Number })
-  @IsInt() 
+  @ApiProperty({ type: Number })
+  @IsInt()
   codFacturaOutrosServicos: number;
-  
-  @ApiProperty({ description: 'Código da propina (vazio se for serviço).', "required": false, "default": '' })
-  @IsString()
+
+  @ApiProperty({ required: false })
   @IsOptional()
-  codigo_propina?: string; 
-
-  @ApiProperty({ description: 'Código do Serviço (e.g., "11739").' })
   @IsString()
-  codidigo_servico: string; 
+  codigo_propina?: string;
 
-  @ApiProperty({ description: 'Código do ano letivo (e.g., "23").' })
+  @ApiProperty()
   @IsString()
-  codigo_anoLectivo: string; 
-  // Campos Numéricos (Valor, Total, Descontos, "etc".)
-  @ApiProperty({ description: 'Valor do serviço.', "type": Number })
-  @IsNumber()
-  valor: number; 
+  codidigo_servico: string;
 
-  @ApiProperty({ description: 'Valor da multa.', "type": Number })
-  @IsNumber()
-  multa: number; 
-
-  @ApiProperty({ description: 'Total do item.', "type": Number })
-  @IsNumber()
-  total: number; 
-
-  @ApiProperty({ description: 'Taxa de multa.', "type": Number })
-  @IsNumber()
-  taxa_multa: number; 
-
-  @ApiProperty({ description: 'Taxa de desconto.', "type": Number })
-  @IsNumber()
-  taxa_desconto: number; 
-
-  @ApiProperty({ description: 'Valor do desconto.', "type": Number })
-  @IsNumber()
-  desconto: number; 
-
-  @ApiProperty({ description: 'Incidência.', "type": Number })
-  @IsNumber()
-  incidencia: number; 
-
-  @ApiProperty({ description: 'Valor do IVA.', "type": Number })
-  @IsNumber()
-  valor_iva: number; 
-
-  // Campos de String
-  @ApiProperty({ description: 'Descrição do serviço (e.g., "Exame Especial. Prótese e Órtese").' })
+  @ApiProperty()
   @IsString()
-  servico: string; 
+  codigo_anoLectivo: string;
 
-  @ApiProperty({ description: 'Mês da propina (vazio para serviço).', "default": '' })
-  @IsString()
-  mes_propina: string; 
+  @ApiProperty({ type: Number })
+  @IsNumber()
+  valor: number;
 
-  @ApiProperty({ description: 'Número da prestação (vazio para serviço).', "required": false, "default": '' })
+  @ApiProperty({ type: Number })
+  @IsNumber()
+  multa: number;
+
+  @ApiProperty({ type: Number })
+  @IsNumber()
+  total: number;
+
+  @ApiProperty({ type: Number })
+  @IsNumber()
+  taxa_multa: number;
+
+  @ApiProperty({ type: Number })
+  @IsNumber()
+  taxa_desconto: number;
+
+  @ApiProperty({ type: Number })
+  @IsNumber()
+  desconto: number;
+
+  @ApiProperty({ type: Number })
+  @IsNumber()
+  incidencia: number;
+
+  @ApiProperty({ type: Number })
+  @IsNumber()
+  valor_iva: number;
+
+  @ApiProperty()
   @IsString()
+  servico: string;
+
+  @ApiProperty({ default: '' })
+  @IsString()
+  mes_propina: string;
+
+  @ApiProperty({ required: false, default: '' })
   @IsOptional()
-  n_prestacao?: string; 
-
-  @ApiProperty({ description: 'Ano letivo (e.g., "2025-2026").' })
   @IsString()
-  ano_lectivo: string; 
+  n_prestacao?: string;
 
-  @ApiProperty({ description: 'Bolsa de estudo (vazio para serviço).', "required": false, "default": '' })
+  @ApiProperty()
   @IsString()
+  ano_lectivo: string;
+
+  @ApiProperty({ required: false, default: '' })
   @IsOptional()
-  bolsa?: string; 
-
-  @ApiProperty({ description: 'Descrição da taxa (e.g., "ISENTO(0,00%)").' })
   @IsString()
-  taxa_descricao: string; 
+  bolsa?: string;
 
-  // Campo com valor NULL
-  @ApiProperty({ description: 'ID temporário do mês. Pode ser null.', "type": Number, "nullable": true, "required": false })
+  @ApiProperty()
+  @IsString()
+  taxa_descricao: string;
+
+  @ApiProperty({ type: Number, nullable: true, required: false })
   @ValidateIf(o => o.mes_temp_id !== undefined)
   @IsOptional()
-  @Type(() => Number) // Tenta transformar, "mas" null é mantido se for o valor
-  mes_temp_id?: number | null; 
+  @Type(() => Number)
+  mes_temp_id?: number | null;
+
+  // 🔹 Campos extras opcionais (não quebram validação)
+  @ApiProperty({ required: false, description: 'Campos extras opcionais, como tipo_taxas' })
+  @IsOptional()
+  tipo_taxas?: string;
+
+  // 🔹 Também pode permitir outros campos extras sem erro
+  [key: string]: any;
 }
 
 // === UNIÃO DOS DOIS PARA O SWAGGER (Sem ser uma classe real, "mas" tipagem) ===

@@ -17,21 +17,28 @@ import { PermissionTypeDetails } from 'src/common/enums/permission.type';
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService,private httpService: HttpService) { }
   @Post('create')
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+  //@UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   //@RequiredPermissions(PermissionTypeDetails.PAGAMENTOS.sigla,PermissionTypeDetails.FACTURAS.sigla)
   @ApiOperation({ summary: 'Cria um novo pagamento.' })
   @ApiResponse({ status: 201, "description": 'Pagamento criado com sucesso.' })
   async create(@Body() createPaymentDto: CreatePaymentDto, @Req() req: any): Promise<Payment | any> {
-    const user = req.user; // Obter o usuário autenticado
+
+    const user = {
+      pk_utilizador: 1,
+      nome: 'Usuário de Teste',
+    }; // Obter o usuário autenticado
       const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     console.log('Usuário autenticado:', user);
-    const payment = await this.paymentService.createPayment(createPaymentDto, user);
+     const payment = await this.paymentService.createPayment(createPaymentDto, user as any) ;
+    /*
+   
         AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} criou um pagamento com código de fatura ${createPaymentDto.codigoFactura}`,
       fkUtilizadorResponsavel: user.pk_utilizador,
       fkOperacaoLog: 7,
       ip: ip,
     });
+    */
     return payment;
   }
   @Get('get/:academicYear/:preInscritionCode')

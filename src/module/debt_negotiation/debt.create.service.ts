@@ -112,7 +112,7 @@ async createDebtNegotiation(
       const metadeOriginal = parseFloat((valorOriginal / 2).toFixed(2));
       const pagoNaHora = parseFloat((dto.valor_pago_na_hora || 0).toFixed(2));
 
-      if (pagoNaHora !== metadeOriginal) {
+      if (pagoNaHora < metadeOriginal) {
         throw new BadRequestException(
           `Para negociação parcelada, o valor pago na hora deve ser exatamente ${metadeOriginal} (50% da dívida original: ${valorOriginal}). Recebido: ${pagoNaHora}.`,
         );
@@ -207,7 +207,7 @@ itensServicos.forEach((d) => {
       Descricao: isTotal
         ? 'Negociação de Dívida - Pagamento Total'
         : 'Negociação de Dívida - Entrada 50%',
-      TotalPreco: primeiroValorApagar,
+      TotalPreco: dto.totalDivida ?? dto.precoTotal ?? 0,
       ValorAPagar: primeiroValorApagar,
       itens: todosItens,  // Todos os itens (mensalidades + serviços) aqui!
     } as CreateInvoiceDto);

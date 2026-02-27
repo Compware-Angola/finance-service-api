@@ -10,6 +10,7 @@ import { AnoLectivoUtil } from '../util/current-academic-year';
 import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
 import { DecodedUserPayload } from 'src/common/types/token-validation-response.interface';
 import { UpdateAddDiscountDto } from '../discount/dto/update-add-discount.dto';
+import { Payment2 } from './entities/payment2.entity';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
@@ -21,8 +22,8 @@ export class PaymentService {
     private anoAtualPrincipal: number;
     constructor(
         private readonly anoLectivoUtil: AnoLectivoUtil,
-        @InjectRepository(Payment)
-        private readonly paymentRepository: Repository<Payment>,
+        @InjectRepository(Payment2)
+        private readonly paymentRepository: Repository<Payment2>,
         private readonly invoiceService: InvoiceService,
         private dataSource: DataSource,
     ) { this.initAnoAtual(); }
@@ -316,13 +317,13 @@ export class PaymentService {
             await queryRunner.release();
         }
     }
-    async findPaymentByN_Operacao_Bancaria(nOperacaoBancaria: string): Promise<Payment | null> {
+    async findPaymentByN_Operacao_Bancaria(nOperacaoBancaria: string): Promise<Payment2 | null> {
         return this.paymentRepository.findOne({ where: { nOperacaoBancaria } });
     }
-    async findPaymentByCodigoFactura(codigoFactura: number): Promise<Payment | null> {
+    async findPaymentByCodigoFactura(codigoFactura: number): Promise<Payment2 | null> {
         return this.paymentRepository.findOne({ where: { codigoFactura } });
     }
-    async findPaymentByN_Operacao_Bancaria2(nOperacaoBancaria2: string): Promise<Payment | null> {
+    async findPaymentByN_Operacao_Bancaria2(nOperacaoBancaria2: string): Promise<Payment2 | null> {
         return this.paymentRepository.findOne({ where: { nOperacaoBancaria2 } });
     }
 

@@ -10,12 +10,13 @@ import { InvoiceItem } from '../invoice/entities/InvoiceIten.entity';
 import { InvoiceModule } from '../invoice/invoice.module';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { HttpModule } from '@nestjs/axios/dist/http.module';
+import { Payment2 } from './entities/payment2.entity';
 
 @Module({
   imports: [HttpModule.register({
     timeout: 5000,
     maxRedirects: 5
-  }), TypeOrmModule.forFeature([Payment, InvoiceItem, MesTemp, AcademicYear]), MonthlyFeesModule, InvoiceModule],
+  }), TypeOrmModule.forFeature([Payment,Payment2, InvoiceItem, MesTemp, AcademicYear]), MonthlyFeesModule, InvoiceModule],
   controllers: [PaymentController],
   providers: [PaymentService, AnoLectivoUtil],
   exports: [PaymentService],

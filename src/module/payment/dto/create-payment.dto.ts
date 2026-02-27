@@ -130,12 +130,6 @@ export class CreatePaymentDto {
   @Min(0)
   caixaId?: number;
 
-  @ApiProperty({
-    enum: ['pendente', 'concluido'],
-    default: 'pendente',
-  })
-  @IsEnum(['pendente', 'concluido'])
-  statusPagamento: 'pendente' | 'concluido';
 
   @ApiPropertyOptional({ example: '2025-11-05T11:00:00Z' })
   @IsOptional()

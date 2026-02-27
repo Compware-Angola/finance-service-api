@@ -1124,7 +1124,7 @@ private async confirmacaoAnoCorrente(codigo_matricula: number): Promise<any> {
   // CONVERTER PARA camelCase + number
   return rawResult
 }
-private async mesesPagosPorAnoPropina(
+private async mesesPagosPorAnoPropina( //TODO: analizar bem essa query
   ano_lectivo_id: number,
   codigo_inscricao: number
 ): Promise<any[]> {

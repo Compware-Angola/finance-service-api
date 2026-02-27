@@ -65,4 +65,16 @@ export class AlunoController {
       codigo,
     });
   }
+  @Get('/preinscricao/:codigo')
+  @ApiParam({
+    name: 'codigo',
+    type: Number,
+    example: 260,
+    description: 'Código da matrícula',
+  })
+  async findAlunoPreInscricaoByMatricula(
+    @Param('codigo', ParseIntPipe) codigo: number,
+  ) {
+    return this.alunoService.findAlunoPreinscricaoByMatricula(codigo);
+  }
 }

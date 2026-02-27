@@ -1,20 +1,35 @@
-import { Controller, Get, Query, Param, ParseIntPipe, Post, Body } from '@nestjs/common';
+import { Controller, Get, Query, Param, ParseIntPipe, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
+import { PermissionsGuard } from 'src/common/secret/permissions.guard';
+import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
+import { HttpService } from '@nestjs/axios';
+import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
 
 @ApiTags('payment')
 @Controller('payment')
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) { }
+  constructor(private readonly paymentService: PaymentService,private httpService: HttpService) { }
   @Post('create')
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @ApiOperation({ summary: 'Cria um novo pagamento.' })
   @ApiResponse({ status: 201, "description": 'Pagamento criado com sucesso.' })
-  async create(@Body() createPaymentDto: CreatePaymentDto): Promise<Payment | any> {
-    return this.paymentService.createPayment(createPaymentDto);
+  async create(@Body() createPaymentDto: CreatePaymentDto, @Req() req: any): Promise<Payment | any> {
+    const user = req.user; // Obter o usuário autenticado
+      const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    console.log('Usuário autenticado:', user);
+    const payment = await this.paymentService.createPayment(createPaymentDto, user);
+        AccessLogHelper.logAccess(this.httpService, {
+      descricao: `Utilizador ${user?.nome} criou um pagamento com código de fatura ${createPaymentDto.codigoFactura}`,
+      fkUtilizadorResponsavel: user.pk_utilizador,
+      fkOperacaoLog: 7,
+      ip: ip,
+    });
+    return payment;
   }
   @Get('get/:academicYear/:preInscritionCode')
   @ApiOperation({

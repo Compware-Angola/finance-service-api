@@ -151,7 +151,7 @@ async createDebtNegotiation(
 // A. Itens de mensalidades
 itensMensalidades.forEach((d) => {
   todosItens.push({
-    CodigoProduto: d.codigo_propina ?? null, // ou safeNumber se for número
+    CodigoProduto: d.codigo_propina ?? null, 
     Quantidade: 1,
     Total: safeNumber(d.total),
     obs: d.mes_propina 
@@ -166,11 +166,11 @@ itensMensalidades.forEach((d) => {
     descontoProduto: safeNumber(d.taxa_desconto),
     mes: d.mes_propina ?? null,
     multa: safeNumber(d.multa),
-    mesTempId: d.mes_temp_id ?? undefined, // se for número, use safeNumber(d.mes_temp_id, undefined)
-    
+    mesTempId: d.mes_temp_id ?? undefined, 
+    codigo_anoLectivo: safeNumber(d.codigo_anoLectivo ),
     estado: 0,
     valorPago: 0,
-    valorATransportar: 0, // ou safeNumber(d.valorATransportar, 0).toString() se vier string
+    valorATransportar: 0, 
   });
 });
 
@@ -193,7 +193,7 @@ itensServicos.forEach((d) => {
     mes: d.mes_propina ?? null,
     multa: safeNumber(d.multa),
     mesTempId: d.mes_temp_id ?? undefined,
-    
+    codigo_anoLectivo: safeNumber(d.codigo_anoLectivo ),
     estado: 0,
     valorPago: 0,
     valorATransportar: 0,
@@ -215,7 +215,10 @@ itensServicos.forEach((d) => {
     // =============================================
     // 8. CRIAR FATURA 2 - SALDO RESTANTE (se parcelado)
     // =============================================
+    /*
+    TODO: A lógica atual é criar uma fatura "resumo" para o saldo restante, sem itens detalhados. Se quiseres criar uma fatura com os mesmos itens (ou uma divisão deles), precisaremos de uma lógica mais complexa para mapear quais itens vão para a fatura de entrada e quais ficam para a fatura de saldo. Por enquanto, deixei comentado um exemplo de criação de fatura de saldo sem itens detalhados.
     let faturaSaldo: Invoice | null = null;
+    
     if (!isTotal && valorRestante > 0) {
       // Por enquanto sem itens (pode ser uma fatura "resumo" ou futura)
       // Se quiseres dividir os itens restantes aqui, cria outra lógica de mapeamento
@@ -230,7 +233,7 @@ itensServicos.forEach((d) => {
         // dataVencimento: ... (opcional)
       } as CreateInvoiceDto);
     }
-
+ */
     // =============================================
     // 9. Atualizar faturas antigas (anular e redirecionar)
     // =============================================
@@ -243,7 +246,7 @@ itensServicos.forEach((d) => {
       await queryRunner.manager.update(
         Invoice,
         { Codigo: TypeOrmIn(codigosAntigos) },
-        { estado: 3 }, // anulada
+        { estado: 3 },
       );
 
       await queryRunner.manager.update(
@@ -291,7 +294,7 @@ itensServicos.forEach((d) => {
     return {
       mensagem: 'Negociação criada com sucesso',
       fatura_entrada_id: faturaEntrada.Codigo,
-      fatura_saldo_id: faturaSaldo ? faturaSaldo.Codigo : null,
+    //  fatura_saldo_id: faturaSaldo ? faturaSaldo.Codigo : null,
       tipo: isTotal ? 'TOTAL' : 'PARCELADO',
     };
   } catch (error) {

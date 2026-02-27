@@ -180,8 +180,8 @@ export class PaymentService {
             instituicaoId: undefined,
             nOperacaoBancaria: nOperacaoBancaria,
             nOperacaoBancaria2:  undefined,
-            fkUtilizador: user?.pk_utilizador, // Associar o pagamento ao ID do usuário autenticado
-            utilizador: user?.pk_utilizador, // Campo "utilizador" para compatibilidade, também associando ao ID do usuário autenticado
+            fkUtilizador: user?.sub, // Associar o pagamento ao ID do usuário autenticado
+            utilizador: user?.sub, // Campo "utilizador" para compatibilidade, também associando ao ID do usuário autenticado
             statusPagamento: estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
             estado: estados===1 ? 2 : 1, // Atualizar o estado da factura: 1 para pago, 2 para parcialmente pago
             createdAt: new Date(),

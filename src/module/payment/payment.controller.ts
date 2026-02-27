@@ -28,7 +28,7 @@ export class PaymentController {
     const payment = await this.paymentService.createPayment(createPaymentDto, user);
         AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} criou um pagamento com código de fatura ${createPaymentDto.codigoFactura}`,
-      fkUtilizadorResponsavel: user.pk_utilizador,
+      fkUtilizadorResponsavel: user.sub,
       fkOperacaoLog: 7,
       ip: ip,
     });

@@ -85,19 +85,6 @@ export class CreatePaymentDto {
   @IsInt()
   @Min(0)
   canal?: number;
-
-  @ApiPropertyOptional({ example: 'recibo_123.pdf' })
-  @IsOptional()
-  @IsString()
-  @Length(1, 450)
-  nomeDocumento?: string;
-
-  @ApiPropertyOptional({ example: 'extra.jpg' })
-  @IsOptional()
-  @IsString()
-  @Length(1, 450)
-  nomeDocumento2?: string;
-
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
   @IsInt()

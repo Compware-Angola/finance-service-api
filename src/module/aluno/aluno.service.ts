@@ -34,7 +34,7 @@ export class AlunoService {
     }
 
     const aluno = result[0];
-    console.log(aluno);
+   
 
     if (aluno?.ESTADO_MATRICULA?.toLowerCase() === 'diplomado') {
       throw new BadRequestException('Aluno diplomado');

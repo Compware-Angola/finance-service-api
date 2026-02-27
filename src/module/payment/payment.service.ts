@@ -126,7 +126,7 @@ export class PaymentService {
     }
     async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
         const anoCorrente = this.anoAtualPrincipal;
-        const { statusPagamento, nOperacaoBancaria, ...rest } = dto;
+        const { statusPagamento, nOperacaoBancaria, anoLectivo,...rest } = dto;
      if (!nOperacaoBancaria) {
             throw new BadRequestException("Precisa de uma operação bancária");
         }
@@ -173,7 +173,7 @@ export class PaymentService {
         const finalPayload = {
             ...rest,
 
-            anoLectivo: anoCorrente,
+            anoLectivo:  anoLectivo ?? anoCorrente,
             codigoFactura: dto.codigoFactura,
             codigoPreInscricao: student?.codigo ?? dto.codigoPreInscricao ?? invoice.codigoPreinscricao ?? undefined,
             instituicaoId: undefined,

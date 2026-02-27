@@ -169,4 +169,12 @@ export class CreatePaymentDto {
   })
   @IsEnum(['Y', 'N'])
   feitoComReserva: 'Y' | 'N';
+
+    @ApiProperty({
+    description: 'Ano letivo do pagamento',
+    example: 23,
+  })
+  @IsInt()
+  @IsPositive()
+  anoLectivo: number;
 }

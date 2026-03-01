@@ -445,6 +445,7 @@ FROM (
         f.estado                          AS estado,
         f.valorapagar                      AS valor_pagar,
         f.totalmulta                      AS total_multa,
+        f.desconto                        As desconto,
         f.totaliva                         AS total_iva,
         f.TOTAL_INCIDENCIA                 AS total_incidencia,
         p.Nome_Completo                   AS nome_aluno,
@@ -495,6 +496,7 @@ FROM (
     c.designacao,
     po.designacao,
     ano.Designacao,
+    f.desconto,
     ano.codigo
 ) t
 WHERE rn BETWEEN :startRow AND :endRow

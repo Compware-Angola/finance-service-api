@@ -173,7 +173,7 @@ export class PaymentService {
 
         const finalPayload = {
             ...rest,
-
+             
             anoLectivo:  anoLectivo ?? anoCorrente,
             codigoFactura: dto.codigoFactura,
             codigoPreInscricao: student?.codigo ?? dto.codigoPreInscricao ?? invoice.codigoPreinscricao ?? undefined,
@@ -294,17 +294,19 @@ export class PaymentService {
             }else {
                 // Se já existe um pagamento para esta fatura, atualizamos o registro existente
                 const updatedPayment = {
-                    ...existingPayment,
+                  
                     statusPagamento: PaymentStatus.CONCLUIDO,
                     nOperacaoBancaria2: dto.nOperacaoBancaria,
                     valorDepositado: dto.valorDepositado,
                     formaPagamento: dto.formaPagamento,
-                    fkUtilizador: user?.pk_utilizador,
-                    utilizador: user?.pk_utilizador,
-                    createdAt: existingPayment.createdAt, 
-                    UpdateAt: new Date(),
+                    fkUtilizador: user?.sub,
+                    utilizador: user?.sub,
+               
+                    updatedAt: new Date(),
                 }
-                await queryRunner.manager.update(Payment, { codigo: existingPayment.codigo }, updatedPayment);
+                console.log(updatedPayment);
+                
+                await queryRunner.manager.update(Payment2, { codigo: existingPayment.codigo }, updatedPayment);
             }
 
             await queryRunner.commitTransaction();

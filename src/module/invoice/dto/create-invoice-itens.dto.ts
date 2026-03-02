@@ -180,4 +180,12 @@ export class InvoiceItemDto {
   @IsOptional()
   @IsInt()
   codigoFactura?: number;
+    @ApiProperty({
+    description: 'Ano lectivo.',
+    type: Number,
+    example: 1023,
+  })
+  @IsOptional()
+  @IsInt()
+  codigo_anoLectivo?: number;
 }

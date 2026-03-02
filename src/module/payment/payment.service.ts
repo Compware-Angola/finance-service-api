@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Brackets, DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
@@ -8,16 +8,22 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { InvoiceService } from '../invoice/invoice.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
+import { DecodedUserPayload } from 'src/common/types/token-validation-response.interface';
+import { UpdateAddDiscountDto } from '../discount/dto/update-add-discount.dto';
+import { Payment2 } from './entities/payment2.entity';
 
-
+export enum PaymentStatus {
+  CONCLUIDO = 'concluido',
+  PENDENTE = 'pendente',
+}
 
 @Injectable()
 export class PaymentService {
     private anoAtualPrincipal: number;
     constructor(
         private readonly anoLectivoUtil: AnoLectivoUtil,
-        @InjectRepository(Payment)
-        private readonly paymentRepository: Repository<Payment>,
+        @InjectRepository(Payment2)
+        private readonly paymentRepository: Repository<Payment2>,
         private readonly invoiceService: InvoiceService,
         private dataSource: DataSource,
     ) { this.initAnoAtual(); }
@@ -119,101 +125,208 @@ export class PaymentService {
             totalPages,
         };
     }
-    async createPayment(dto: CreatePaymentDto) {
+    async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
         const anoCorrente = this.anoAtualPrincipal;
-        const { status_pagamento, N_Operacao_Bancaria, N_Operacao_Bancaria2, AnoLectivo, ...rest } = dto;
-        const paymentStatus: 'concluido' = 'concluido';
-        if (!N_Operacao_Bancaria) return new BadRequestException("Precisa de uma operacao bancaria")
-        const n_op = await this.findPaymentByN_Operacao_Bancaria(N_Operacao_Bancaria);
-        if (n_op) return new BadRequestException(`Este Numero de Operacao Bancaria ja existe ${N_Operacao_Bancaria}`)
-        if (N_Operacao_Bancaria2) {
-            const n_op2 = await this.findPaymentByN_Operacao_Bancaria2(N_Operacao_Bancaria2);
-            if (n_op2) return new BadRequestException(`Este numero de Operacao Bancaria ja existe 2 ${N_Operacao_Bancaria2}`)
+        const { nOperacaoBancaria, anoLectivo,...rest } = dto;
+     if (!nOperacaoBancaria) {
+            throw new BadRequestException("Precisa de uma operação bancária");
         }
-        if (!dto.codigo_factura) return new BadRequestException("Precisa de uma fatura para criar um pagamento")
-        const invoice = await this.invoiceService.findOne(dto.codigo_factura);
+
+        const n_op = await this.findPaymentByN_Operacao_Bancaria(nOperacaoBancaria);
+        if (n_op) {
+            throw new BadRequestException(`Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`);
+        }
+
+       
+        if (!dto.codigoFactura) {
+            throw new BadRequestException("Precisa de uma fatura para criar um pagamento");
+        }
+
+        const invoice = await this.invoiceService.findOne(dto.codigoFactura);
+        if (!invoice) {
+            throw new NotFoundException(`Fatura ${dto.codigoFactura} não encontrada`);
+        }
+
+        // vrificar se já existe um pagamento associado a esta fatura
+        const existingPayment = await this.findPaymentByCodigoFactura(dto.codigoFactura);
+        const valorDepositado = dto.valorDepositado || existingPayment?.valorDepositado || 0;
+        // 1. Atualizar estado de todos os itens da factura
+        const estados = invoice.TotalPreco > valorDepositado ? 2 : 1;
+        // Buscar os itens (pode ser fora da transação, pois é só leitura)
         const itens = await this.dataSource.query(`
         SELECT
             tp.Codigo AS CodigoProduto,
-            tp.Descricao As DescricaoProduto,
+            tp.Descricao AS DescricaoProduto,
             tp.Preco AS PrecoProduto,
             tp.TipoServico AS TipoServicoProduto,
+            tp.sigla AS SiglaProduto,
             fi.*
-        FROM "."UMA_TB_TIPO_SERVICOS" tp
-        INNER JOIN factura_items fi ON fi.CodigoProduto = tp.Codigo
-        WHERE "fi".CodigoFactura = ?`, [invoice.Codigo]);
-        const specific_services = [
-            "Taxa de Reingresso",
-            "Candidatura de Transferência para UMA",
-            "Candidatura ao 1º Ano",
-            "Taxa de Exame de Admissão"
-        ];;
-        const search = await itens.some((item: any) =>
-            specific_services.includes(item.DescricaoProduto)
-        );
-        if (search) {
-            itens.forEach((item: any) => {
-                const serviceDescription = item.DescricaoProduto;
+        FROM FK2_TB_TIPO_SERVICOS tp
+        INNER JOIN FK2_FACTURA_ITEMS fi ON fi.CodigoProduto = tp.Codigo
+        WHERE fi.CodigoFactura = :codigoFactura
+    `, { codigoFactura: dto.codigoFactura } as any);
 
-                switch (serviceDescription) {
-                    case "Taxa de Reingresso":
-                        console.log(`Ação para o Serviço Específico: ${serviceDescription}`);
-                        // Lógica específica para a Taxa de Reingresso
-                        break;
-
-                    case "Candidatura de Transferência para UMA":
-                        console.log(`Ação para o Serviço Específico: ${serviceDescription}`);
-                        // Lógica específica para Candidatura de Transferência
-                        break;
-
-                    case "Candidatura ao 1º Ano":
-                    case "Taxa de Exame de Admissão":
-                        console.log(`Ação para o Serviço Específico: ${serviceDescription} (Casos agrupados)`);
-                        // Lógica comum para as duas candidaturas/taxas
-                        break;
-
-                    default:
-                        // Ignora descrições que não são as específicas ou que não estão no switch
-                        break;
-                }
-            });
-
-        }
+        // Aqui você pode fazer validações adicionais, por exemplo:
+        // - Verificar se o valor pago ≥ valor total da factura
+        // - Decidir se é pagamento completo ou parcial
+        const student = await this.findAlunoPreinscricaoByMatricula(invoice.CodigoMatricula);
 
         const finalPayload = {
             ...rest,
-
-            AnoLectivo: anoCorrente,
-            codigo_factura: dto.codigo_factura,
-            instituicao_id: undefined,
-            N_Operacao_Bancaria,
-            N_Operacao_Bancaria2,
-            status_pagamento: paymentStatus,
-            estado: 1,
+             
+            anoLectivo:  anoLectivo ?? anoCorrente,
+            codigoFactura: dto.codigoFactura,
+            codigoPreInscricao: student?.codigo ?? dto.codigoPreInscricao ?? invoice.codigoPreinscricao ?? undefined,
+            instituicaoId: undefined,
+            nOperacaoBancaria: nOperacaoBancaria,
+            nOperacaoBancaria2:  undefined,
+            fkUtilizador: user?.sub, // Associar o pagamento ao ID do usuário autenticado
+            utilizador: user?.sub, // Campo "utilizador" para compatibilidade, também associando ao ID do usuário autenticado
+            statusPagamento: estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
+            estado: estados===1 ? 2 : 1, // Atualizar o estado da factura: 1 para pago, 2 para parcialmente pago
+            createdAt: new Date(),
         };
+
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction();
+
         try {
-            invoice.estado = 1;
-            await this.invoiceService.updateEntity(invoice)
-            const payment = this.paymentRepository.create(finalPayload);
-            await this.paymentRepository.save(payment);
-            return payment;
+
+            if (estados == 1) {
+                for (const item of itens) {
+                    await queryRunner.query(`
+                UPDATE FK2_FACTURA_ITEMS 
+                SET estado = :estado 
+                WHERE Codigo = :codigo
+            `, { estado: estados, codigo: item.Codigo } as any);
+                }
+            }
+            // 2. Atualizar estado da factura principal
+            await queryRunner.query(`
+            UPDATE FK2_FACTURA  
+            SET estado = :estados
+            WHERE Codigo =:codigo
+        `, {
+                estados,
+                codigo: dto.codigoFactura,
+            } as any);
+
+            const SIGLAS_ESPECIAIS1 = ['TdM', 'IpuCricular(Anual)']; // para anual, se tiver algum desses itens, precisa de confirmação para activar a matrícula e grade curricular do aluno
+            const precisaConfirmacao = itens.some((item: any) => SIGLAS_ESPECIAIS1.includes(item.SiglaProduto));
+            if (precisaConfirmacao) {
+                // Atualizar confirmação
+
+                await queryRunner.query(`
+        update FK2_TB_CONFIRMACOES
+        set estado = :estado
+        where 1=1
+        and codigo_matricula = :codMatricula
+        and codigo_ano_lectivo = :anoLectivo;
+        update FK2_TB_MATRICULAS
+        set ESTADO_MATRICULA = 'activo'
+        where codigo = :codMatricula;
+            `, { estado: 1, anoLectivo: invoice.anoLectivo, codMatricula: invoice.CodigoMatricula } as any);
+
+                // Atualizar  grade curricular do aluno 
+                await queryRunner.query(`
+        update FK2_TB_GRADE_CURRICULAR_ALUNO
+        set CODIGO_STATUS_GRADE_CURRICULAR = :estado
+        where 1=1
+        and codigo_matricula = :codMatricula
+        and codigo_ano_lectivo = :anoLectivo;
+        update FK2_TB_MATRICULAS
+        set ESTADO_MATRICULA = 'activo'
+        where codigo = :codMatricula;
+            `, { estado: 2, codMatricula: invoice.CodigoMatricula, anoLectivo: invoice.anoLectivo } as any);
+
+
+            }
+            const SIGLAS_ESPECIAIS2 = ['SEMESTRAL']; // para anual, se tiver algum desses itens, precisa de confirmação para activar a matrícula e grade curricular do aluno
+            const precisaConfirmacaoSemestral = itens.some((item: any) => SIGLAS_ESPECIAIS2.includes(item.SiglaProduto));
+            if (precisaConfirmacaoSemestral) {
+                // Atualizar confirmação
+
+                await queryRunner.query(`
+        update FK2_TB_CONFIRMACOES
+        set estado = :estado
+        where 1=1
+        and codigo_matricula = :codMatricula
+        and codigo_ano_lectivo = :anoLectivo;
+        update FK2_TB_MATRICULAS
+        set ESTADO_MATRICULA = 'activo'
+        where codigo = :codMatricula;
+            `, { estado: 1, anoLectivo: invoice.anoLectivo, codMatricula: invoice.CodigoMatricula } as any);
+
+                // Atualizar  grade curricular do aluno  com base no semestre atual
+                const confirmacaoAtual = await queryRunner.query(`
+    SELECT SEMESTRE,CODIGO 
+    FROM FK2_TB_CONFIRMACOES 
+    WHERE CODIGO_MATRICULA = :codMatricula 
+      AND CODIGO_ANO_LECTIVO = :anoLectivo
+    ORDER BY CODIGO DESC
+    FETCH FIRST 1 ROWS ONLY
+`, {
+                    codMatricula: invoice.CodigoMatricula,
+                    anoLectivo: invoice.anoLectivo
+                } as any);
+
+
+                await queryRunner.query(`
+        update FK2_TB_GRADE_CURRICULAR_ALUNO
+        set CODIGO_STATUS_GRADE_CURRICULAR = :estado
+        where 1=1
+        and codigo_matricula = :codMatricula
+        and codigo_ano_lectivo = :anoLectivo;
+        and CODIGO_CONFIRMACAO = :confirmacaoAtual;
+        update FK2_TB_MATRICULAS
+        set ESTADO_MATRICULA = 'activo'
+        where codigo = :codMatricula;
+            `, { estado: 2, codMatricula: invoice.CodigoMatricula, anoLectivo: invoice.anoLectivo, confirmacaoAtual: confirmacaoAtual[0].CODIGO } as any);
+
+
+            }
+
+
+            if (!existingPayment) {
+               const  payment = this.paymentRepository.create(finalPayload);
+                await queryRunner.manager.save(payment);
+            }else {
+                // Se já existe um pagamento para esta fatura, atualizamos o registro existente
+                const updatedPayment = {
+                  
+                    statusPagamento: PaymentStatus.CONCLUIDO,
+                    nOperacaoBancaria2: dto.nOperacaoBancaria,
+                    valorDepositado: dto.valorDepositado,
+                    formaPagamento: dto.formaPagamento,
+                    fkUtilizador: user?.sub,
+                    utilizador: user?.sub,
+               
+                    updatedAt: new Date(),
+                }
+                console.log(updatedPayment);
+                
+                await queryRunner.manager.update(Payment2, { codigo: existingPayment.codigo }, updatedPayment);
+            }
+
+            await queryRunner.commitTransaction();
+
+            return  { message: existingPayment ? 'Pagamento atualizado com sucesso' : 'Pagamento criado com sucesso' };
         } catch (error) {
             await queryRunner.rollbackTransaction();
             throw error;
         } finally {
             await queryRunner.release();
-
         }
-
     }
-    async findPaymentByN_Operacao_Bancaria(N_Operacao_Bancaria: string): Promise<Payment | null> {
-        return this.paymentRepository.findOne({ where: { N_Operacao_Bancaria } });
+    async findPaymentByN_Operacao_Bancaria(nOperacaoBancaria: string): Promise<Payment2 | null> {
+        return this.paymentRepository.findOne({ where: { nOperacaoBancaria } });
     }
-    async findPaymentByN_Operacao_Bancaria2(N_Operacao_Bancaria2: string): Promise<Payment | null> {
-        return this.paymentRepository.findOne({ where: { N_Operacao_Bancaria2 } });
+    async findPaymentByCodigoFactura(codigoFactura: number): Promise<Payment2 | null> {
+        return this.paymentRepository.findOne({ where: { codigoFactura } });
+    }
+    async findPaymentByN_Operacao_Bancaria2(nOperacaoBancaria2: string): Promise<Payment2 | null> {
+        return this.paymentRepository.findOne({ where: { nOperacaoBancaria2 } });
     }
 
     async studentPayments(query: StudentPaymentsQueryDto) {
@@ -336,6 +449,19 @@ export class PaymentService {
 
 
 
+    }
+
+    private async findAlunoPreinscricaoByMatricula(codigo) {
+        const sql = `select p.codigo from fk2_tb_matriculas    m
+      inner join FK2_TB_ADMISSAO         a on a.codigo = m.CODIGO_ALUNO
+      inner join FK2_TB_PREINSCRICAO     p on p.codigo = a.PRE_INCRICAO
+      where m.codigo =  ${codigo}`;
+        const result = await this.dataSource.query(sql);
+        if (!result || result.length === 0) {
+            throw new NotFoundException('Aluno não encontrado');
+        }
+        const preInscricao = result[0];
+        return preInscricao;
     }
 
 }

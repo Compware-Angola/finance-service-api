@@ -288,7 +288,8 @@ async dividaOutrosServicos(codigo_matricula: number): Promise<DividaDto[]> {
 
     const taxaMultaMeses = await this.mesesPagarService.mesesPagar(new Date().toISOString().split('T')[0], 1, 0, confirmacao?.ano_lectivo_id, pre_inscricaoId, "null", codigo_matricula);
     const desconto_finalista = await this.pegar_finalista(confirmacao?.ano_lectivo_id, codigo_matricula, pre_inscricaoId);
-
+ console.log(taxaMultaMeses,"TAXA MUKTA");
+ 
     // Semestre 1
     if (propina && (!bolseiro1 || (bolseiro1.desconto > 0 && bolseiro1.desconto < 100))) {
       const mes_temp = await this.mesTempRepo.find({ where: { semestre: 1, "activo": 1 } });
@@ -719,7 +720,8 @@ const matricula = toLowerCaseKeys(matriculaRaw);
 
     
       if (!propina) continue;
-
+ console.log(confirmacao);
+ 
       const taxaMultaMeses = await this.mesesPagarService.mesesPagar(
         new Date().toISOString().split('T')[0],
         1,
@@ -729,6 +731,8 @@ const matricula = toLowerCaseKeys(matriculaRaw);
         user,
         codigo_matricula
       );
+
+
 
       for (const mes of mesesNaoPagos) {
         const mesTaxa = taxaMultaMeses.find(m => m.codigo === mes.m_id);
@@ -1120,7 +1124,7 @@ private async confirmacaoAnoCorrente(codigo_matricula: number): Promise<any> {
   // CONVERTER PARA camelCase + number
   return rawResult
 }
-private async mesesPagosPorAnoPropina(
+private async mesesPagosPorAnoPropina( //TODO: analizar bem essa query
   ano_lectivo_id: number,
   codigo_inscricao: number
 ): Promise<any[]> {

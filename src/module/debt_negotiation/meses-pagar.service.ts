@@ -21,7 +21,7 @@ export class MesesPagarService {
     @InjectRepository(MesTemp)
     private readonly mesTempRepo: Repository<MesTemp>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   async mesesPagar(
     data: string,
@@ -32,21 +32,34 @@ export class MesesPagarService {
     user: any,
     matricula: number,
   ): Promise<MesPagar[]> {
+    console.log(data, tipo, mes_id, codigo_anoLectivo, user, matricula, "ISAAC");
+
     const anoLectivoId = await this.getAnoLectivoByCandidatura(user, codigo_anoLectivo);
     const mesesTemp = await this.getMesesTemp(tipo, user, anoLectivoId, mes_id);
 
- 
+
     const mesesApagar: MesPagar[] = [];
     for (const [index, aa] of mesesTemp.entries()) {
-      const mes =toLowerCaseKeys(aa)
-      console.log(mes);
-      
+      const mes = toLowerCaseKeys(aa)
+      console.log(mes, "00000000000000");
+
       const prestacoesIsentasMulta = await this.checkIsencaoMultaRaw(matricula, mes.id_mes, anoLectivoId);
+      console.log(prestacoesIsentasMulta, "ISAAC BUNGA");
+
 
       let taxa = 0;
-      if (data > mes.data) {
+      const dataAtual = new Date(data);
+      const dataLimite = new Date(mes.data_limite);
+      dataAtual.setHours(0, 0, 0, 0);
+dataLimite.setHours(0, 0, 0, 0);
+
+      if (dataAtual.getTime() > dataLimite.getTime()) {
+        console.log(prestacoesIsentasMulta);
+        console.log(typeof prestacoesIsentasMulta);
         if (!prestacoesIsentasMulta) {
-          taxa = await this.parametroTaxaMulta(data, mes.data, mes.data_final, mesesTemp, index);
+          console.log("ENTREI BABY");
+
+          taxa = await this.parametroTaxaMulta(data, mes.data_limite, mes.data_final, mesesTemp, index);
         }
       }
 
@@ -77,6 +90,8 @@ export class MesesPagarService {
     }
 
     const diffMonths = this.diffInMonths(dataLimiteObj, dataBancoObj);
+    console.log(diffMonths, "00000000000000111");
+
     if (diffMonths === 1 && dataBancoObj > dataLimiteObj) {
       return this.getPercentagemByCodigo(2); // 7%
     }
@@ -93,7 +108,7 @@ export class MesesPagarService {
   private async getPercentagemByCodigo(codigo: number): Promise<number> {
     const result = await this.dataSource.query(
       `SELECT "percentagem" FROM "UMA_TB_PARAMETROS_MULTA" WHERE "codigo" = :codigo FETCH NEXT 1 ROWS ONLY`,
-     [  codigo ]
+      [codigo]
     );
     return result[0]?.percentagem ?? 0;
   }
@@ -127,6 +142,7 @@ export class MesesPagarService {
         'mt.designacao AS mes',
         'mt.data_limite AS data',
         'mt.data_final AS data_final',
+        'mt.data_limite AS data_limite',
         'mt.prestacao AS prestacao',
       ])
       .where('mt.ano_lectivo = :anoLectivoId', { anoLectivoId })
@@ -157,33 +173,33 @@ export class MesesPagarService {
 
   // === CICLOS (EXATAMENTE COMO VOCÊ QUER) ===
 
-async cicloDoutoramento() {
-const result = await this.dataSource.query(`
+  async cicloDoutoramento() {
+    const result = await this.dataSource.query(`
   SELECT "Codigo", "Designacao"
   FROM "UMA_TB_ANO_LECTIVO"
   WHERE "Designacao" = 'Ciclo Doutoramento'
   FETCH NEXT 1 ROWS ONLY
 `);
 
-  return result[0] || null;
-}
+    return result[0] || null;
+  }
 
-async cicloMestrado() {
-  const result = await this.dataSource.query(`
+  async cicloMestrado() {
+    const result = await this.dataSource.query(`
     SELECT "Codigo", "Designacao"
     FROM "UMA_TB_ANO_LECTIVO"
     WHERE "Designacao" = 'Ciclo Mestrado'
     FETCH NEXT 1 ROWS ONLY
   `);
-  return result[0] || null;
-}
-async checkIsencaoMultaRaw(
-  matricula: number,
-  mes_id: string | number,
-  ano_lectivo_id: string | number,
-): Promise<boolean> {
-  const result = await this.dataSource.query(
-    `
+    return result[0] || null;
+  }
+  async checkIsencaoMultaRaw(
+    matricula: number,
+    mes_id: string | number,
+    ano_lectivo_id: string | number,
+  ): Promise<boolean> {
+    const result = await this.dataSource.query(
+      `
       SELECT 1
       FROM "UMA_TB_ISENCOE_MULTA"
       WHERE "mes_temp_id" = :1
@@ -192,9 +208,9 @@ async checkIsencaoMultaRaw(
         AND "codigo_anoLectivo" = :3
       FETCH NEXT 1 ROWS ONLY
     `,
-    [mes_id, matricula, ano_lectivo_id]
-  );
+      [mes_id, matricula, ano_lectivo_id]
+    );
 
-  return result.length > 0;
-}
+    return result.length > 0;
+  }
 }

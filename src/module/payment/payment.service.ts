@@ -294,7 +294,7 @@ export class PaymentService {
             }else {
                 // Se já existe um pagamento para esta fatura, atualizamos o registro existente
                 const updatedPayment = {
-                    ...existingPayment,
+                   
                     statusPagamento: PaymentStatus.CONCLUIDO,
                     nOperacaoBancaria2: dto.nOperacaoBancaria,
                     valorDepositado: dto.valorDepositado,
@@ -302,9 +302,9 @@ export class PaymentService {
                     fkUtilizador: user?.pk_utilizador,
                     utilizador: user?.pk_utilizador,
                     createdAt: existingPayment.createdAt, 
-                    UpdateAt: new Date(),
+                    updateAt: new Date(),
                 }
-                await queryRunner.manager.update(Payment, { codigo: existingPayment.codigo }, updatedPayment);
+                await queryRunner.manager.update(Payment2, { codigo: existingPayment.codigo }, updatedPayment);
             }
 
             await queryRunner.commitTransaction();

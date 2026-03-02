@@ -116,7 +116,25 @@ export class InvoiceService {
       await queryRunner.release();
     }
   }
+  async annulInvoice(Codigo: number): Promise<Invoice> {
+    const invoice = await this.findOne(Codigo);
+    if (!invoice) {
+      throw new NotFoundException(`Fatura com Código ${Codigo} não encontrada.`);
+    }
 
+    invoice.estado = 3; // 3 - eliminado
+    return this.invoiceRepository.save(invoice);
+  }
+  async  reactivateInvoice(Codigo: number): Promise<Invoice> {
+    const invoice = await this.findOne(Codigo);
+
+    if (!invoice) {
+      throw new NotFoundException(`Fatura com Código ${Codigo} não encontrada.`);
+    }
+
+    invoice.estado = 0; // 0 - pendente
+    return this.invoiceRepository.save(invoice);
+  }
   /**
    * Lógica principal de criação da fatura e itens.
    * Sempre recebe um EntityManager válido (interno ou externo).

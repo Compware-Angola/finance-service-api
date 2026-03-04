@@ -362,10 +362,12 @@ export class PaymentService {
         await queryRunner.manager.save(payment);
       } else {
         // Se já existe um pagamento para esta fatura, atualizamos o registro existente
+        const valorDepositadoAtualizado =
+          existingPayment.valorDepositado + (dto.valorDepositado || 0);
         const updatedPayment = {
           statusPagamento: PaymentStatus.CONCLUIDO,
           nOperacaoBancaria2: dto.nOperacaoBancaria,
-          valorDepositado: dto.valorDepositado,
+          valorDepositado: valorDepositadoAtualizado,
           formaPagamento: dto.formaPagamento,
           fkUtilizador: user?.sub,
           utilizador: user?.sub,

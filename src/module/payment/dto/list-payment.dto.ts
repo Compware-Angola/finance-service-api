@@ -1,0 +1,43 @@
+import { IsInt, IsNumber, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
+
+export class ListPaymentDTO extends PaginationQueryDto {
+  @ApiProperty({
+    description: 'Ano lectivo correspondente',
+    example: 23,
+  })
+  @IsInt()
+  @Type(() => Number)
+  anoLectivo: number;
+  @ApiPropertyOptional({
+    description: 'Código da matrícula do aluno',
+    example: 55426,
+  })
+  @IsInt()
+  @IsOptional()
+  @Type(() => Number)
+  codigoMatricula?: number;
+
+  @ApiPropertyOptional({ description: 'Código da factura', example: 1222829 })
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  codigoFactura?: number;
+
+  @ApiPropertyOptional({
+    description: 'Estado do pagamento',
+    example: 2,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  estado?: number;
+
+  @ApiPropertyOptional({
+    description: 'Nome do Aluno',
+    example: 'João',
+  })
+  @IsOptional()
+  nome?: string;
+}

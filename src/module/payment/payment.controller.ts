@@ -1,4 +1,14 @@
-import { Controller, Get, Query, Param, ParseIntPipe, Post, Body, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Param,
+  ParseIntPipe,
+  Post,
+  Body,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
@@ -11,22 +21,32 @@ import { HttpService } from '@nestjs/axios';
 import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
 import { RequiredPermissions } from 'src/common/pipes/permissions.decorator';
 import { PermissionTypeDetails } from 'src/common/enums/permission.type';
+import { ListPaymentDTO } from './dto/list-payment.dto';
 
 @ApiTags('payment')
 @Controller('payment')
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService,private httpService: HttpService) { }
+  constructor(
+    private readonly paymentService: PaymentService,
+    private httpService: HttpService,
+  ) {}
   @Post('create')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.LIQUIDAR_NOTA_PAGAMENTO.sigla)
   @ApiOperation({ summary: 'Cria um novo pagamento.' })
-  @ApiResponse({ status: 201, "description": 'Pagamento criado com sucesso.' })
-  async create(@Body() createPaymentDto: CreatePaymentDto, @Req() req: any): Promise<Payment | any> {
+  @ApiResponse({ status: 201, description: 'Pagamento criado com sucesso.' })
+  async create(
+    @Body() createPaymentDto: CreatePaymentDto,
+    @Req() req: any,
+  ): Promise<Payment | any> {
     const user = req.user; // Obter o usuário autenticado
-      const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     console.log('Usuário autenticado:', user);
-    const payment = await this.paymentService.createPayment(createPaymentDto, user);
-        AccessLogHelper.logAccess(this.httpService, {
+    const payment = await this.paymentService.createPayment(
+      createPaymentDto,
+      user,
+    );
+    AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} criou um pagamento com código de fatura ${createPaymentDto.codigoFactura}`,
       fkUtilizadorResponsavel: user.sub,
       fkOperacaoLog: 7,
@@ -36,9 +56,13 @@ export class PaymentController {
   }
   @Get('get/:academicYear/:preInscritionCode')
   @ApiOperation({
-    summary: 'Lista pagamentos por Ano Lectivo e Código de Pré-Inscrição, "com" paginação.'
+    summary:
+      'Lista pagamentos por Ano Lectivo e Código de Pré-Inscrição, "com" paginação.',
   })
-  @ApiResponse({ status: 200, "description": 'Lista de pagamentos filtrada e paginada.', })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de pagamentos filtrada e paginada.',
+  })
   async findByAnoLectivoAndPreInscricao(
     @Param('academicYear', ParseIntPipe) academicYear: string,
     @Param('preInscritionCode', ParseIntPipe) preInscritionCode: string,
@@ -55,12 +79,18 @@ export class PaymentController {
   @ApiResponse({
     status: 200,
     description: 'Lista de pagamentos do aluno.',
-
   })
-  async getStudentPayments(
-    @Query() query: StudentPaymentsQueryDto
-  ) {
+  async getStudentPayments(@Query() query: StudentPaymentsQueryDto) {
     return this.paymentService.studentPayments(query);
+  }
+  @Get('list-payments')
+  @ApiOperation({ summary: 'Listar pagamentos realizados' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de pagamentos realizados.',
+  })
+  async getPayments(@Query() query: ListPaymentDTO) {
+    return this.paymentService.findPayments(query);
   }
 
   @Get('student-payments/:facturaCode/details')

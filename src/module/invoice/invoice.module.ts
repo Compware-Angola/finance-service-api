@@ -10,9 +10,14 @@ import { AcademicYear } from './entities/academic.year.entity';
 import { InvoiceItem } from './entities/InvoiceIten.entity';
 import { BullModule } from '@nestjs/bullmq';
 import { InvoiceProcessor } from '../jobs/invoice-servico.processor';
+import { HttpModule } from '@nestjs/axios/dist/http.module';
 
 @Module({
   imports: [
+    HttpModule.register({
+        timeout: 5000,
+        maxRedirects: 5
+      }),
    TypeOrmModule.forFeature([Invoice, TypeInvoiceDocument, AcademicYear,InvoiceItem]),
       BullModule.registerQueue({
          name: 'invoice_service',

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus, ParseIntPipe, UseGuards } from '@nestjs/common'; // Importação do ParseIntPipe
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus, ParseIntPipe, UseGuards, Req } from '@nestjs/common'; // Importação do ParseIntPipe
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 
 import { InvoiceService } from './invoice.service';
@@ -14,11 +14,14 @@ import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
 import { PermissionsGuard } from 'src/common/secret/permissions.guard';
 import { RequiredPermissions } from 'src/common/pipes/permissions.decorator';
 import { PermissionTypeDetails } from 'src/common/enums/permission.type';
+import { HttpService } from '@nestjs/axios';
+import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
+
 
 @ApiTags('Invoices')
 @Controller('invoices')
 export class InvoiceController {
-  constructor(private readonly invoiceService: InvoiceService) { }
+  constructor(private readonly invoiceService: InvoiceService, private httpService: HttpService) { }
 
   // ------------------------------------
   // 1. CREATE (POST)
@@ -68,8 +71,49 @@ export class InvoiceController {
   async findByMatricula(
     @Query() filterQuery: InvoiceFilterEnrollmentDto
   ): Promise<PagedResult<Invoice>> {
-    // Este método está correto, "pois" o ValidationPipe em main.ts lida com o DTO de query.
+
     return this.invoiceService.findByEnrollmentCode(filterQuery);
+  }
+  
+  @Delete(':id')
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+  @RequiredPermissions(PermissionTypeDetails.DELETAR_FACTURA.sigla)
+  @ApiOperation({ summary: 'Anula uma fatura pelo Código' })
+  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura a ser anulada', "type": Number })
+  @ApiResponse({ status: 200, "description": 'Fatura anulada com sucesso.', "type": Invoice })
+  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' })
+  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
+  async annulInvoice(@Param('id', ParseIntPipe) Codigo: number,@Req() req: any): Promise<Invoice> {
+     const user = req.user;
+      const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    console.log('Usuário autenticado:', user);
+     AccessLogHelper.logAccess(this.httpService, {
+      descricao: `Utilizador ${user?.nome} anulou a fatura com código ${Codigo}`,
+      fkUtilizadorResponsavel: user.sub,
+      fkOperacaoLog: 7,
+      ip: ip,
+    });
+    return this.invoiceService.annulInvoice(Codigo);
+  }
+  @Patch('reactivate/:id')
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+  @RequiredPermissions(PermissionTypeDetails.REACTIVAR_FACTURA.sigla)
+  @ApiOperation({ summary: 'Reativa uma fatura anulada pelo Código' })
+  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura a ser reativada', "type": Number })
+  @ApiResponse({ status: 200, "description": 'Fatura reativada com sucesso.', "type": Invoice })
+  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' })
+  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
+  async reactivateInvoice(@Param('id', ParseIntPipe) Codigo: number,@Req() req: any): Promise<Invoice> {
+     const user = req.user;
+      const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+    console.log('Usuário autenticado:', user);
+     AccessLogHelper.logAccess(this.httpService, {
+      descricao: `Utilizador ${user?.nome} reativou a fatura com código ${Codigo}`,
+      fkUtilizadorResponsavel: user.sub,
+      fkOperacaoLog: 7,
+      ip: ip,
+    });
+    return this.invoiceService.reactivateInvoice(Codigo);
   }
 
   // ------------------------------------

@@ -111,14 +111,14 @@ async createDebtNegotiation(
     } else {
       const metadeOriginal = parseFloat((valorOriginal / 2).toFixed(2));
       const pagoNaHora = parseFloat((dto.valor_pago_na_hora || 0).toFixed(2));
-
+/*
       if (pagoNaHora < metadeOriginal) {
         throw new BadRequestException(
           `Para negociação parcelada, o valor pago na hora deve ser exatamente ${metadeOriginal} (50% da dívida original: ${valorOriginal}). Recebido: ${pagoNaHora}.`,
         );
       }
-
-      primeiroValorApagar = parseFloat((metadeOriginal - saldo_reset).toFixed(2));
+*/
+      primeiroValorApagar = parseFloat((metadeOriginal).toFixed(2));
       valorRestante = parseFloat(metadeOriginal.toFixed(2));
     }
 

@@ -8,6 +8,7 @@ import {
   IsIn,
 } from 'class-validator';
 import { ApiProperty, ApiExtraModels, getSchemaPath } from '@nestjs/swagger';
+import { Optional } from '@nestjs/common';
 
 // === ITEM DE MENSALIDADE ===
 export class MensalidadeItemDto {
@@ -106,11 +107,13 @@ export class MensalidadeItemDto {
 export class ServicoItemDto {
   @ApiProperty({ type: Number })
   @IsInt()
-  codGradeCurricular: number;
+  @Optional()
+  codGradeCurricular?: number;
 
   @ApiProperty({ type: Number })
   @IsInt()
-  codFacturaOutrosServicos: number;
+  @Optional()
+  codFacturaOutrosServicos?: number;
 
   @ApiProperty({ required: false })
   @IsOptional()

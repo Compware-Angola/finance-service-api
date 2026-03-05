@@ -1,5 +1,8 @@
 export enum PermissionType {
+  LIQUIDAR_NOTA_PAGAMENTO = "LIQUIDAR_NOTA_PAGAMENTO",
   FULL_ACCESS = "FULL_ACCESS",
+  DELETAR_FACTURA = "DELETAR_FACTURA",
+  REACTIVAR_FACTURA = "REACTIVAR_FACTURA",
   ATRIBUIR_PROVA = "ATRIBUIR_PROVA",
   LANCAMENTO_NOTAS_AVALIACOES = "LANCAMENTO_NOTAS_AVALIACOES",
   TESTE = "TESTE",
@@ -944,6 +947,9 @@ export const PermissionTypeDetails = {
   },
   DOCUMENTO: { designacao: "Documento", sigla: "mdm_l" },
   FACTURAS_PENDENTES: { designacao: "Facturas Pendentes", sigla: "maf_fp" },
+  DELETAR_FACTURA: { designacao: "Deletar Factura", sigla: "maf_del_factura" },
+
+REACTIVAR_FACTURA: { designacao: "Reactivar Factura", sigla: "maf_react_factura" },
   LISTAR_MENSAGENS: { designacao: "Listar Mensagens", sigla: "mgs_ls" },
   LISTAR_SALAS: { designacao: "Listar Salas", sigla: "mta_ls" },
   DEFINIR_UNIDADE_CURRICULAR_COM_ORAL: {
@@ -981,6 +987,10 @@ export const PermissionTypeDetails = {
   LISTAR_NEGOCIACAO_DIVIDA: {
     designacao: "Listar A negociação de dividas",
     sigla: "m_lis_ndiv",
+  },
+  LIQUIDAR_NOTA_PAGAMENTO: {
+    designacao: "Liquidar nota pagamentos",
+    sigla: "liq_pga",
   },
 } as const;
 

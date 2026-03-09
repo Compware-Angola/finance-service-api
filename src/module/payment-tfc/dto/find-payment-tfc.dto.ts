@@ -28,6 +28,18 @@ export class FindPaymentTFCDTO {
   @Type(() => Number)
   matriculaId?: number;
 
+  @ApiPropertyOptional({ description: 'Código da factura', example: 1222980 })
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  facturaId?: number;
+
+  @ApiPropertyOptional({ description: 'Código da Pagamento', example: 1222375 })
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  pagamentoId?: number;
+
   @ApiPropertyOptional({
     description: 'Nome do Aluno',
     example: 'William Ricardo',

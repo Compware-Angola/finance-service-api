@@ -546,37 +546,60 @@ export class PaymentService {
       codigoMatricula,
       estado,
       nome,
+      n_operacao_bancaria2,
+      n_operacao_bancaria,
       page = 1,
       limit = 25,
     } = filters;
 
     const offset = (page - 1) * limit;
+    const conditions: string[] = [];
+    const params: any = {};
 
     let baseWhere = `1=1`;
 
+    conditions.push(`1 = 1`);
+
     if (anoLectivo) {
-      baseWhere += ` AND fac.ANO_LECTIVO = ${anoLectivo}`;
+      conditions.push(`fac.ANO_LECTIVO = :anoLectivo`);
+      params.anoLectivo = anoLectivo;
     }
 
     if (codigoFactura) {
-      baseWhere += ` AND fac.CODIGO = ${codigoFactura}`;
+      conditions.push(`fac.CODIGO = :codigoFactura`);
+      params.codigoFactura = codigoFactura;
     }
 
     if (codigoMatricula) {
-      baseWhere += ` AND mac.CODIGO = ${codigoMatricula}`;
+      conditions.push(`mac.CODIGO = :codigoMatricula`);
+      params.codigoMatricula = codigoMatricula;
     }
 
     if (estado) {
       const statusPagamento = estado == 2 ? 'pendente' : 'concluido';
-      baseWhere += ` AND pg.status_pagamento = '${statusPagamento}'`;
+      conditions.push(`pg.status_pagamento = :statusPagamento`);
+      params.statusPagamento = statusPagamento;
+    }
+
+    if (n_operacao_bancaria) {
+      conditions.push(`pg.n_operacao_bancaria = :nOperacaoBancaria`);
+      params.nOperacaoBancaria = n_operacao_bancaria;
+    }
+
+    if (n_operacao_bancaria2) {
+      conditions.push(`pg.n_operacao_bancaria2 = :nOperacaoBancaria2`);
+      params.nOperacaoBancaria2 = n_operacao_bancaria2;
     }
 
     if (nome) {
-      baseWhere += `
-      AND fn_remove_acentos(UPPER(pre.NOME_COMPLETO))
-      LIKE '%' || fn_remove_acentos(UPPER('${nome}')) || '%'
-    `;
+      conditions.push(`
+    fn_remove_acentos(UPPER(pre.NOME_COMPLETO))
+    LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%'
+  `);
+      params.nome = nome;
     }
+
+    const whereClause = conditions.join(' AND ');
 
     const sql = `
     SELECT
@@ -611,7 +634,7 @@ export class PaymentService {
       LEFT JOIN FK2_TB_CAIXAS cai            ON cai.codigo = pg.caixa_id
       LEFT JOIN fk2_tb_canal_comunicacao can ON can.codigo = pg.canal
       LEFT JOIN FK2_TB_FORMA_PAGAMENTO   fp  ON to_char(fp.codigo)  = pg.forma_pagamento
-    WHERE ${baseWhere}
+    WHERE ${whereClause}
     ORDER BY pg.codigo DESC
     OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
   `;
@@ -625,12 +648,12 @@ export class PaymentService {
       INNER JOIN FK2_TB_PREINSCRICAO pre ON pre.codigo = adm.PRE_INCRICAO
       INNER JOIN FK2_TB_CURSOS cur      ON cur.codigo = mac.codigo_curso
       INNER JOIN FK2_TB_CAIXAS cai      ON cai.codigo = pg.caixa_id
-    WHERE ${baseWhere}
+    WHERE ${whereClause}
   `;
 
     const [result, countResult] = await Promise.all([
-      this.dataSource.query(sql),
-      this.dataSource.query(sqlCount),
+      this.dataSource.query(sql, params),
+      this.dataSource.query(sqlCount, params),
     ]);
 
     const total = Number(countResult[0].TOTAL);

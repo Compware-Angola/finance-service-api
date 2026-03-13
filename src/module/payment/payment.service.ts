@@ -167,6 +167,16 @@ export class PaymentService {
     if (!invoice) {
       throw new NotFoundException(`Fatura ${dto.codigoFactura} não encontrada`);
     }
+    const negotation = await this.dataSource.query(
+      `
+        SELECT
+            *
+        FROM FK2_NEGOCIACAO_DIVIDAS n
+        
+        WHERE n.CODIGO_FATURA = :codigoFactura
+    `,
+      { codigoFactura: dto.codigoFactura } as any,
+    );
 
     // vrificar se já existe um pagamento associado a esta fatura
     const existingPayment = await this.findPaymentByCodigoFactura(
@@ -250,6 +260,20 @@ export class PaymentService {
           codigo: dto.codigoFactura,
         } as any,
       );
+      // 3 Verificar se a fatura é de negociação
+
+
+      await queryRunner.query(
+        `
+            UPDATE FK2_FACTURA
+            SET estado = :estados
+            WHERE Codigo =:codigo
+        `,
+        {
+          estados,
+          codigo: dto.codigoFactura,
+        } as any,
+      );
 
       const SIGLAS_ESPECIAIS1 = ['TdM', 'IpuCricular(Anual)']; // para anual, se tiver algum desses itens, precisa de confirmação para activar a matrícula e grade curricular do aluno
       const precisaConfirmacao = itens.some((item: any) =>
@@ -320,7 +344,6 @@ export class PaymentService {
           } as any,
         );
 
-        // Atualizar  grade curricular do aluno  com base no semestre atual
         const confirmacaoAtual = await queryRunner.query(
           `
     SELECT SEMESTRE,CODIGO
@@ -361,7 +384,7 @@ export class PaymentService {
         const payment = this.paymentRepository.create(finalPayload);
         await queryRunner.manager.save(payment);
       } else {
-        // Se já existe um pagamento para esta fatura, atualizamos o registro existente
+
         const valorDepositadoAtualizado =
           existingPayment.valorDepositado + (dto.valorDepositado || 0);
         const updatedPayment = {
@@ -374,12 +397,30 @@ export class PaymentService {
 
           updatedAt: new Date(),
         };
-        console.log(updatedPayment);
+
 
         await queryRunner.manager.update(
           Payment2,
           { codigo: existingPayment.codigo },
           updatedPayment,
+        );
+      }
+      if (negotation && negotation.length > 0) {
+   
+        
+
+        const valoRestante = Math.max(0, negotation[0].VALOR_DIVIDA - valorDepositado);
+        await queryRunner.query(
+          `
+            UPDATE FK2_NEGOCIACAO_DIVIDAS
+           
+            SET VALORRESTANTE =:valoRestante
+            WHERE CODIGO_FATURA  =:codigo
+        `,
+          {
+            valoRestante,
+            codigo: dto.codigoFactura,
+          } as any,
         );
       }
 

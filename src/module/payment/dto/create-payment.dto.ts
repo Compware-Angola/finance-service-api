@@ -132,7 +132,6 @@ export class CreatePaymentDto {
   @ApiPropertyOptional({ example: 'Pagamento parcial' })
   @IsOptional()
   @IsString()
-  @Length(1, 100)
   infoAdicional?: string;
 
   @ApiPropertyOptional({ default: 1 })

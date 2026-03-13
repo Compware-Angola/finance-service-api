@@ -40,4 +40,18 @@ export class ListPaymentDTO extends PaginationQueryDto {
   })
   @IsOptional()
   nome?: string;
+
+  @ApiPropertyOptional({
+    description: 'Número de Operação Bancária',
+    example: '588105REF1',
+  })
+  @IsOptional()
+  n_operacao_bancaria?: string;
+
+  @ApiPropertyOptional({
+    description: 'Número de Operação Bancária 2',
+    example: '1759237479',
+  })
+  @IsOptional()
+  n_operacao_bancaria2?: string;
 }

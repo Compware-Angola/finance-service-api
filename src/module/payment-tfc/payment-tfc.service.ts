@@ -15,33 +15,62 @@ export class PaymentTfcService {
       status,
       limit = 25,
       matriculaId,
+      facturaId,
+      pagamentoId,
       nome,
     } = filters;
     const offset = (page - 1) * limit;
+    const conditions: string[] = [];
+    const params: any = {};
 
-    let baseWhere = `
-    s.sigla = 'JdMdFdC'
-    AND f.ANO_LECTIVO = ${anoLectivo}
-  `;
+    conditions.push(`s.sigla = :sigla`);
+    params.sigla = 'JdMdFdC';
+
+    if (anoLectivo) {
+      conditions.push(`f.ANO_LECTIVO = :anoLectivo`);
+      params.anoLectivo = anoLectivo;
+    }
 
     if (curso) {
-      baseWhere += ` AND tm.Codigo_Curso = ${curso}`;
-    }
-    if (periodoId) {
-      baseWhere += ` AND tprd.codigo = ${periodoId}`;
+      conditions.push(`tm.Codigo_Curso = :curso`);
+      params.curso = curso;
     }
 
-    //Estado Factura
+    if (periodoId) {
+      conditions.push(`tprd.codigo = :periodoId`);
+      params.periodoId = periodoId;
+    }
+
+    // Estado Factura
     if (status) {
-      baseWhere += ` AND f.estado = ${status}`;
+      conditions.push(`f.estado = :status`);
+      params.status = status;
     }
-    //fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%'
+
     if (nome) {
-      baseWhere += ` AND fn_remove_acentos(UPPER(tp.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER('${nome}')) || '%'`;
+      conditions.push(`
+      fn_remove_acentos(UPPER(tp.NOME_COMPLETO))
+      LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%'
+    `);
+      params.nome = nome;
     }
+
     if (matriculaId) {
-      baseWhere += ` AND tm.codigo  = ${matriculaId}`;
+      conditions.push(`tm.codigo = :matriculaId`);
+      params.matriculaId = matriculaId;
     }
+
+    if (facturaId) {
+      conditions.push(`f.codigo = :facturaId`);
+      params.facturaId = facturaId;
+    }
+
+    if (pagamentoId) {
+      conditions.push(`p.codigo = :pagamentoId`);
+      params.pagamentoId = pagamentoId;
+    }
+
+    const whereClause = conditions.join(' AND ');
 
     const sql = `
     SELECT
@@ -49,7 +78,9 @@ export class PaymentTfcService {
       tm.codigo AS matricula,
       p.codigo AS pagamento,
       tc.designacao AS curso,
-      f.estado AS estado
+      f.estado AS estado,
+      f.codigo as codigo_factura
+
     FROM FK2_FACTURA f
       LEFT JOIN FK2_TB_PAGAMENTOS p ON p.CODIGO_FACTURA = f.codigo
       INNER JOIN FK2_FACTURA_ITEMS it ON it.CODIGOFACTURA = f.codigo
@@ -59,7 +90,7 @@ export class PaymentTfcService {
       INNER JOIN FK2_TB_PREINSCRICAO tp ON tp.Codigo = ta.pre_incricao
       INNER JOIN FK2_TB_CURSOS tc ON tc.Codigo = tm.Codigo_Curso
       INNER JOIN FK2_TB_PERIODOS tprd ON tprd.Codigo = tp.Codigo_Turno
-    WHERE ${baseWhere}
+    WHERE ${whereClause}
     ORDER BY tm.codigo ASC
     OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
   `;
@@ -75,11 +106,11 @@ export class PaymentTfcService {
       INNER JOIN FK2_TB_PREINSCRICAO tp ON tp.Codigo = ta.pre_incricao
       INNER JOIN FK2_TB_CURSOS tc ON tc.Codigo = tm.Codigo_Curso
       INNER JOIN FK2_TB_PERIODOS tprd ON tprd.Codigo = tp.Codigo_Turno
-    WHERE ${baseWhere}
+    WHERE ${whereClause}
   `;
     const [result, countResult] = await Promise.all([
-      this.dataSource.query(sql),
-      this.dataSource.query(sqlCount),
+      this.dataSource.query(sql, params),
+      this.dataSource.query(sqlCount, params),
     ]);
 
     const total = Number(countResult[0].TOTAL);

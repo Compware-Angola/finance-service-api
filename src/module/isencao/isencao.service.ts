@@ -109,7 +109,16 @@ export class IsencaoService {
   }
 
   async findAll(filters: FilterIsencaoDto): Promise<PagedResult<any>> {
-    const { page = 1, limit = 10, codigoMatricula, codigoServico, estadoIsencao } = filters;
+    const {
+      page = 1,
+      limit = 10,
+      codigoMatricula,
+      codigoServico,
+      estadoIsencao,
+      anoLectivo,
+      codigoCurso,
+      faculdadeId,
+    } = filters;
     const skip = (page - 1) * limit;
 
     const whereConditions: string[] = [];
@@ -129,7 +138,18 @@ export class IsencaoService {
       whereConditions.push('a.ESTADO_ISENSAO = :estadoIsencao');
       params.estadoIsencao = estadoIsencao;
     }
-
+    if (codigoCurso) {
+      whereConditions.push('k.CODIGO = :codigoCurso');
+      params.codigoCurso = codigoCurso;
+    }
+    if (anoLectivo) {
+      whereConditions.push('c.CODIGO = :anoLectivo');
+      params.anoLectivo = anoLectivo;
+    }
+    if (faculdadeId) {
+      whereConditions.push('k.FACULDADE_ID = :faculdadeId');
+      params.faculdadeId = faculdadeId;
+    }
     const additionalWhere =
       whereConditions.length > 0 ? 'AND ' + whereConditions.join(' AND ') : '';
 

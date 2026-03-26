@@ -15,4 +15,12 @@ export class FilterDiscountDto extends PaginationQueryDto {
   @IsOptional()
   @IsString()
   designacao?: string;
+
+  @ApiProperty({
+    description: 'Percentual',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  percentual?: number;
 }

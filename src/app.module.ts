@@ -72,10 +72,12 @@ import { PaymentTfcModule } from './module/payment-tfc/payment-tfc.module';
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
+        useFactory: (config: ConfigService) => ({
+        prefix: config.get<string>('BULL_PREFIX') || 'dev', 
         connection: {
-          host: config.get<string>('REDIS_HOST', 'localhost'),
-          port: config.get<number>('REDIS_PORT', 6379),
+          host: config.get<string>('REDIS_HOST') || 'localhost',
+          port: config.get<number>('REDIS_PORT') || 6379,
+          // password: config.get<string>('REDIS_PASSWORD'),
         },
       }),
     }),

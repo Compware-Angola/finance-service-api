@@ -131,7 +131,7 @@ export class DiscountService {
     }
 
     const sql = `
-      UPDATE FK2_DESCONTOS_ESPECIAIS 
+      UPDATE FK2_DESCONTOS_ESPECIAIS
       SET ${setClauses.join(', ')}
       WHERE ID = :id
     `;
@@ -141,7 +141,7 @@ export class DiscountService {
   }
 
   async findAll(filters: FilterDiscountDto): Promise<PagedResult<any>> {
-    const { page = 1, limit = 10, codigo, designacao } = filters;
+    const { page = 1, limit = 10, codigo, designacao, percentual } = filters;
     const skip = (page - 1) * limit;
 
     const whereConditions: string[] = [];
@@ -155,6 +155,10 @@ export class DiscountService {
     if (designacao) {
       whereConditions.push('UPPER(a.DESCRICAO) LIKE UPPER(:designacao)');
       params.designacao = `%${designacao}%`;
+    }
+    if (percentual) {
+      whereConditions.push('a.TAXA = :percentual');
+      params.percentual = percentual;
     }
 
     const whereClause =
@@ -180,7 +184,7 @@ export class DiscountService {
     const sql = `
       SELECT * FROM (
         SELECT b.*, ROWNUM rnum FROM (
-          SELECT 
+          SELECT
             a.DESCRICAO,
             a.TAXA,
             a.DATA_INICIO,
@@ -251,7 +255,7 @@ export class DiscountService {
     }
 
     const sql = `
-      UPDATE FK2_TB_DESCONTOS_ALUNOO 
+      UPDATE FK2_TB_DESCONTOS_ALUNOO
       SET ${setClauses.join(', ')}
       WHERE ID = :id
     `;
@@ -268,11 +272,24 @@ export class DiscountService {
       codigoAnoLectivo,
       semestre,
       codigoMatricula,
+      codigoInstituicao,
+      afectacao,
     } = filters;
     const skip = (page - 1) * limit;
 
     const whereConditions: string[] = [];
     const params: any = {};
+
+    const TipoPagamento = {
+      PAGAMENTO_GLOBAL: {
+        valor: null,
+        campo: 'PAGAMENTO_GLOBAL',
+      },
+      PAGAMENTO_PROPINA: {
+        valor: 'Pagamento de Propina',
+        campo: 'PAGAMENTO_PROPINA',
+      },
+    } as const;
 
     // Construção dos filtros
     if (codigo) {
@@ -293,6 +310,17 @@ export class DiscountService {
     if (codigoMatricula) {
       whereConditions.push('a.CODIGO_MATRICULA = :codigoMatricula');
       params.codigoMatricula = codigoMatricula;
+    }
+    if (codigoInstituicao) {
+      whereConditions.push('d.CODIGO = :codigoInstituicao');
+      params.codigoInstituicao = codigoInstituicao;
+    }
+    if (afectacao) {
+      const searchAfectacaoQuery =
+        afectacao === 1
+          ? `a.AFECTACAO = '${TipoPagamento.PAGAMENTO_PROPINA.valor}'`
+          : `a.AFECTACAO IS NULL`;
+      whereConditions.push(searchAfectacaoQuery);
     }
 
     // Lógica para concatenar filtros em uma query que já possui WHERE de joins

@@ -4,14 +4,18 @@ import {
   IsOptional,
   IsString,
   IsDateString,
+  IsArray,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export class CreateIsencaoDto {
-  @ApiProperty({ description: 'Código da matrícula' })
+  @ApiProperty({ description: 'Código da matrícula', type: [Number] })
+  @IsArray()
   @IsNotEmpty()
-  @IsNumber()
-  codigoMatricula: number;
+  @IsNumber({}, { each: true })
+  @Type(() => Number)
+  codigoMatriculas: number[];
 
   @ApiProperty({ description: 'Código do serviço' })
   @IsNotEmpty()
@@ -22,11 +26,6 @@ export class CreateIsencaoDto {
   @IsOptional()
   @IsNumber()
   codigoUtilizador?: number;
-
-  @ApiProperty({ description: 'Data da isenção', example: '2024-05-20' })
-  @IsNotEmpty()
-  @IsDateString()
-  dataIsencao: string;
 
   @ApiProperty({ description: 'Canal', required: false })
   @IsOptional()

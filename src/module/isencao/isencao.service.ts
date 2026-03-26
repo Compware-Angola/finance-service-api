@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CreateIsencaoDto } from './dto/create-isencao.dto';
 import { UpdateIsencaoDto } from './dto/update-isencao.dto';
@@ -11,6 +15,7 @@ export class IsencaoService {
   constructor(private readonly dataSource: DataSource) {}
 
   async create(createDto: CreateIsencaoDto) {
+    const codigosMatriculas = createDto.codigoMatriculas;
     const sql = `
       INSERT INTO "FK2_TB_ISENCOES" (
         "CODIGO_MATRICULA",
@@ -27,7 +32,7 @@ export class IsencaoService {
         :codigoMatricula,
         :codigoServico,
         :codigoUtilizador,
-        TO_DATE(:dataIsencao, 'YYYY-MM-DD'),
+        sysdate,
         :canal,
         :obs,
         'ACTIVO',
@@ -36,19 +41,65 @@ export class IsencaoService {
         CURRENT_DATE
       )
     `;
+    const sqlExisteIsencao = `
+    select COUNT(*) AS TOTAL
+    from FK2_TB_ISENCOES
+    where 1=1
+    and CODIGO_MATRICULA = :codigoMatricula
+    and CODIGO_SERVICO = :codigoServico
+    and UPPER(ESTADO_ISENSAO) = UPPER('Activo')
+    `;
+    const results = await Promise.all(
+      codigosMatriculas.map(async (codigoMatricula) => {
+        try {
+          const existeIsencaoParams = {
+            codigoMatricula: codigoMatricula,
+            codigoServico: createDto.codigoServico,
+          };
+          const resultado = await this.dataSource.query(
+            sqlExisteIsencao,
+            Object.values(existeIsencaoParams),
+          );
+          const row = resultado?.[0];
+          if (!row || row.TOTAL > 0) {
+            throw new BadRequestException(
+              'Já existe uma isenção ativa com essas mesmas informações',
+            );
+          }
 
-    const params = {
-      codigoMatricula: createDto.codigoMatricula,
-      codigoServico: createDto.codigoServico,
-      codigoUtilizador: createDto.codigoUtilizador || null,
-      dataIsencao: createDto.dataIsencao,
-      canal: createDto.canal || null,
-      obs: createDto.obs || null,
-      codigoAnoLectivo: createDto.codigoAnoLectivo,
-      codigoPreInscricao: createDto.codigoPreInscricao || null,
+          const params = {
+            codigoMatricula: codigoMatricula,
+            codigoServico: createDto.codigoServico,
+            codigoUtilizador: createDto.codigoUtilizador || null,
+
+            canal: createDto.canal || null,
+            obs: createDto.obs || null,
+            codigoAnoLectivo: createDto.codigoAnoLectivo,
+            codigoPreInscricao: createDto.codigoPreInscricao || null,
+          };
+
+          await this.dataSource.query(sql, Object.values(params));
+          return { codigoMatricula, success: true };
+        } catch (e) {
+          return { codigoMatricula, success: false, error: e?.message };
+        }
+      }),
+    );
+    const sucessos = results
+      .filter((r) => r.success)
+      .map((r) => r.codigoMatricula);
+
+   const erros = results
+  .filter((r) => !r.success)
+  .map((r) => ({
+    codigoMatricula: r.codigoMatricula,
+    error: r.error,
+  }));
+    return {
+      total: codigosMatriculas.length,
+      sucessos,
+      erros,
     };
-
-    await this.dataSource.query(sql, Object.values(params));
   }
 
   async update(id: number, updateDto: UpdateIsencaoDto) {
@@ -109,7 +160,16 @@ export class IsencaoService {
   }
 
   async findAll(filters: FilterIsencaoDto): Promise<PagedResult<any>> {
-    const { page = 1, limit = 10, codigoMatricula, codigoServico, estadoIsencao } = filters;
+    const {
+      page = 1,
+      limit = 10,
+      codigoMatricula,
+      codigoServico,
+      estadoIsencao,
+      anoLectivo,
+      codigoCurso,
+      faculdadeId,
+    } = filters;
     const skip = (page - 1) * limit;
 
     const whereConditions: string[] = [];
@@ -129,7 +189,18 @@ export class IsencaoService {
       whereConditions.push('a.ESTADO_ISENSAO = :estadoIsencao');
       params.estadoIsencao = estadoIsencao;
     }
-
+    if (codigoCurso) {
+      whereConditions.push('k.CODIGO = :codigoCurso');
+      params.codigoCurso = codigoCurso;
+    }
+    if (anoLectivo) {
+      whereConditions.push('c.CODIGO = :anoLectivo');
+      params.anoLectivo = anoLectivo;
+    }
+    if (faculdadeId) {
+      whereConditions.push('k.FACULDADE_ID = :faculdadeId');
+      params.faculdadeId = faculdadeId;
+    }
     const additionalWhere =
       whereConditions.length > 0 ? 'AND ' + whereConditions.join(' AND ') : '';
 

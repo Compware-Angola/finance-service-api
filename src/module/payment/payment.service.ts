@@ -236,6 +236,8 @@ export class PaymentService {
     await queryRunner.startTransaction();
 
     try {
+      console.log(estados);
+
       if (estados == 1) {
         for (const item of itens) {
           await queryRunner.query(
@@ -275,50 +277,51 @@ export class PaymentService {
         } as any,
       );
 
-      const SIGLAS_ESPECIAIS1 = ['TdM', 'IpuCricular(Anual)']; // para anual, se tiver algum desses itens, precisa de confirmação para activar a matrícula e grade curricular do aluno
+      const SIGLAS_ESPECIAIS1 = ['tdm', 'ipucricular(anual)'];
       const precisaConfirmacao = itens.some((item: any) =>
-        SIGLAS_ESPECIAIS1.includes(item.SiglaProduto),
+        SIGLAS_ESPECIAIS1.includes(item.SIGLAPRODUTO?.toLowerCase()),
       );
-      if (precisaConfirmacao) {
-        // Atualizar confirmação
+      console.log('Total itens:', itens.length);
+      console.log('Siglas encontradas:', itens.map((i: any) => i.SIGLAPRODUTO));
+      console.log(precisaConfirmacao, "ENTREI");
 
-        await queryRunner.query(
-          `
-        update FK2_TB_CONFIRMACOES
-        set estado = :estado
-        where 1=1
-        and codigo_matricula = :codMatricula
-        and codigo_ano_lectivo = :anoLectivo;
-        update FK2_TB_MATRICULAS
-        set ESTADO_MATRICULA = 'activo'
-        where codigo = :codMatricula;
-            `,
-          {
-            estado: 1,
-            anoLectivo: invoice.anoLectivo,
-            codMatricula: invoice.CodigoMatricula,
-          } as any,
-        );
+if (precisaConfirmacao) {
+  // Atualizar confirmação
+  await queryRunner.query(
+    `UPDATE FK2_TB_CONFIRMACOES
+     SET estado = :estado
+     WHERE codigo_matricula = :codMatricula
+     AND codigo_ano_lectivo = :anoLectivo`,
+    {
+      estado: 1,
+      anoLectivo: invoice.anoLectivo,
+      codMatricula: invoice.CodigoMatricula,
+    } as any,
+  );
 
-        // Atualizar  grade curricular do aluno
-        await queryRunner.query(
-          `
-        update FK2_TB_GRADE_CURRICULAR_ALUNO
-        set CODIGO_STATUS_GRADE_CURRICULAR = :estado
-        where 1=1
-        and codigo_matricula = :codMatricula
-        and codigo_ano_lectivo = :anoLectivo;
-        update FK2_TB_MATRICULAS
-        set ESTADO_MATRICULA = 'activo'
-        where codigo = :codMatricula;
-            `,
-          {
-            estado: 2,
-            codMatricula: invoice.CodigoMatricula,
-            anoLectivo: invoice.anoLectivo,
-          } as any,
-        );
-      }
+  // Atualizar grade curricular do aluno
+  await queryRunner.query(
+    `UPDATE FK2_TB_GRADE_CURRICULAR_ALUNO
+     SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
+     WHERE codigo_matricula = :codMatricula
+     AND codigo_ano_lectivo = :anoLectivo`,
+    {
+      estado: 2,
+      codMatricula: invoice.CodigoMatricula,
+      anoLectivo: invoice.anoLectivo,
+    } as any,
+  );
+
+  // Atualizar matrícula
+  await queryRunner.query(
+    `UPDATE FK2_TB_MATRICULAS
+     SET ESTADO_MATRICULA = 'activo'
+     WHERE codigo = :codMatricula`,
+    {
+      codMatricula: invoice.CodigoMatricula,
+    } as any,
+  );
+}
       const SIGLAS_ESPECIAIS2 = ['SEMESTRAL']; // para anual, se tiver algum desses itens, precisa de confirmação para activar a matrícula e grade curricular do aluno
       const precisaConfirmacaoSemestral = itens.some((item: any) =>
         SIGLAS_ESPECIAIS2.includes(item.SiglaProduto),
@@ -327,16 +330,10 @@ export class PaymentService {
         // Atualizar confirmação
 
         await queryRunner.query(
-          `
-        update FK2_TB_CONFIRMACOES
-        set estado = :estado
-        where 1=1
-        and codigo_matricula = :codMatricula
-        and codigo_ano_lectivo = :anoLectivo;
-        update FK2_TB_MATRICULAS
-        set ESTADO_MATRICULA = 'activo'
-        where codigo = :codMatricula;
-            `,
+          `UPDATE FK2_TB_CONFIRMACOES
+   SET estado = :estado
+   WHERE codigo_matricula = :codMatricula
+   AND codigo_ano_lectivo = :anoLectivo`,
           {
             estado: 1,
             anoLectivo: invoice.anoLectivo,
@@ -344,6 +341,14 @@ export class PaymentService {
           } as any,
         );
 
+        await queryRunner.query(
+          `UPDATE FK2_TB_MATRICULAS
+   SET ESTADO_MATRICULA = 'activo'
+   WHERE codigo = :codMatricula`,
+          {
+            codMatricula: invoice.CodigoMatricula,
+          } as any,
+        );
         const confirmacaoAtual = await queryRunner.query(
           `
     SELECT SEMESTRE,CODIGO
@@ -360,22 +365,25 @@ export class PaymentService {
         );
 
         await queryRunner.query(
-          `
-        update FK2_TB_GRADE_CURRICULAR_ALUNO
-        set CODIGO_STATUS_GRADE_CURRICULAR = :estado
-        where 1=1
-        and codigo_matricula = :codMatricula
-        and codigo_ano_lectivo = :anoLectivo;
-        and CODIGO_CONFIRMACAO = :confirmacaoAtual;
-        update FK2_TB_MATRICULAS
-        set ESTADO_MATRICULA = 'activo'
-        where codigo = :codMatricula;
-            `,
+          `UPDATE FK2_TB_GRADE_CURRICULAR_ALUNO
+   SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
+   WHERE codigo_matricula = :codMatricula
+   AND codigo_ano_lectivo = :anoLectivo
+   AND CODIGO_CONFIRMACAO = :confirmacaoAtual`,
           {
             estado: 2,
             codMatricula: invoice.CodigoMatricula,
             anoLectivo: invoice.anoLectivo,
             confirmacaoAtual: confirmacaoAtual[0].CODIGO,
+          } as any,
+        );
+
+        await queryRunner.query(
+          `UPDATE FK2_TB_MATRICULAS
+   SET ESTADO_MATRICULA = 'activo'
+   WHERE codigo = :codMatricula`,
+          {
+            codMatricula: invoice.CodigoMatricula,
           } as any,
         );
       }
@@ -406,8 +414,8 @@ export class PaymentService {
         );
       }
       if (negotation && negotation.length > 0) {
-   
-        
+
+
 
         const valoRestante = Math.max(0, negotation[0].VALOR_DIVIDA - valorDepositado);
         await queryRunner.query(

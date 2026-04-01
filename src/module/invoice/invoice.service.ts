@@ -31,6 +31,10 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { InvoiceSearchDto } from './dto/get-invoice.dto';
 import { normalizeParam } from '../util/normalize-util';
+import { InvoiceItemEnum } from 'src/common/enums/invoice-item.enum';
+import { InvoiceEnum } from 'src/common/enums/invoice.enum';
+
+type ExemptionType = { CODIGO: number; SIGLA: string };
 
 //0 - pendente,
 //1 - validado
@@ -119,17 +123,21 @@ export class InvoiceService {
   async annulInvoice(Codigo: number): Promise<Invoice> {
     const invoice = await this.findOne(Codigo);
     if (!invoice) {
-      throw new NotFoundException(`Fatura com Código ${Codigo} não encontrada.`);
+      throw new NotFoundException(
+        `Fatura com Código ${Codigo} não encontrada.`,
+      );
     }
 
     invoice.estado = 3; // 3 - eliminado
     return this.invoiceRepository.save(invoice);
   }
-  async  reactivateInvoice(Codigo: number): Promise<Invoice> {
+  async reactivateInvoice(Codigo: number): Promise<Invoice> {
     const invoice = await this.findOne(Codigo);
 
     if (!invoice) {
-      throw new NotFoundException(`Fatura com Código ${Codigo} não encontrada.`);
+      throw new NotFoundException(
+        `Fatura com Código ${Codigo} não encontrada.`,
+      );
     }
 
     invoice.estado = 0; // 0 - pendente
@@ -145,7 +153,7 @@ export class InvoiceService {
     dueDateParams: string | undefined,
     manager: EntityManager,
   ): Promise<Invoice> {
-    const { itens, ...invoiceData } = createInvoiceDto;
+    let { itens, ...invoiceData } = createInvoiceDto;
 
     // 1. Referência e data de vencimento
     const referencia = referenceParams || (await genearateKeyNumber(9)); // ajusta o nome/método se for diferente
@@ -194,7 +202,70 @@ export class InvoiceService {
       anoLetivo.Designacao,
     );
 
+    //4.1 Verificar a Isenção
+    //4.2 Pegar todos os serviços que estão dentro da tabela de Isenções
+    const invoiceProductCodes = itens?.map((item) => item.CodigoProduto) ?? [];
+    let totalExemptionAmount = 0;
+
+    if (invoiceProductCodes.length > 0) {
+      const servicePlaceholders = invoiceProductCodes
+        .map((_, i) => `:service${i}`)
+        .join(', ');
+      const queryParams: any = {
+        academicYear: invoiceData.codigo_anoLectivo ?? anoLetivo.Codigo,
+        studentId: createInvoiceDto?.CodigoMatricula,
+      };
+      invoiceProductCodes.forEach((code, i) => {
+        queryParams[`service${i}`] = code;
+      });
+
+      const exemptionResults: ExemptionType[] = await manager.query(
+        `
+    SELECT
+      s1.codigo,
+      s1.sigla
+    FROM FK2_TB_TIPO_SERVICOS s1
+    WHERE s1.codigo IN (${servicePlaceholders})
+      AND s1.SIGLA NOT IN ('IpuC','IpuCricular(Anual)','TdM','PROP')
+      AND s1.sigla IN (
+        SELECT s2.SIGLA
+        FROM FK2_TB_ISENCOES i1
+        INNER JOIN FK2_TB_TIPO_SERVICOS s2 ON s2.codigo = i1.CODIGO_SERVICO
+        WHERE i1.CODIGO_MATRICULA = :studentId
+          AND UPPER(i1.ESTADO_ISENSAO) = 'ACTIVO'
+          AND i1.CODIGO_ANOLECTIVO = :academicYear
+
+      )
+    `,
+        queryParams,
+      );
+
+      const exemptedServices = Array.isArray(exemptionResults)
+        ? exemptionResults
+        : [];
+      if (exemptedServices.length > 0) {
+        const exemptedCodesSet = new Set(exemptedServices.map((s) => s.CODIGO));
+        itens = itens?.map((item) => {
+          if (!exemptedCodesSet.has(item.CodigoProduto)) return item;
+          totalExemptionAmount += item.Total ?? item.Quantidade * item.preco;
+          return { ...item, estado: InvoiceItemEnum.ISENTO };
+        });
+      }
+    }
+
+    let invoiceAmount = invoiceData.ValorAPagar ?? invoiceData.TotalPreco ?? 0;
+    let invoiceStatus = 0;
+
+    if (invoiceAmount > 0) {
+      invoiceStatus =
+        Math.abs(invoiceAmount - totalExemptionAmount) < 0.01
+          ? InvoiceEnum.ISENTO
+          : InvoiceEnum.PENDENTE;
+      invoiceAmount -= totalExemptionAmount;
+    }
+
     // 5. Inserir a fatura (CODIGO gerado automaticamente pela sequence + trigger)
+
     const insertResult = await manager.query(
       `
     INSERT INTO FK2_FACTURA (
@@ -228,7 +299,8 @@ export class InvoiceService {
       CORRENTE,
       CODIGO_PREINSCRICAO,
       NUMSEQUENCIAFACTURA,
-      TIPO_DOCUMENTO_FACTURA_ID
+      TIPO_DOCUMENTO_FACTURA_ID,
+      VALORISENTO
     ) VALUES (
       SYSDATE,
       :totalPreco,
@@ -256,11 +328,12 @@ export class InvoiceService {
       :faturaReference,
       :canal,
       :anoLectivo,
-      0,
+      :invoiceStatus,
       0,
       :codigoPreInscricao,
       :numSequenciaFactura,
-      :tipoDocumentoFacturaId
+      :tipoDocumentoFacturaId,
+      :valorIsento
     )
 
      RETURNING CODIGO INTO :outId
@@ -274,7 +347,7 @@ export class InvoiceService {
         totalMulta: invoiceData.TotalMulta ?? 0,
         totalIncidencia: invoiceData.total_incidencia ?? 0,
         totalRetencao: invoiceData.total_retencao ?? 0,
-        valorAPagar: invoiceData.ValorAPagar ?? invoiceData.TotalPreco ?? 0,
+        valorAPagar: invoiceAmount,
         valorAPagarExtenso: '', // podes implementar função para gerar por extenso
         descricao: invoiceData.Descricao ?? '',
         codigoDescricao: invoiceData.codigo_descricao ?? 101,
@@ -292,6 +365,8 @@ export class InvoiceService {
         codigoPreInscricao: invoiceData.codigo_preinscricao ?? null,
         numSequenciaFactura: hashData.numSequenciaFactura,
         tipoDocumentoFacturaId: tipoDocId,
+        invoiceStatus: invoiceStatus,
+        valorIsento: totalExemptionAmount,
         outId: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
       } as any,
     );
@@ -663,6 +738,7 @@ WHERE rn BETWEEN :startRow AND :endRow
           fi.Mes                       AS fi_mes,
           fi.Multa                     AS fi_multa,
           fi.preco                     AS fi_preco,
+          fi.estado                    AS fi_estado,
 
           -- ================= SERVIÇOS / MESES =================
           ts.Descricao                 AS ts_descricao,
@@ -951,6 +1027,7 @@ function groupInvoices(rows: any[]): any[] {
           valor_pago: row.FI_VALOR_PAGO,
           DescricaoServico: row.TS_DESCRICAO,
           MesDesignacao: row.MES_DESIGNACAO,
+          estado: row.FI_ESTADO,
         });
       }
     }

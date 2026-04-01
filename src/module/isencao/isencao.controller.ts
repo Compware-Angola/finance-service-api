@@ -12,6 +12,7 @@ import { CreateIsencaoDto } from './dto/create-isencao.dto';
 import { UpdateIsencaoDto } from './dto/update-isencao.dto';
 import { FilterIsencaoDto } from './dto/filter-isencao.dto';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { CreateIsencaoMesalidadeDto } from './dto/create-isencao-mentalidade.dto';
 
 @ApiTags('isencao')
 @Controller('isencao')
@@ -22,6 +23,11 @@ export class IsencaoController {
   @ApiOperation({ summary: 'Criar nova isenção' })
   create(@Body() createDto: CreateIsencaoDto) {
     return this.isencaoService.create(createDto);
+  }
+  @Post('/mensalidade')
+  @ApiOperation({ summary: 'Criar nova isenção mensalidade' })
+  createMensalidade(@Body() createMensalidadeDto: CreateIsencaoMesalidadeDto) {
+    return this.isencaoService.isentarMensalidade(createMensalidadeDto);
   }
 
   @Get()

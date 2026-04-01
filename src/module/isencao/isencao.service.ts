@@ -9,6 +9,9 @@ import { UpdateIsencaoDto } from './dto/update-isencao.dto';
 import { FilterIsencaoDto } from './dto/filter-isencao.dto';
 import { PagedResult } from '../../common/dto/pagination-result.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { CreateIsencaoMesalidadeDto } from './dto/create-isencao-mentalidade.dto';
+import { InvoiceEnum } from 'src/common/enums/invoice.enum';
+import { InvoiceItemEnum } from 'src/common/enums/invoice-item.enum';
 
 @Injectable()
 export class IsencaoService {
@@ -89,14 +92,201 @@ export class IsencaoService {
       .filter((r) => r.success)
       .map((r) => r.codigoMatricula);
 
-   const erros = results
-  .filter((r) => !r.success)
-  .map((r) => ({
-    codigoMatricula: r.codigoMatricula,
-    error: r.error,
-  }));
+    const erros = results
+      .filter((r) => !r.success)
+      .map((r) => ({
+        codigoMatricula: r.codigoMatricula,
+        error: r.error,
+      }));
     return {
       total: codigosMatriculas.length,
+      sucessos,
+      erros,
+    };
+  }
+
+  async isentarMensalidade(createMensalidadeDto: CreateIsencaoMesalidadeDto) {
+    const { codigoAnoLectivo, codigoMatricula, mesTemps } =
+      createMensalidadeDto;
+
+    const results: any[] = [];
+
+    for (const mes of mesTemps) {
+      const queryRunner = this.dataSource.createQueryRunner();
+
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      try {
+        // 1. Verificar isenção existente
+        const resultado = await queryRunner.query(
+          `
+        select COUNT(*) AS TOTAL
+        from FK2_TB_ISENCOES
+        where MES_TEMP_ID = :mesTempId
+        and CODIGO_MATRICULA = :codigoMatricula
+        and UPPER(ESTADO_ISENSAO) = 'ACTIVO'
+        `,
+          {
+            codigoMatricula,
+            mesTempId: mes.mesTempId,
+          } as any,
+        );
+
+        const row = resultado?.[0];
+
+        if (!row || row.TOTAL > 0) {
+          throw new Error(
+            'Já existe uma isenção ativa com essas mesmas informações',
+          );
+        }
+
+        // 2. Buscar factura
+        const resultadoInforFacura = await queryRunner.query(
+          `
+        select
+          fi.CODIGO,
+          fi.CODIGOFACTURA,
+          fi.TOTAL,
+          f.estado AS ESTADO_FACTURA
+        from FK2_FACTURA_ITEMS fi
+        inner join fk2_factura f on f.codigo = fi.CODIGOFACTURA
+        where fi.MES_TEMP_ID = :mesTempId
+        and f.CODIGOMATRICULA = :codigoMatricula
+        `,
+          {
+            mesTempId: mes.mesTempId,
+            codigoMatricula,
+          } as any,
+        );
+
+        const rowInfoFactura = resultadoInforFacura?.[0];
+
+        if (!rowInfoFactura) {
+          throw new Error('Não foi encontrado nenhuma factura com esse mês');
+        }
+
+        if (rowInfoFactura.ESTADO_FACTURA == InvoiceEnum.PAGO) {
+          throw new Error('A Factura já está paga');
+        }
+
+        // 3. Atualizar item
+        await queryRunner.query(
+          `
+        update fk2_factura_items
+        set estado = :estado
+        where codigo = :codigo
+        `,
+          {
+            estado: InvoiceItemEnum.ISENTO,
+            codigo: rowInfoFactura.CODIGO,
+          } as any,
+        );
+
+        // 4. Verificar pendentes
+        const resultadoContarPendentes = await queryRunner.query(
+          `
+        select count(*) as TOTAL
+        from FK2_FACTURA_ITEMS
+        where ESTADO = :estado
+        and CODIGO <> :codigo
+        and CODIGOFACTURA = :factura
+        `,
+          {
+            estado: InvoiceEnum.PENDENTE,
+            codigo: rowInfoFactura.CODIGO,
+            factura: rowInfoFactura.CODIGOFACTURA,
+          } as any,
+        );
+
+        let facturaStatus = InvoiceEnum.ISENTO;
+
+        if (resultadoContarPendentes?.[0]?.TOTAL > 0) {
+          facturaStatus = InvoiceEnum.PENDENTE;
+        }
+
+        // 5. Atualizar factura
+        await queryRunner.query(
+          `
+        update fk2_factura
+        set valorisento = :valor,
+            estado = :estado
+        where codigo = :codigo
+        `,
+          {
+            valor: rowInfoFactura.TOTAL,
+            estado: facturaStatus,
+            codigo: rowInfoFactura.CODIGOFACTURA,
+          } as any,
+        );
+
+        // 6. Inserir isenção
+        await queryRunner.query(
+          `
+        INSERT INTO FK2_TB_ISENCOES (
+          CODIGO_MATRICULA,
+          CODIGO_SERVICO,
+          CODIGO_UTILIZADOR,
+          DATA_ISENCAO,
+          CANAL,
+          OBS,
+          ESTADO_ISENSAO,
+          CODIGO_ANOLECTIVO,
+          CODIGO_PREINSCRICAO,
+          CREATED_AT,
+          MES_TEMP_ID
+        ) VALUES (
+          :codigoMatricula,
+          :codigoServico,
+          :codigoUtilizador,
+          sysdate,
+          :canal,
+          :obs,
+          'ACTIVO',
+          :codigoAnoLectivo,
+          :codigoPreInscricao,
+          CURRENT_DATE,
+          :mesTempId
+        )
+        `,
+          {
+            codigoMatricula,
+            codigoServico: mes.servicoId,
+            codigoUtilizador: null,
+            canal: createMensalidadeDto.canal ?? null,
+            obs: createMensalidadeDto.obs ?? null,
+            codigoAnoLectivo,
+            codigoPreInscricao: createMensalidadeDto.obs ?? null,
+            mesTempId: mes.mesTempId,
+          } as any,
+        );
+
+        // commit desse item
+        await queryRunner.commitTransaction();
+
+        results.push({ mesTemp: mes.mesTempId, success: true });
+      } catch (e) {
+        // rollback só desse item
+        await queryRunner.rollbackTransaction();
+        results.push({
+          mesTemp: mes.mesTempId,
+          success: false,
+          error: e.message,
+        });
+      } finally {
+        await queryRunner.release();
+      }
+    }
+    const sucessos = results.filter((r) => r.success).map((r) => r.mesTemp);
+    const erros = results
+      .filter((r) => !r.success)
+      .map((r) => ({
+        mesTempId: r.mesTemp,
+        error: r.error,
+      }));
+
+    return {
+      total: mesTemps.length,
       sucessos,
       erros,
     };

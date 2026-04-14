@@ -22,6 +22,7 @@ import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
 import { RequiredPermissions } from 'src/common/pipes/permissions.decorator';
 import { PermissionTypeDetails } from 'src/common/enums/permission.type';
 import { ListPaymentDTO } from './dto/list-payment.dto';
+import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
 
 @ApiTags('payment')
 @Controller('payment')
@@ -104,5 +105,14 @@ export class PaymentController {
     @Param('facturaCode', ParseIntPipe) facturaCode: number,
   ) {
     return this.paymentService.studentPaymentsDetails(facturaCode);
+  }
+  @Get('monthly')
+  @ApiOperation({ summary: 'Lista de pagamentos por mensalidades' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de pagamentos por mensalidades.',
+  })
+  async findPaymentMonthly(@Query() query: FindPaymentMonthlyDTO) {
+    return this.paymentService.findPaymentMonthly(query);
   }
 }

@@ -13,10 +13,11 @@ import { ApiProperty } from '@nestjs/swagger';
 export class UpdateIsencaoDto extends PartialType(
   OmitType(CreateIsencaoDto, ['codigoMatriculas']),
 ) {
-  @ApiProperty({ description: 'Código da matrícula' })
-  @IsNotEmpty()
+  @ApiProperty({ description: 'Código da matrícula', required: false })
+  @IsOptional()
   @IsNumber()
-  codigoMatricula: number;
+  codigoMatricula?: number;
+
   @ApiProperty({
     description: 'ACTIVO ou INACTIVO',
     required: false,
@@ -26,8 +27,12 @@ export class UpdateIsencaoDto extends PartialType(
   @IsIn(['Activo', 'Inactivo'])
   estadoIsencao?: string;
 
-  @ApiProperty({ description: 'Data da isenção', example: '2024-05-20' })
-  @IsNotEmpty()
+  @ApiProperty({
+    description: 'Data da isenção',
+    example: '2024-05-20',
+    required: false,
+  })
+  @IsOptional()
   @IsDateString()
-  dataIsencao: string;
+  dataIsencao?: string;
 }

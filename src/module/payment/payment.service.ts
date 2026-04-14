@@ -17,6 +17,7 @@ import { UpdateAddDiscountDto } from '../discount/dto/update-add-discount.dto';
 import { Payment2 } from './entities/payment2.entity';
 import { ListPaymentDTO } from './dto/list-payment.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
@@ -172,7 +173,7 @@ export class PaymentService {
         SELECT
             *
         FROM FK2_NEGOCIACAO_DIVIDAS n
-        
+
         WHERE n.CODIGO_FATURA = :codigoFactura
     `,
       { codigoFactura: dto.codigoFactura } as any,
@@ -264,7 +265,6 @@ export class PaymentService {
       );
       // 3 Verificar se a fatura é de negociação
 
-
       await queryRunner.query(
         `
             UPDATE FK2_FACTURA
@@ -282,46 +282,49 @@ export class PaymentService {
         SIGLAS_ESPECIAIS1.includes(item.SIGLAPRODUTO?.toLowerCase()),
       );
       console.log('Total itens:', itens.length);
-      console.log('Siglas encontradas:', itens.map((i: any) => i.SIGLAPRODUTO));
-      console.log(precisaConfirmacao, "ENTREI");
+      console.log(
+        'Siglas encontradas:',
+        itens.map((i: any) => i.SIGLAPRODUTO),
+      );
+      console.log(precisaConfirmacao, 'ENTREI');
 
-if (precisaConfirmacao) {
-  // Atualizar confirmação
-  await queryRunner.query(
-    `UPDATE FK2_TB_CONFIRMACOES
+      if (precisaConfirmacao) {
+        // Atualizar confirmação
+        await queryRunner.query(
+          `UPDATE FK2_TB_CONFIRMACOES
      SET estado = :estado
      WHERE codigo_matricula = :codMatricula
      AND codigo_ano_lectivo = :anoLectivo`,
-    {
-      estado: 1,
-      anoLectivo: invoice.anoLectivo,
-      codMatricula: invoice.CodigoMatricula,
-    } as any,
-  );
+          {
+            estado: 1,
+            anoLectivo: invoice.anoLectivo,
+            codMatricula: invoice.CodigoMatricula,
+          } as any,
+        );
 
-  // Atualizar grade curricular do aluno
-  await queryRunner.query(
-    `UPDATE FK2_TB_GRADE_CURRICULAR_ALUNO
+        // Atualizar grade curricular do aluno
+        await queryRunner.query(
+          `UPDATE FK2_TB_GRADE_CURRICULAR_ALUNO
      SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
      WHERE codigo_matricula = :codMatricula
      AND codigo_ano_lectivo = :anoLectivo`,
-    {
-      estado: 2,
-      codMatricula: invoice.CodigoMatricula,
-      anoLectivo: invoice.anoLectivo,
-    } as any,
-  );
+          {
+            estado: 2,
+            codMatricula: invoice.CodigoMatricula,
+            anoLectivo: invoice.anoLectivo,
+          } as any,
+        );
 
-  // Atualizar matrícula
-  await queryRunner.query(
-    `UPDATE FK2_TB_MATRICULAS
+        // Atualizar matrícula
+        await queryRunner.query(
+          `UPDATE FK2_TB_MATRICULAS
      SET ESTADO_MATRICULA = 'activo'
      WHERE codigo = :codMatricula`,
-    {
-      codMatricula: invoice.CodigoMatricula,
-    } as any,
-  );
-}
+          {
+            codMatricula: invoice.CodigoMatricula,
+          } as any,
+        );
+      }
       const SIGLAS_ESPECIAIS2 = ['SEMESTRAL']; // para anual, se tiver algum desses itens, precisa de confirmação para activar a matrícula e grade curricular do aluno
       const precisaConfirmacaoSemestral = itens.some((item: any) =>
         SIGLAS_ESPECIAIS2.includes(item.SiglaProduto),
@@ -392,7 +395,6 @@ if (precisaConfirmacao) {
         const payment = this.paymentRepository.create(finalPayload);
         await queryRunner.manager.save(payment);
       } else {
-
         const valorDepositadoAtualizado =
           existingPayment.valorDepositado + (dto.valorDepositado || 0);
         const updatedPayment = {
@@ -406,7 +408,6 @@ if (precisaConfirmacao) {
           updatedAt: new Date(),
         };
 
-
         await queryRunner.manager.update(
           Payment2,
           { codigo: existingPayment.codigo },
@@ -414,14 +415,14 @@ if (precisaConfirmacao) {
         );
       }
       if (negotation && negotation.length > 0) {
-
-
-
-        const valoRestante = Math.max(0, negotation[0].VALOR_DIVIDA - valorDepositado);
+        const valoRestante = Math.max(
+          0,
+          negotation[0].VALOR_DIVIDA - valorDepositado,
+        );
         await queryRunner.query(
           `
             UPDATE FK2_NEGOCIACAO_DIVIDAS
-           
+
             SET VALORRESTANTE =:valoRestante
             WHERE CODIGO_FATURA  =:codigo
         `,
@@ -702,6 +703,182 @@ if (precisaConfirmacao) {
 
     const [result, countResult] = await Promise.all([
       this.dataSource.query(sql, params),
+      this.dataSource.query(sqlCount, params),
+    ]);
+
+    const total = Number(countResult[0].TOTAL);
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: await toLowerCaseKeys(result),
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+  async findPaymentMonthly(filters: FindPaymentMonthlyDTO) {
+    const {
+      codigoAnoLectivo,
+      codigoCurso,
+      codigoPagamento,
+      codigoFaculdade,
+      codigoMatricula,
+      codigoPeriodo,
+      nome,
+      mesId,
+      limit = 10,
+      page = 1,
+    } = filters;
+
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = [];
+    const params: any = {};
+
+    // obrigatório
+    conditions.push(`fac.ESTADO = 1`);
+
+    // filtros dinâmicos
+    if (codigoPagamento) {
+      conditions.push(`pag.CODIGO = :codigoPagamento`);
+      params.codigoPagamento = codigoPagamento;
+    }
+
+    if (codigoCurso) {
+      conditions.push(`cur.CODIGO = :codigoCurso`);
+      params.codigoCurso = codigoCurso;
+    }
+
+    if (codigoAnoLectivo) {
+      conditions.push(`al.CODIGO = :codigoAnoLectivo`);
+      params.codigoAnoLectivo = codigoAnoLectivo;
+    }
+
+    if (codigoFaculdade) {
+      conditions.push(`fab.CODIGO = :codigoFaculdade`);
+      params.codigoFaculdade = codigoFaculdade;
+    }
+
+    if (codigoMatricula) {
+      conditions.push(`tm.CODIGO = :codigoMatricula`);
+      params.codigoMatricula = codigoMatricula;
+    }
+
+    if (codigoPeriodo) {
+      conditions.push(`per.CODIGO = :codigoPeriodo`);
+      params.codigoPeriodo = codigoPeriodo;
+    }
+
+    if (mesId) {
+      conditions.push(`mes.ID = :mesId`);
+      params.mesId = mesId;
+    }
+
+    if (nome) {
+      conditions.push(`
+      fn_remove_acentos(UPPER(pre.NOME_COMPLETO))
+      LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%'
+    `);
+      params.nome = nome;
+    }
+
+    const whereClause = conditions.join(' AND ');
+
+    const sql = `
+    SELECT
+        fac.CODIGO          AS codigoFactura,
+        pag.CODIGO          AS codigoPagamento,
+        tm.CODIGO           AS codigoMatricula,
+
+        pre.NOME_COMPLETO   AS nomeCompleto,
+        fab.DESIGNACAO      AS faculdade,
+        cur.DESIGNACAO      AS curso,
+        fai.PRECO           AS valorMensalidade,
+        al.DESIGNACAO       AS anoLectivo,
+        mes.DESIGNACAO      AS mes,
+        per.DESIGNACAO      AS periodo,
+        fn_tipo_estudante(vw.codigo_bolseiro, vw.renuncia, vw.codigo_tipo_bolsa) as tipo
+
+    FROM FK2_TB_MATRICULAS tm
+    INNER JOIN FK2_TB_ADMISSAO ad
+        ON ad.CODIGO = tm.CODIGO_ALUNO
+    INNER JOIN FK2_TB_PREINSCRICAO pre
+        ON pre.CODIGO = ad.PRE_INCRICAO
+    INNER JOIN FK2_TB_CURSOS cur
+        ON cur.CODIGO = tm.CODIGO_CURSO
+    INNER JOIN FK2_TB_FACULDADE fab
+        ON fab.CODIGO = cur.FACULDADE_ID
+    INNER JOIN FK2_FACTURA fac
+        ON fac.CODIGOMATRICULA = tm.CODIGO
+    INNER JOIN FK2_FACTURA_ITEMS fai
+        ON fai.CODIGOFACTURA = fac.CODIGO
+    INNER JOIN FK2_TB_PAGAMENTOS pag
+        ON pag.CODIGO_FACTURA = fac.CODIGO
+    INNER JOIN FK2_MES_TEMP mes
+        ON mes.ID = fai.MES_TEMP_ID
+    INNER JOIN FK2_TB_ANO_LECTIVO al
+        ON al.CODIGO = fac.ANO_LECTIVO
+    INNER JOIN FK2_TB_PERIODOS per
+        ON per.CODIGO = pre.CODIGO_TURNO
+
+    --- INICIO BOLSEIROS
+    LEFT JOIN FK2_TIPO_ESTUDANTE_BOLSEIRO_VW vw
+         ON  vw.codigo_matricula = tm.codigo
+         and vw.codigo_ano_lectivo = al.codigo
+         and vw.semestre = mes.semestre
+         and vw.status_ = 0
+
+    --- FIM BOLSEIROS
+    WHERE ${whereClause}
+
+    ORDER BY pag.CODIGO DESC
+    OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+  `;
+
+    const sqlParams = {
+      ...params,
+      offset,
+      limit,
+    };
+
+    const sqlCount = `
+    SELECT COUNT(1) AS TOTAL
+    FROM FK2_TB_MATRICULAS tm
+    INNER JOIN FK2_TB_ADMISSAO ad
+        ON ad.CODIGO = tm.CODIGO_ALUNO
+    INNER JOIN FK2_TB_PREINSCRICAO pre
+        ON pre.CODIGO = ad.PRE_INCRICAO
+    INNER JOIN FK2_TB_CURSOS cur
+        ON cur.CODIGO = tm.CODIGO_CURSO
+    INNER JOIN FK2_TB_FACULDADE fab
+        ON fab.CODIGO = cur.FACULDADE_ID
+    INNER JOIN FK2_FACTURA fac
+        ON fac.CODIGOMATRICULA = tm.CODIGO
+    INNER JOIN FK2_FACTURA_ITEMS fai
+        ON fai.CODIGOFACTURA = fac.CODIGO
+    INNER JOIN FK2_TB_PAGAMENTOS pag
+        ON pag.CODIGO_FACTURA = fac.CODIGO
+    INNER JOIN FK2_MES_TEMP mes
+        ON mes.ID = fai.MES_TEMP_ID
+    INNER JOIN FK2_TB_ANO_LECTIVO al
+        ON al.CODIGO = fac.ANO_LECTIVO
+    INNER JOIN FK2_TB_PERIODOS per
+        ON per.CODIGO = pre.CODIGO_TURNO
+
+    LEFT JOIN fk2_tb_bolseiros fb
+        ON fb.CODIGO_MATRICULA  = tm.CODIGO
+        AND fb.CODIGO_ANOLECTIVO = al.CODIGO
+        AND fb.SEMESTRE          = mes.SEMESTRE
+        AND fb.STATUS_           = 0
+    LEFT JOIN FK2_TB_INSTITUICAO i
+        ON i.CODIGO = fb.CODIGO_INSTITUICAO
+
+    WHERE ${whereClause}
+  `;
+
+    const [result, countResult] = await Promise.all([
+      this.dataSource.query(sql, sqlParams),
       this.dataSource.query(sqlCount, params),
     ]);
 

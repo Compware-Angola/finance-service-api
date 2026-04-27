@@ -6,6 +6,8 @@ import {
   Query,
   Patch,
   Param,
+  Delete,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { DiscountService } from './discount.service';
 import { FilterDiscountDto } from './dto/filter-discount.dto';
@@ -70,5 +72,13 @@ export class DiscountController {
     @Body() updateDto: UpdateAddDiscountDto,
   ) {
     return this.discountService.updateAddDiscount(id, updateDto);
+  }
+
+  @Delete('add/:id')
+  @ApiOperation({
+    summary: 'Remove um desconto atribuído a um aluno',
+  })
+  removeAddDiscount(@Param('id', ParseIntPipe) id: number) {
+    return this.discountService.removeAddDiscount(id);
   }
 }

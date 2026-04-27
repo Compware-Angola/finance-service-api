@@ -146,7 +146,6 @@ export class DiscountService {
 
     const whereConditions: string[] = [];
     const params: any = {};
-
     if (codigo) {
       whereConditions.push('a.ID = :codigo');
       params.codigo = codigo;
@@ -279,7 +278,7 @@ export class DiscountService {
 
     const whereConditions: string[] = [];
     const params: any = {};
-
+    whereConditions.push('a.DELETED_AT IS NULL');
     const TipoPagamento = {
       PAGAMENTO_GLOBAL: {
         valor: null,
@@ -426,4 +425,31 @@ export class DiscountService {
       totalPages,
     };
   }
+
+  async removeAddDiscount(codigo: number) {
+  const checkSql = `
+    SELECT 1
+    FROM FK2_TB_DESCONTOS_ALUNOO
+    WHERE CODIGO = :codigo
+      AND DELETED_AT IS NULL
+    FETCH FIRST 1 ROWS ONLY
+  `;
+
+  const exists = await this.dataSource.query(checkSql, [codigo]);
+
+  if (exists.length === 0) {
+    throw new BadRequestException('Desconto não existe.');
+  }
+
+  const sql = `
+    UPDATE FK2_TB_DESCONTOS_ALUNOO
+    SET DELETED_AT = SYSDATE
+    WHERE CODIGO = :codigo
+      AND DELETED_AT IS NULL
+  `;
+
+  await this.dataSource.query(sql, [codigo]);
+}
+
+
 }

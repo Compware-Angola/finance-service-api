@@ -258,35 +258,132 @@ export class MonthlyFeesDiscountService {
     if (descontoNormal.temDesconto == true) return descontoNormal.desconto;
     return 0;
   }
+
+  private async existIsencaoMulta(codigoMatricula: number, mesTempId: number) {
+    const resultado = await this.dataSource.query(
+      `
+        select COUNT(*) AS TOTAL
+        from FK2_TB_ISENCOE_MULTA
+        where MES_TEMP_ID = :mesTempId
+        and CODIGO_MATRICULA = :codigoMatricula
+        and UPPER(ESTADO_ISENSAO) = 'ACTIVO'
+        `,
+      {
+        codigoMatricula,
+        mesTempId: mesTempId,
+      } as any,
+    );
+    const row = resultado?.[0];
+
+    if (row && row.TOTAL > 0) {
+      return true;
+    }
+    return false;
+  }
+  private async calcularPercentagemMulta(
+    codigoMatricula: number,
+    mesTemp: MesTempResponse,
+  ) {
+    const existMulta = await this.existIsencaoMulta(
+      codigoMatricula,
+      mesTemp.id,
+    );
+    if (existMulta) return 0;
+    const percentagemMulta = obterMulta(
+      mesTemp.data_limite,
+      mesTemp.data_final,
+    );
+    return percentagemMulta;
+  }
+  private async existIsencaoMensalidade(
+    codigoMatricula: number,
+    mesTempId: number,
+  ) {
+    const resultado = await this.dataSource.query(
+      `
+        select COUNT(*) AS TOTAL
+        from FK2_TB_ISENCOES
+        where MES_TEMP_ID = :mesTempId
+        and CODIGO_MATRICULA = :codigoMatricula
+        and UPPER(ESTADO_ISENSAO) = 'ACTIVO'
+        `,
+      {
+        codigoMatricula,
+        mesTempId: mesTempId,
+      } as any,
+    );
+
+    const row = resultado?.[0];
+
+    if (row && row.TOTAL > 0) {
+      return true;
+    }
+    return false;
+  }
+  private async obterStatusPagamento(
+    isBolseiroIntegral: boolean,
+    codigoMatricula: number,
+    mesTempId: number,
+  ) {
+    if (isBolseiroIntegral) return 1;
+    const existeIsencaoMensalidade = await this.existIsencaoMensalidade(
+      codigoMatricula,
+      mesTempId,
+    );
+    if (existeIsencaoMensalidade) return 4;
+    return 0;
+  }
+  private async calcularValorMulta(
+    codigoMatricula: number,
+    mesTemp: MesTempResponse,
+    percentagemDesconto: number,
+    mensalidade: number,
+  ) {
+    const percentagemMulta = await this.calcularPercentagemMulta(
+      codigoMatricula,
+      mesTemp,
+    );
+    const multa = percentagemDesconto == 0 ? 0 : mensalidade * percentagemMulta;
+    return multa;
+  }
+
   private async calcularValorMensalidade({
     anoLectivo,
     codigoMatricula,
     mesTemp,
   }: CalcularValorMensalidadeParams) {
-    const percentagemMulta = obterMulta(
-      mesTemp.data_limite,
-      mesTemp.data_final,
-    );
     const mensalidade = await this.obterMensalidade(
       codigoMatricula,
       anoLectivo,
     );
-
-    const PercentagemDesconto = await this.calcularDesconto({
+    const percentagemDesconto = await this.calcularDesconto({
       anoLectivo,
       codigoMatricula,
       mesTemp,
     });
-    const eBolseiro = PercentagemDesconto == 1 ? true : false;
-    const multa = eBolseiro ? 0 : mensalidade * percentagemMulta;
-    const desconto = mensalidade * PercentagemDesconto;
-    console.log('multa: ', multa);
-    console.log('desconto: ', desconto);
-    console.log('mensalidade: ', mensalidade);
+    const bolseiroDesconto = await this.obterBolseiro({
+      anoLectivo,
+      codigoMatricula,
+      semestre: mesTemp.semestre,
+    });
+    const isBolseiroIntegral = bolseiroDesconto.desconto == 1;
 
-    const novaMensalidade = mensalidade + multa - desconto;
-    const statusPagamento = eBolseiro ? 1 : 0;
-    const valorPago = eBolseiro ? desconto : 0;
+    const statusPagamento = await this.obterStatusPagamento(
+      isBolseiroIntegral,
+      codigoMatricula,
+      mesTemp.id,
+    );
+    const desconto = mensalidade * percentagemDesconto;
+    const mensalidadeDesconto = mensalidade - desconto;
+
+    const multa = await this.calcularValorMulta(
+      codigoMatricula,
+      mesTemp,
+      percentagemDesconto,
+      mensalidadeDesconto,
+    );
+
+    const mensalidadeFinal = mensalidadeDesconto + multa;
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,
@@ -302,7 +399,7 @@ export class MonthlyFeesDiscountService {
       ano_lectivo_fatura: anoLectivo,
       estado_fatura: '0',
       reference: '',
-      ValorAPagar: novaMensalidade,
+      ValorAPagar: mensalidadeFinal,
       valorEntregue: 0,
       data_vencimento: null,
       codigo_factura: 0,
@@ -310,10 +407,10 @@ export class MonthlyFeesDiscountService {
       desconto: desconto,
       semestre: mesTemp.semestre,
       multa: multa,
-      total_item: novaMensalidade,
-      valor_pago: valorPago,
+      total_item: mensalidadeFinal,
+      valor_pago: 0,
       mensalidade: mensalidade,
-      total: novaMensalidade,
+      total: mensalidadeFinal,
       total_preco: mensalidade,
       status_pagamento: statusPagamento,
     };
@@ -340,9 +437,13 @@ export class MonthlyFeesDiscountService {
      from fk2_factura ft
      inner JOIN fk2_factura_items it
      on ft.codigo = it.codigofactura
+     inner join fk2_mes_temp mt
+      on mt.id = it.mes_temp_id
      where ft.codigomatricula = :codigo_matricula
      and it.mes_temp_id is not null
-     and ft.ano_lectivo = :codAnoLectivo)
+     and mt.ano_lectivo = :codAnoLectivo
+     and ft.estado != 3
+     )
     `;
     const resultado = await this.dataSource.query(sqlMesTemp, {
       codAnoLectivo,

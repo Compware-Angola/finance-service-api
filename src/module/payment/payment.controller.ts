@@ -30,7 +30,7 @@ export class PaymentController {
   constructor(
     private readonly paymentService: PaymentService,
     private httpService: HttpService,
-  ) {}
+  ) { }
   @Post('create')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.LIQUIDAR_NOTA_PAGAMENTO.sigla)
@@ -49,7 +49,7 @@ export class PaymentController {
     );
     AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} criou um pagamento com código de fatura ${createPaymentDto.codigoFactura}`,
-      fkUtilizadorResponsavel: user.sub,
+      fkUtilizadorResponsavel: user?.sub,
       fkOperacaoLog: 7,
       ip: ip,
     });

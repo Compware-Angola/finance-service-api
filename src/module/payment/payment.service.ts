@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { Brackets, DataSource, QueryRunner, Repository } from 'typeorm';
@@ -20,6 +21,7 @@ import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
 import { AtribuirProvaHelper } from 'src/common/helpers/atribuir-prova.helper';
 import { HttpService } from '@nestjs/axios';
+import { AxiosError } from 'axios';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
@@ -242,19 +244,42 @@ export class PaymentService {
       } as any,
     );
   }
+
   private async handleTda(
-    queryRunner: QueryRunner,
     invoice: InvoiceContext,
-  ): Promise<void> {
-    let result: any;
-    if (invoice.codigoPreinscricao) {
-      result = await AtribuirProvaHelper.atribuirProvaSync(this.httpService, {
-        codigoCandidato: invoice.codigoPreinscricao,
-      });
-      console.log("Result: ", result)
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      if (invoice.codigoPreinscricao) {
+        await AtribuirProvaHelper.atribuirProvaSync(
+          this.httpService,
+          {
+            codigoCandidato: invoice.codigoPreinscricao,
+          },
+        );
+
+        return { success: true };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Erro ao atribuir prova:', error);
+
+      if (error instanceof AxiosError) {
+        const message =
+          error.response?.data?.message ||
+          'Serviço de exames indisponível';
+
+        return {
+          success: false,
+          message,
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Erro inesperado ao atribuir prova',
+      };
     }
-
-
   }
 
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
@@ -366,55 +391,64 @@ export class PaymentService {
         await this.handleSemestral(queryRunner, invoice);
       }
       //5 Verificar se a sigla é TdEdA
-      if (this.hasMatchingSigla(itens, ['TdEdA'], { caseSensitive: true })) {
+      let tdaResult: { success: boolean; message?: string } | null = null;
 
-        await this.handleTda(queryRunner, invoice);
+      if (this.hasMatchingSigla(itens, ['TdEdA'], { caseSensitive: true })) {
+        tdaResult = await this.handleTda(invoice);
       }
 
-      /*
-          // 6. Criar ou atualizar pagamento
-          if (!existingPayment) {
-            const payment = this.paymentRepository.create(finalPayload);
-            await queryRunner.manager.save(payment);
-          } else {
-            const valorDepositadoAtualizado =
-              existingPayment.valorDepositado + (dto.valorDepositado || 0);
-    
-            await queryRunner.manager.update(
-              Payment2,
-              { codigo: existingPayment.codigo },
-              {
-                statusPagamento: PaymentStatus.CONCLUIDO,
-                nOperacaoBancaria2: dto.nOperacaoBancaria,
-                valorDepositado: valorDepositadoAtualizado,
-                formaPagamento: dto.formaPagamento,
-                fkUtilizador: user?.sub,
-                utilizador: user?.sub,
-                updatedAt: new Date(),
-              },
-            );
-          }
-    
-          // 6. Atualizar negociação de dívidas se existir
-          if (negotation && negotation.length > 0) {
-            const valoRestante = Math.max(0, negotation[0].VALOR_DIVIDA - valorDepositado);
-            await queryRunner.query(
-              `UPDATE FK2_NEGOCIACAO_DIVIDAS
+      // 6. Criar ou atualizar pagamento
+      if (!existingPayment) {
+        const payment = this.paymentRepository.create(finalPayload);
+        await queryRunner.manager.save(payment);
+      } else {
+        const valorDepositadoAtualizado =
+          existingPayment.valorDepositado + (dto.valorDepositado || 0);
+
+        await queryRunner.manager.update(
+          Payment2,
+          { codigo: existingPayment.codigo },
+          {
+            statusPagamento: PaymentStatus.CONCLUIDO,
+            nOperacaoBancaria2: dto.nOperacaoBancaria,
+            valorDepositado: valorDepositadoAtualizado,
+            formaPagamento: dto.formaPagamento,
+            fkUtilizador: user?.sub,
+            utilizador: user?.sub,
+            updatedAt: new Date(),
+          },
+        );
+      }
+
+      // 6. Atualizar negociação de dívidas se existir
+      if (negotation && negotation.length > 0) {
+        const valoRestante = Math.max(0, negotation[0].VALOR_DIVIDA - valorDepositado);
+        await queryRunner.query(
+          `UPDATE FK2_NEGOCIACAO_DIVIDAS
              SET VALORRESTANTE = :valoRestante
              WHERE CODIGO_FATURA = :codigo`,
-              { valoRestante, codigo: dto.codigoFactura } as any,
-            );
+          { valoRestante, codigo: dto.codigoFactura } as any,
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+      return {
+        message: existingPayment
+          ? 'Pagamento atualizado com sucesso'
+          : 'Pagamento criado com sucesso',
+
+        tda: tdaResult && !tdaResult.success
+          ? {
+            error: true,
+            message: tdaResult.message,
           }
-    
-          await queryRunner.commitTransaction();
-    
-          return {
-            message: existingPayment
-              ? 'Pagamento atualizado com sucesso'
-              : 'Pagamento criado com sucesso',
-          };
-    
-          */
+          : {
+            error: false,
+          },
+      };
+
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;

@@ -1,9 +1,10 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { Brackets, DataSource, Repository } from 'typeorm';
+import { Brackets, DataSource, QueryRunner, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
@@ -18,12 +19,20 @@ import { Payment2 } from './entities/payment2.entity';
 import { ListPaymentDTO } from './dto/list-payment.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
+import { AtribuirProvaHelper } from 'src/common/helpers/atribuir-prova.helper';
+import { HttpService } from '@nestjs/axios';
+import { AxiosError } from 'axios';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
   PENDENTE = 'pendente',
 }
-
+type InvoiceContext = {
+  anoLectivo: number;
+  CodigoMatricula: number | null;
+  codigoPreinscricao: number | null;
+};
+type FindAlunoBy = 'matricula' | 'preinscricao';
 @Injectable()
 export class PaymentService {
   private anoAtualPrincipal: number;
@@ -33,6 +42,7 @@ export class PaymentService {
     private readonly paymentRepository: Repository<Payment2>,
     private readonly invoiceService: InvoiceService,
     private dataSource: DataSource,
+    private httpService: HttpService
   ) {
     this.initAnoAtual();
   }
@@ -144,9 +154,138 @@ export class PaymentService {
       totalPages,
     };
   }
+  private hasMatchingSigla(
+    itens: any[],
+    siglas: string[],
+    options?: { caseSensitive?: boolean; field?: string }
+  ): boolean {
+    const field = options?.field ?? 'SiglaProduto';
+    const caseSensitive = options?.caseSensitive ?? false;
+
+    return itens.some((item) => {
+      const siglaItem: string = item[field] ?? item.SIGLAPRODUTO ?? '';
+      return siglas.some((s) =>
+        caseSensitive
+          ? siglaItem === s
+          : siglaItem.toLowerCase() === s.toLowerCase(),
+      );
+    });
+  }
+
+  private async handleAnual(
+    queryRunner: QueryRunner,
+    invoice: InvoiceContext,
+  ): Promise<void> {
+    await queryRunner.query(
+      `UPDATE FK2_TB_CONFIRMACOES
+     SET estado = :estado
+     WHERE codigo_matricula = :codMatricula
+     AND codigo_ano_lectivo = :anoLectivo`,
+      { estado: 1, anoLectivo: invoice.anoLectivo, codMatricula: invoice.CodigoMatricula } as any,
+    );
+
+    await queryRunner.query(
+      `UPDATE FK2_TB_GRADE_CURRICULAR_ALUNO
+     SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
+     WHERE codigo_matricula = :codMatricula
+     AND codigo_ano_lectivo = :anoLectivo`,
+      { estado: 2, codMatricula: invoice.CodigoMatricula, anoLectivo: invoice.anoLectivo } as any,
+    );
+
+    await queryRunner.query(
+      `UPDATE FK2_TB_MATRICULAS
+     SET ESTADO_MATRICULA = 'activo'
+     WHERE codigo = :codMatricula`,
+      { codMatricula: invoice.CodigoMatricula } as any,
+    );
+  }
+  private async handleSemestral(
+    queryRunner: QueryRunner,
+    invoice: InvoiceContext,
+  ): Promise<void> {
+    await queryRunner.query(
+      `UPDATE FK2_TB_CONFIRMACOES
+     SET estado = :estado
+     WHERE codigo_matricula = :codMatricula
+     AND codigo_ano_lectivo = :anoLectivo`,
+      { estado: 1, anoLectivo: invoice.anoLectivo, codMatricula: invoice.CodigoMatricula } as any,
+    );
+
+    await queryRunner.query(
+      `UPDATE FK2_TB_MATRICULAS
+     SET ESTADO_MATRICULA = 'activo'
+     WHERE codigo = :codMatricula`,
+      { codMatricula: invoice.CodigoMatricula } as any,
+    );
+
+    const [confirmacaoAtual] = await queryRunner.query(
+      `
+      SELECT SEMESTRE, CODIGO
+      FROM FK2_TB_CONFIRMACOES
+      WHERE CODIGO_MATRICULA = :codMatricula
+      AND CODIGO_ANO_LECTIVO = :anoLectivo
+      ORDER BY CODIGO DESC
+      FETCH FIRST 1 ROWS ONLY
+    `,
+      { codMatricula: invoice.CodigoMatricula, anoLectivo: invoice.anoLectivo } as any,
+    );
+
+    await queryRunner.query(
+      `UPDATE FK2_TB_GRADE_CURRICULAR_ALUNO
+     SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
+     WHERE codigo_matricula = :codMatricula
+     AND codigo_ano_lectivo = :anoLectivo
+     AND CODIGO_CONFIRMACAO = :confirmacaoAtual`,
+      {
+        estado: 2,
+        codMatricula: invoice.CodigoMatricula,
+        anoLectivo: invoice.anoLectivo,
+        confirmacaoAtual: confirmacaoAtual.CODIGO,
+      } as any,
+    );
+  }
+
+  private async handleTda(
+    invoice: InvoiceContext,
+  ): Promise<{ success: boolean; message?: string }> {
+    try {
+      if (invoice.codigoPreinscricao) {
+        await AtribuirProvaHelper.atribuirProvaSync(
+          this.httpService,
+          {
+            codigoCandidato: invoice.codigoPreinscricao,
+          },
+        );
+
+        return { success: true };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Erro ao atribuir prova:', error);
+
+      if (error instanceof AxiosError) {
+        const message =
+          error.response?.data?.message ||
+          'Serviço de exames indisponível';
+
+        return {
+          success: false,
+          message,
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Erro inesperado ao atribuir prova',
+      };
+    }
+  }
+
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
     const anoCorrente = this.anoAtualPrincipal;
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
+
     if (!nOperacaoBancaria) {
       throw new BadRequestException('Precisa de uma operação bancária');
     }
@@ -168,52 +307,42 @@ export class PaymentService {
     if (!invoice) {
       throw new NotFoundException(`Fatura ${dto.codigoFactura} não encontrada`);
     }
-    const negotation = await this.dataSource.query(
-      `
-        SELECT
-            *
-        FROM FK2_NEGOCIACAO_DIVIDAS n
 
-        WHERE n.CODIGO_FATURA = :codigoFactura
-    `,
+    const negotation = await this.dataSource.query(
+      `SELECT * FROM FK2_NEGOCIACAO_DIVIDAS n WHERE n.CODIGO_FATURA = :codigoFactura`,
       { codigoFactura: dto.codigoFactura } as any,
     );
 
-    // vrificar se já existe um pagamento associado a esta fatura
-    const existingPayment = await this.findPaymentByCodigoFactura(
-      dto.codigoFactura,
-    );
-    const valorDepositado =
-      dto.valorDepositado || existingPayment?.valorDepositado || 0;
-    // 1. Atualizar estado de todos os itens da factura
+    const existingPayment = await this.findPaymentByCodigoFactura(dto.codigoFactura);
+    const valorDepositado = dto.valorDepositado || existingPayment?.valorDepositado || 0;
     const estados = invoice.TotalPreco > valorDepositado ? 2 : 1;
-    // Buscar os itens (pode ser fora da transação, pois é só leitura)
+
     const itens = await this.dataSource.query(
       `
-        SELECT
-            tp.Codigo AS CodigoProduto,
-            tp.Descricao AS DescricaoProduto,
-            tp.Preco AS PrecoProduto,
-            tp.TipoServico AS TipoServicoProduto,
-            tp.sigla AS SiglaProduto,
-            fi.*
-        FROM FK2_TB_TIPO_SERVICOS tp
-        INNER JOIN FK2_FACTURA_ITEMS fi ON fi.CodigoProduto = tp.Codigo
-        WHERE fi.CodigoFactura = :codigoFactura
+      SELECT
+        tp.Codigo AS CodigoProduto,
+        tp.Descricao AS DescricaoProduto,
+        tp.Preco AS PrecoProduto,
+        tp.TipoServico AS TipoServicoProduto,
+        tp.sigla AS SiglaProduto,
+        fi.*
+      FROM FK2_TB_TIPO_SERVICOS tp
+      INNER JOIN FK2_FACTURA_ITEMS fi ON fi.CodigoProduto = tp.Codigo
+      WHERE fi.CodigoFactura = :codigoFactura
     `,
       { codigoFactura: dto.codigoFactura } as any,
     );
+    let student: any;
+    if (invoice.CodigoMatricula) {
+      student = await this.findAluno(invoice.CodigoMatricula, 'matricula');
+    }
+    if (invoice.codigoPreinscricao) {
+      student = await this.findAluno(invoice.codigoPreinscricao, 'preinscricao');
+    }
 
-    // Aqui você pode fazer validações adicionais, por exemplo:
-    // - Verificar se o valor pago ≥ valor total da factura
-    // - Decidir se é pagamento completo ou parcial
-    const student = await this.findAlunoPreinscricaoByMatricula(
-      invoice.CodigoMatricula,
-    );
 
     const finalPayload = {
       ...rest,
-
       anoLectivo: anoLectivo ?? anoCorrente,
       codigoFactura: dto.codigoFactura,
       codigoPreInscricao:
@@ -222,13 +351,12 @@ export class PaymentService {
         invoice.codigoPreinscricao ??
         undefined,
       instituicaoId: undefined,
-      nOperacaoBancaria: nOperacaoBancaria,
+      nOperacaoBancaria,
       nOperacaoBancaria2: undefined,
-      fkUtilizador: user?.sub, // Associar o pagamento ao ID do usuário autenticado
-      utilizador: user?.sub, // Campo "utilizador" para compatibilidade, também associando ao ID do usuário autenticado
-      statusPagamento:
-        estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
-      estado: estados === 1 ? 2 : 1, // Atualizar o estado da factura: 1 para pago, 2 para parcialmente pago
+      fkUtilizador: user?.sub,
+      utilizador: user?.sub,
+      statusPagamento: estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
+      estado: estados === 1 ? 2 : 1,
       createdAt: new Date(),
     };
 
@@ -237,199 +365,69 @@ export class PaymentService {
     await queryRunner.startTransaction();
 
     try {
-      console.log(estados);
-
-      if (estados == 1) {
+      // 1. Atualizar estado dos itens da fatura
+      if (estados === 1) {
         for (const item of itens) {
           await queryRunner.query(
-            `
-                UPDATE FK2_FACTURA_ITEMS
-                SET estado = :estado
-                WHERE Codigo = :codigo
-            `,
+            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado WHERE Codigo = :codigo`,
             { estado: estados, codigo: item.Codigo } as any,
           );
         }
       }
-      // 2. Atualizar estado da factura principal
+
+      // 2. Atualizar estado da fatura principal
       await queryRunner.query(
-        `
-            UPDATE FK2_FACTURA
-            SET estado = :estados
-            WHERE Codigo =:codigo
-        `,
-        {
-          estados,
-          codigo: dto.codigoFactura,
-        } as any,
-      );
-      // 3 Verificar se a fatura é de negociação
-
-      await queryRunner.query(
-        `
-            UPDATE FK2_FACTURA
-            SET estado = :estados
-            WHERE Codigo =:codigo
-        `,
-        {
-          estados,
-          codigo: dto.codigoFactura,
-        } as any,
+        `UPDATE FK2_FACTURA SET estado = :estados WHERE Codigo = :codigo`,
+        { estados, codigo: dto.codigoFactura } as any,
       );
 
-      const SIGLAS_ESPECIAIS1 = ['tdm', 'ipucricular(anual)'];
-      const precisaConfirmacao = itens.some((item: any) =>
-        SIGLAS_ESPECIAIS1.includes(item.SIGLAPRODUTO?.toLowerCase()),
-      );
-      console.log('Total itens:', itens.length);
-      console.log(
-        'Siglas encontradas:',
-        itens.map((i: any) => i.SIGLAPRODUTO),
-      );
-      console.log(precisaConfirmacao, 'ENTREI');
-
-      if (precisaConfirmacao) {
-        // Atualizar confirmação
-        await queryRunner.query(
-          `UPDATE FK2_TB_CONFIRMACOES
-     SET estado = :estado
-     WHERE codigo_matricula = :codMatricula
-     AND codigo_ano_lectivo = :anoLectivo`,
-          {
-            estado: 1,
-            anoLectivo: invoice.anoLectivo,
-            codMatricula: invoice.CodigoMatricula,
-          } as any,
-        );
-
-        // Atualizar grade curricular do aluno
-        await queryRunner.query(
-          `UPDATE FK2_TB_GRADE_CURRICULAR_ALUNO
-     SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
-     WHERE codigo_matricula = :codMatricula
-     AND codigo_ano_lectivo = :anoLectivo`,
-          {
-            estado: 2,
-            codMatricula: invoice.CodigoMatricula,
-            anoLectivo: invoice.anoLectivo,
-          } as any,
-        );
-
-        // Atualizar matrícula
-        await queryRunner.query(
-          `UPDATE FK2_TB_MATRICULAS
-     SET ESTADO_MATRICULA = 'activo'
-     WHERE codigo = :codMatricula`,
-          {
-            codMatricula: invoice.CodigoMatricula,
-          } as any,
-        );
-      }
-      const SIGLAS_ESPECIAIS2 = ['SEMESTRAL']; // para anual, se tiver algum desses itens, precisa de confirmação para activar a matrícula e grade curricular do aluno
-      const precisaConfirmacaoSemestral = itens.some((item: any) =>
-        SIGLAS_ESPECIAIS2.includes(item.SiglaProduto),
-      );
-      if (precisaConfirmacaoSemestral) {
-        // Atualizar confirmação
-
-        await queryRunner.query(
-          `UPDATE FK2_TB_CONFIRMACOES
-   SET estado = :estado
-   WHERE codigo_matricula = :codMatricula
-   AND codigo_ano_lectivo = :anoLectivo`,
-          {
-            estado: 1,
-            anoLectivo: invoice.anoLectivo,
-            codMatricula: invoice.CodigoMatricula,
-          } as any,
-        );
-
-        await queryRunner.query(
-          `UPDATE FK2_TB_MATRICULAS
-   SET ESTADO_MATRICULA = 'activo'
-   WHERE codigo = :codMatricula`,
-          {
-            codMatricula: invoice.CodigoMatricula,
-          } as any,
-        );
-        const confirmacaoAtual = await queryRunner.query(
-          `
-    SELECT SEMESTRE,CODIGO
-    FROM FK2_TB_CONFIRMACOES
-    WHERE CODIGO_MATRICULA = :codMatricula
-      AND CODIGO_ANO_LECTIVO = :anoLectivo
-    ORDER BY CODIGO DESC
-    FETCH FIRST 1 ROWS ONLY
-`,
-          {
-            codMatricula: invoice.CodigoMatricula,
-            anoLectivo: invoice.anoLectivo,
-          } as any,
-        );
-
-        await queryRunner.query(
-          `UPDATE FK2_TB_GRADE_CURRICULAR_ALUNO
-   SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
-   WHERE codigo_matricula = :codMatricula
-   AND codigo_ano_lectivo = :anoLectivo
-   AND CODIGO_CONFIRMACAO = :confirmacaoAtual`,
-          {
-            estado: 2,
-            codMatricula: invoice.CodigoMatricula,
-            anoLectivo: invoice.anoLectivo,
-            confirmacaoAtual: confirmacaoAtual[0].CODIGO,
-          } as any,
-        );
-
-        await queryRunner.query(
-          `UPDATE FK2_TB_MATRICULAS
-   SET ESTADO_MATRICULA = 'activo'
-   WHERE codigo = :codMatricula`,
-          {
-            codMatricula: invoice.CodigoMatricula,
-          } as any,
-        );
+      // 3. Verificar siglas anuais: tdm / ipucricular(anual)
+      if (this.hasMatchingSigla(itens, ['tdm', 'ipucricular(anual)'])) {
+        await this.handleAnual(queryRunner, invoice);
       }
 
+      // 4. Verificar siglas semestrais: SEMESTRAL
+      if (this.hasMatchingSigla(itens, ['SEMESTRAL'], { caseSensitive: true })) {
+        await this.handleSemestral(queryRunner, invoice);
+      }
+      //5 Verificar se a sigla é TdEdA
+      let tdaResult: { success: boolean; message?: string } | null = null;
+
+      if (this.hasMatchingSigla(itens, ['TdEdA'], { caseSensitive: true })) {
+        tdaResult = await this.handleTda(invoice);
+      }
+
+      // 6. Criar ou atualizar pagamento
       if (!existingPayment) {
         const payment = this.paymentRepository.create(finalPayload);
         await queryRunner.manager.save(payment);
       } else {
         const valorDepositadoAtualizado =
           existingPayment.valorDepositado + (dto.valorDepositado || 0);
-        const updatedPayment = {
-          statusPagamento: PaymentStatus.CONCLUIDO,
-          nOperacaoBancaria2: dto.nOperacaoBancaria,
-          valorDepositado: valorDepositadoAtualizado,
-          formaPagamento: dto.formaPagamento,
-          fkUtilizador: user?.sub,
-          utilizador: user?.sub,
-
-          updatedAt: new Date(),
-        };
 
         await queryRunner.manager.update(
           Payment2,
           { codigo: existingPayment.codigo },
-          updatedPayment,
+          {
+            statusPagamento: PaymentStatus.CONCLUIDO,
+            nOperacaoBancaria2: dto.nOperacaoBancaria,
+            valorDepositado: valorDepositadoAtualizado,
+            formaPagamento: dto.formaPagamento,
+            fkUtilizador: user?.sub,
+            utilizador: user?.sub,
+            updatedAt: new Date(),
+          },
         );
       }
-      if (negotation && negotation.length > 0) {
-        const valoRestante = Math.max(
-          0,
-          negotation[0].VALOR_DIVIDA - valorDepositado,
-        );
-        await queryRunner.query(
-          `
-            UPDATE FK2_NEGOCIACAO_DIVIDAS
 
-            SET VALORRESTANTE =:valoRestante
-            WHERE CODIGO_FATURA  =:codigo
-        `,
-          {
-            valoRestante,
-            codigo: dto.codigoFactura,
-          } as any,
+      // 6. Atualizar negociação de dívidas se existir
+      if (negotation && negotation.length > 0) {
+        const valoRestante = Math.max(0, negotation[0].VALOR_DIVIDA - valorDepositado);
+        await queryRunner.query(
+          `UPDATE FK2_NEGOCIACAO_DIVIDAS
+             SET VALORRESTANTE = :valoRestante
+             WHERE CODIGO_FATURA = :codigo`,
+          { valoRestante, codigo: dto.codigoFactura } as any,
         );
       }
 
@@ -439,7 +437,18 @@ export class PaymentService {
         message: existingPayment
           ? 'Pagamento atualizado com sucesso'
           : 'Pagamento criado com sucesso',
+
+        tda: tdaResult && !tdaResult.success
+          ? {
+            error: true,
+            message: tdaResult.message,
+          }
+          : {
+            error: false,
+          },
       };
+
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -576,19 +585,34 @@ export class PaymentService {
     return await this.dataSource.query(sql, [facturaCode]);
   }
 
-  private async findAlunoPreinscricaoByMatricula(codigo) {
-    const sql = `select p.codigo from fk2_tb_matriculas    m
-      inner join FK2_TB_ADMISSAO         a on a.codigo = m.CODIGO_ALUNO
-      inner join FK2_TB_PREINSCRICAO     p on p.codigo = a.PRE_INCRICAO
-      where m.codigo =  ${codigo}`;
+
+  private async findAluno(codigo: number | string, by: FindAlunoBy) {
+    const whereClause =
+      by === 'matricula'
+        ? `m.codigo = ${codigo}`
+        : `p.codigo = ${codigo}`;
+
+    const selectClause =
+      by === 'matricula'
+        ? `p.codigo`
+        : `m.codigo`;
+
+    const sql = `
+    SELECT ${selectClause}
+    FROM FK2_TB_PREINSCRICAO  p
+    LEFT JOIN FK2_TB_ADMISSAO     a ON a.PRE_INCRICAO = p.codigo
+    LEFT JOIN FK2_TB_MATRICULAS   m ON m.CODIGO_ALUNO = a.codigo
+    WHERE ${whereClause}
+  `;
+
     const result = await this.dataSource.query(sql);
+
     if (!result || result.length === 0) {
       throw new NotFoundException('Aluno não encontrado');
     }
-    const preInscricao = result[0];
-    return preInscricao;
-  }
 
+    return result[0];
+  }
   public async findPayments(filters: ListPaymentDTO) {
     const {
       anoLectivo,

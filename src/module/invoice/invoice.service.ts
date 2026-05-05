@@ -671,12 +671,16 @@ WHERE rn BETWEEN :startRow AND :endRow
       page = 1,
       codigoMatricula,
       academicYear,
+      codigoPreInscricao,
       status,
     } = filterQuery;
 
-    if (!codigoMatricula || !academicYear) {
+    if (!academicYear) {
+      throw new BadRequestException('Ano letivo são obrigatórios.');
+    }
+    if (!codigoMatricula && !codigoPreInscricao) {
       throw new BadRequestException(
-        'Código da matrícula e ano letivo são obrigatórios.',
+        'Necessária informar o codigoMatricula ou codigoPreInscricao',
       );
     }
 
@@ -791,8 +795,10 @@ WHERE rn BETWEEN :startRow AND :endRow
       LEFT JOIN FK2_POLOS po
              ON po.id = f.polo_id
 
-      WHERE
-          f.CodigoMatricula = :codigoMatricula
+      WHERE 1=1
+
+          AND(:codigoMatricula IS NULL or  f.CodigoMatricula = :codigoMatricula )
+          AND (:codigoPreInscricao IS NULL or f.codigo_preinscricao	 = :codigoPreInscricao)
           AND f.ano_lectivo = :academicYear
           AND f.estado <> 3
           AND (:status IS NULL OR f.estado = :status)
@@ -801,10 +807,11 @@ WHERE rn BETWEEN :startRow AND :endRow
   `;
 
     const rawResults = await this.dataSource.query(dataSql, {
-      codigoMatricula,
+      codigoMatricula: codigoMatricula ?? null,
       academicYear,
       status: status ?? null,
       startRow,
+      codigoPreInscricao: codigoPreInscricao ?? null,
       endRow,
     } as any);
 

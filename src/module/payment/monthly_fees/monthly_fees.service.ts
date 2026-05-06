@@ -49,9 +49,9 @@ export class MonthlyFeesService {
       .andWhere("NVL(TO_CHAR(f.estado), '0') != '3'");
     // FILTRO DE STATUS (pago / pendente)
     if (status === 'paid') {
-      countQuery.andWhere('fi.valor_pago >= fi.Total');
+      countQuery.andWhere('f.estado = 1');
     } else if (status === 'pending') {
-      countQuery.andWhere('fi.valor_pago < fi.Total');
+      countQuery.andWhere('f.estado = 0');
     }
 
     const totalResult = await countQuery
@@ -117,9 +117,9 @@ export class MonthlyFeesService {
       .andWhere("NVL(TO_CHAR(f.estado), '0') != '3'");
     // MESMO FILTRO DE STATUS NA QUERY PRINCIPAL
     if (status === 'paid') {
-      dataQuery.andWhere('fi.valor_pago >= fi.Total');
+      dataQuery.andWhere('f.estado = 1');
     } else if (status === 'pending') {
-      dataQuery.andWhere('fi.valor_pago < fi.Total');
+      dataQuery.andWhere('f.estado = 0');
     }
 
     let results = await dataQuery

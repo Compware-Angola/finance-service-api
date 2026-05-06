@@ -12,6 +12,7 @@ import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { CreateIsencaoMesalidadeDto } from './dto/create-isencao-mentalidade.dto';
 import { InvoiceEnum } from 'src/common/enums/invoice.enum';
 import { InvoiceItemEnum } from 'src/common/enums/invoice-item.enum';
+import { CreateIsencaoMultaDTO } from './dto/create-isencao-multa.dto';
 
 @Injectable()
 export class IsencaoService {
@@ -113,7 +114,6 @@ export class IsencaoService {
 
     for (const mes of mesTemps) {
       const queryRunner = this.dataSource.createQueryRunner();
-
       await queryRunner.connect();
       await queryRunner.startTransaction();
 
@@ -135,7 +135,7 @@ export class IsencaoService {
 
         const row = resultado?.[0];
 
-        if (!row || row.TOTAL > 0) {
+        if (row && row.TOTAL > 0) {
           throw new Error(
             'Já existe uma isenção ativa com essas mesmas informações',
           );
@@ -263,9 +263,8 @@ export class IsencaoService {
 
         // commit desse item
         await queryRunner.commitTransaction();
-
         results.push({ mesTemp: mes.mesTempId, success: true });
-      } catch (e) {
+      } catch (e: any) {
         // rollback só desse item
         await queryRunner.rollbackTransaction();
         results.push({

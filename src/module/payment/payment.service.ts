@@ -339,7 +339,7 @@ export class PaymentService {
         tp.Preco AS PrecoProduto,
         tp.TipoServico AS TipoServicoProduto,
         tp.sigla AS SiglaProduto,
-        fi.*
+        fi.codigo  AS codigo_fi
       FROM FK2_TB_TIPO_SERVICOS tp
       INNER JOIN FK2_FACTURA_ITEMS fi ON fi.CodigoProduto = tp.Codigo
       WHERE fi.CodigoFactura = :codigoFactura
@@ -385,9 +385,13 @@ export class PaymentService {
       // 1. Atualizar estado dos itens da fatura
       if (estados === 1) {
         for (const item of itens) {
+          const item_formated = toLowerCaseKeys(item)
+          console.log(item_formated);
+          console.log(item_formated.codigo_fi, item_formated.precoproduto);
+          console.log("-----------------------")
           await queryRunner.query(
-            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado , VALOR_PAGO = :valor  WHERE CODIGOFACTURA = :codigo`,
-            { estado: estados, codigo: item.Codigo, valor: item.PrecoProduto } as any,
+            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado , VALOR_PAGO = :valor  WHERE CODIGO = :codigo`,
+            { estado: estados, codigo: item_formated.codigo_fi, valor: item_formated.precoproduto } as any,
           );
         }
       }

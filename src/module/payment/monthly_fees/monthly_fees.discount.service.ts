@@ -384,7 +384,8 @@ export class MonthlyFeesDiscountService {
     );
 
     const mensalidadeFinal = mensalidadeDesconto + multa;
-    const valorPago = isBolseiroIntegral ? mensalidadeFinal : 0;
+    const valorPago = isBolseiroIntegral ? mensalidade : 0;
+
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,
@@ -419,7 +420,7 @@ export class MonthlyFeesDiscountService {
   async generatePayment({
     codAnoLectivo,
     codigo_matricula,
-    status,
+    status = 'all',
   }: TestMonthlyDTO) {
     const sqlMesTemp = `
      select

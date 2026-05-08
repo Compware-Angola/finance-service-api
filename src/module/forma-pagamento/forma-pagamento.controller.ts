@@ -9,6 +9,7 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 
 import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -18,8 +19,11 @@ import { FormaPagamentoService } from './forma-pagamento.service';
 import { CreateFormaPagamentoDto } from './dto/create-forma-pagamento.dto';
 import { UpdateFormaPagamentoDto } from './dto/update-forma-pagamento.dto';
 import { FilterFormaPagamentoDto } from './dto/filter-forma-pagamento.dto';
+import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
+import { PermissionsGuard } from 'src/common/secret/permissions.guard';
 
 @ApiTags('Forma Pagamento')
+@UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
 @Controller('forma-pagamento')
 export class FormaPagamentoController {
   constructor(private readonly service: FormaPagamentoService) {}

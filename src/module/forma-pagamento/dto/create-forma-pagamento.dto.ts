@@ -1,18 +1,8 @@
-import { IsInt, IsNotEmpty, IsString, MaxLength, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateFormaPagamentoDto {
-  @ApiProperty({
-    example: 1,
-    description: 'Código da forma de pagamento',
-  })
-  @IsInt({
-    message: 'Código deve ser inteiro',
-  })
-  @Min(1)
-  codigo: number;
-
   @ApiProperty({
     example: 'TRANSFERENCIA',
     description: 'Descrição da forma de pagamento',

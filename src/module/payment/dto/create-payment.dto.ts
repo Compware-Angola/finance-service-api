@@ -15,7 +15,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class CreatePaymentDto {
-
   @ApiProperty({
     description: 'Data do pagamento (AAAA-MM-DD)',
     example: '2025-11-05',
@@ -29,14 +28,11 @@ export class CreatePaymentDto {
   @Length(1, 25)
   nOperacaoBancaria?: string;
 
-
-
   @ApiPropertyOptional({ example: 'Pagamento via Multicaixa Express' })
   @IsOptional()
   @IsString()
   @Length(1, 1000)
   observacao?: string;
-
 
   @ApiPropertyOptional({ example: 150000.0 })
   @IsOptional()
@@ -73,7 +69,6 @@ export class CreatePaymentDto {
   @IsInt()
   @IsPositive()
   contaMovimentada?: number;
-
 
   @ApiPropertyOptional({ example: '2025-11-05T08:45:00Z' })
   @IsOptional()
@@ -117,7 +112,6 @@ export class CreatePaymentDto {
   @Min(0)
   caixaId?: number;
 
-
   @ApiPropertyOptional({ example: '2025-11-05T11:00:00Z' })
   @IsOptional()
   @IsDateString()
@@ -141,8 +135,6 @@ export class CreatePaymentDto {
   @Max(1)
   corrente?: number;
 
-
-
   @ApiProperty({
     enum: ['Y', 'N'],
     default: 'N',
@@ -150,7 +142,7 @@ export class CreatePaymentDto {
   @IsEnum(['Y', 'N'])
   feitoComReserva: 'Y' | 'N';
 
-    @ApiProperty({
+  @ApiProperty({
     description: 'Ano letivo do pagamento',
     example: 23,
   })

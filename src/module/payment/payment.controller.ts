@@ -46,9 +46,9 @@ export class PaymentController {
     @Body() createPaymentDto: CreatePaymentDto,
     @Req() req: any,
   ): Promise<Payment | any> {
-    const user = req.user; // Obter o usuário autenticado
+    const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    console.log('Usuário autenticado:', user);
+
     const payment = await this.paymentService.createPayment(
       createPaymentDto,
       user,

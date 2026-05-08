@@ -339,7 +339,7 @@ export class PaymentService {
         tp.Preco AS PrecoProduto,
         tp.TipoServico AS TipoServicoProduto,
         tp.sigla AS SiglaProduto,
-        fi.*
+        fi.codigo  AS codigo_fi
       FROM FK2_TB_TIPO_SERVICOS tp
       INNER JOIN FK2_FACTURA_ITEMS fi ON fi.CodigoProduto = tp.Codigo
       WHERE fi.CodigoFactura = :codigoFactura
@@ -385,9 +385,13 @@ export class PaymentService {
       // 1. Atualizar estado dos itens da fatura
       if (estados === 1) {
         for (const item of itens) {
+          const item_formated = toLowerCaseKeys(item)
+          console.log(item_formated);
+          console.log(item_formated.codigo_fi, item_formated.precoproduto);
+          console.log("-----------------------")
           await queryRunner.query(
-            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado WHERE CODIGOFACTURA = :codigo`,
-            { estado: estados, codigo: item.Codigo } as any,
+            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado , VALOR_PAGO = :valor  WHERE CODIGO = :codigo`,
+            { estado: estados, codigo: item_formated.codigo_fi, valor: item_formated.precoproduto } as any,
           );
         }
       }
@@ -792,6 +796,7 @@ export class PaymentService {
       mac.codigo                  AS codigo_matricula,
       cur.designacao              AS curso,
       fac.codigo                  AS codigo_factura,
+      ut.Nome                     AS nome_operador,
       can.designacao              as canal
 
     FROM FK2_TB_PAGAMENTOS pg
@@ -803,6 +808,7 @@ export class PaymentService {
       LEFT JOIN FK2_TB_CAIXAS cai            ON cai.codigo = pg.caixa_id
       LEFT JOIN fk2_tb_canal_comunicacao can ON can.codigo = pg.canal
       LEFT JOIN FK2_TB_FORMA_PAGAMENTO   fp  ON to_char(fp.codigo)  = pg.forma_pagamento
+      LEFT Join  FK2_MCA_TB_UTILIZADOR ut ON ut.PK_UTILIZADOR =pg.FK_UTILIZADOR
     WHERE ${whereClause}
     ORDER BY pg.codigo DESC
     OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY

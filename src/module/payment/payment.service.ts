@@ -22,6 +22,7 @@ import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
 import { AtribuirProvaHelper } from 'src/common/helpers/atribuir-prova.helper';
 import { HttpService } from '@nestjs/axios';
 import { AxiosError } from 'axios';
+import { TipoPagamento } from './dto/listar-servico-pagos.dto';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
@@ -281,7 +282,87 @@ export class PaymentService {
       };
     }
   }
+  async listarServicosPagosAluno(filter: {
+    anoLectivo?: number;
+    codigoMatricula?: number;
+    tipo?: TipoPagamento;
+  }) {
+    const {
+      anoLectivo,
+      codigoMatricula,
+      tipo = 'TODOS',
+    } = filter;
 
+    const preinscricaoResult = await this.dataSource.query(
+      `
+      SELECT ta.PRE_INCRICAO AS CODIGO_PREINSCRICAO
+      FROM FK2_TB_MATRICULAS tm
+      INNER JOIN FK2_TB_ADMISSAO ta
+        ON ta.CODIGO = tm.CODIGO_ALUNO
+      WHERE tm.CODIGO = :1
+    `,
+      [codigoMatricula],
+    );
+
+    const codigoPreinscricao = preinscricaoResult?.[0]?.CODIGO_PREINSCRICAO;
+
+    if (!codigoPreinscricao) {
+      return [];
+    }
+
+    let tipoClause = '';
+
+    if (tipo === 'MENSALIDADES') {
+      tipoClause = `
+      AND s.CODIGO IN (1149893, 1149835, 22241)
+    `;
+    }
+
+    if (tipo === 'SERVICOS') {
+      tipoClause = `
+      AND s.CODIGO NOT IN (1149893, 1149835, 22241)
+    `;
+    }
+
+    const sql = `
+    SELECT
+      pi.CODIGO,
+      DBMS_LOB.SUBSTR(s.DESCRICAO, 4000, 1) AS SERVICO,
+      pi.VALOR_TOTAL,
+      p.DATABANCO,
+      p.UPDATED_AT,
+      p.ANOLECTIVO,
+      s.CODIGO AS CODIGO_SERVICO
+    FROM FK2_TB_PAGAMENTOSI pi
+    INNER JOIN FK2_TB_PAGAMENTOS p
+      ON p.CODIGO = pi.CODIGO_PAGAMENTO
+    INNER JOIN FK2_TB_TIPO_SERVICOS s
+      ON s.CODIGO = pi.CODIGO_SERVICO
+    WHERE p.ANOLECTIVO = :1
+      AND p.ESTADO = 1
+      AND p.CODIGO_PREINSCRICAO = :2
+      AND DBMS_LOB.GETLENGTH(s.DESCRICAO) > 0
+      ${tipoClause}
+    ORDER BY
+      p.DATA,
+      p.CODIGO_FACTURA ASC
+  `;
+
+    const result = await this.dataSource.query(sql, [
+      anoLectivo,
+      codigoPreinscricao,
+    ]);
+
+    return result.map((row: any) => ({
+      codigo: row.CODIGO,
+      servico: row.SERVICO,
+      valor: row.VALOR_TOTAL,
+      data_pagamento_banco: row.DATABANCO,
+      data_validacao: row.UPDATED_AT,
+      ano_lectivo: row.ANOLECTIVO,
+      codigo_servico: row.CODIGO_SERVICO,
+    }));
+  }
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
     const anoCorrente = this.anoAtualPrincipal;
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;

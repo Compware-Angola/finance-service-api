@@ -9,7 +9,7 @@ import {
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { Payment } from './entities/payment.entity';
@@ -23,6 +23,7 @@ import { RequiredPermissions } from 'src/common/pipes/permissions.decorator';
 import { PermissionTypeDetails } from 'src/common/enums/permission.type';
 import { ListPaymentDTO } from './dto/list-payment.dto';
 import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
+import { ListarServicosPagosAlunoDto } from './dto/listar-servico-pagos.dto';
 
 @ApiTags('payment')
 @Controller('payment')
@@ -74,6 +75,20 @@ export class PaymentController {
       preInscritionCode,
       paginationQuery,
     );
+  }
+  @Get('servicos-pagos-aluno')
+  @ApiQuery({ name: 'anoLectivo', required: true, type: Number, example: 23 })
+  @ApiQuery({ name: 'codigoMatricula', required: true, type: Number, example: 40014 })
+  @ApiQuery({
+    name: 'tipo',
+    required: false,
+    enum: ['TODOS', 'MENSALIDADES', 'SERVICOS'],
+    example: 'TODOS',
+  })
+  async listarServicosPagosAluno(
+    @Query() filter: ListarServicosPagosAlunoDto,
+  ) {
+    return this.paymentService.listarServicosPagosAluno(filter);
   }
   @Get('student-payments')
   @ApiOperation({ summary: 'Listar pagamentos do aluno' })

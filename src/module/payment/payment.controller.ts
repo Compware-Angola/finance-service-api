@@ -8,6 +8,8 @@ import {
   Body,
   UseGuards,
   Req,
+  ValidationPipe,
+  UsePipes,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
@@ -24,6 +26,8 @@ import { PermissionTypeDetails } from 'src/common/enums/permission.type';
 import { ListPaymentDTO } from './dto/list-payment.dto';
 import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
 import { ListarServicosPagosAlunoDto } from './dto/listar-servico-pagos.dto';
+import { EstatisticasService } from './estatisticas.service';
+import { EstatisticasQueryDto } from './dto/estatisticas-query.dto';
 
 @ApiTags('payment')
 @Controller('payment')
@@ -31,7 +35,8 @@ export class PaymentController {
   constructor(
     private readonly paymentService: PaymentService,
     private httpService: HttpService,
-  ) { }
+    private readonly estatisticasService: EstatisticasService,
+  ) {}
   @Post('create')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.LIQUIDAR_NOTA_PAGAMENTO.sigla)
@@ -78,16 +83,19 @@ export class PaymentController {
   }
   @Get('servicos-pagos-aluno')
   @ApiQuery({ name: 'anoLectivo', required: true, type: Number, example: 23 })
-  @ApiQuery({ name: 'codigoMatricula', required: true, type: Number, example: 40014 })
+  @ApiQuery({
+    name: 'codigoMatricula',
+    required: true,
+    type: Number,
+    example: 40014,
+  })
   @ApiQuery({
     name: 'tipo',
     required: false,
     enum: ['TODOS', 'MENSALIDADES', 'SERVICOS'],
     example: 'TODOS',
   })
-  async listarServicosPagosAluno(
-    @Query() filter: ListarServicosPagosAlunoDto,
-  ) {
+  async listarServicosPagosAluno(@Query() filter: ListarServicosPagosAlunoDto) {
     return this.paymentService.listarServicosPagosAluno(filter);
   }
   @Get('student-payments')
@@ -129,5 +137,11 @@ export class PaymentController {
   })
   async findPaymentMonthly(@Query() query: FindPaymentMonthlyDTO) {
     return this.paymentService.findPaymentMonthly(query);
+  }
+
+  @Get('estatisticas')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getEstatisticasAgrupado(@Query() query: EstatisticasQueryDto) {
+    return this.estatisticasService.getAgrupado(query);
   }
 }

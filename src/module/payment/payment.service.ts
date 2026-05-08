@@ -792,6 +792,7 @@ export class PaymentService {
       mac.codigo                  AS codigo_matricula,
       cur.designacao              AS curso,
       fac.codigo                  AS codigo_factura,
+      ut.Nome                     AS nome_operador,
       can.designacao              as canal
 
     FROM FK2_TB_PAGAMENTOS pg
@@ -803,6 +804,7 @@ export class PaymentService {
       LEFT JOIN FK2_TB_CAIXAS cai            ON cai.codigo = pg.caixa_id
       LEFT JOIN fk2_tb_canal_comunicacao can ON can.codigo = pg.canal
       LEFT JOIN FK2_TB_FORMA_PAGAMENTO   fp  ON to_char(fp.codigo)  = pg.forma_pagamento
+      LEFT Join  FK2_MCA_TB_UTILIZADOR ut ON ut.PK_UTILIZADOR =pg.FK_UTILIZADOR
     WHERE ${whereClause}
     ORDER BY pg.codigo DESC
     OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY

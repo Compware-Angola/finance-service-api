@@ -22,6 +22,7 @@ import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
 import { AtribuirProvaHelper } from 'src/common/helpers/atribuir-prova.helper';
 import { HttpService } from '@nestjs/axios';
 import { AxiosError } from 'axios';
+import { TipoPagamento } from './dto/listar-servico-pagos.dto';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
@@ -42,7 +43,7 @@ export class PaymentService {
     private readonly paymentRepository: Repository<Payment2>,
     private readonly invoiceService: InvoiceService,
     private dataSource: DataSource,
-    private httpService: HttpService
+    private httpService: HttpService,
   ) {
     this.initAnoAtual();
   }
@@ -157,7 +158,7 @@ export class PaymentService {
   private hasMatchingSigla(
     itens: any[],
     siglas: string[],
-    options?: { caseSensitive?: boolean; field?: string }
+    options?: { caseSensitive?: boolean; field?: string },
   ): boolean {
     const field = options?.field ?? 'SiglaProduto';
     const caseSensitive = options?.caseSensitive ?? false;
@@ -181,7 +182,11 @@ export class PaymentService {
      SET estado = :estado
      WHERE codigo_matricula = :codMatricula
      AND codigo_ano_lectivo = :anoLectivo`,
-      { estado: 1, anoLectivo: invoice.anoLectivo, codMatricula: invoice.CodigoMatricula } as any,
+      {
+        estado: 1,
+        anoLectivo: invoice.anoLectivo,
+        codMatricula: invoice.CodigoMatricula,
+      } as any,
     );
 
     await queryRunner.query(
@@ -189,7 +194,11 @@ export class PaymentService {
      SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
      WHERE codigo_matricula = :codMatricula
      AND codigo_ano_lectivo = :anoLectivo`,
-      { estado: 2, codMatricula: invoice.CodigoMatricula, anoLectivo: invoice.anoLectivo } as any,
+      {
+        estado: 2,
+        codMatricula: invoice.CodigoMatricula,
+        anoLectivo: invoice.anoLectivo,
+      } as any,
     );
 
     await queryRunner.query(
@@ -208,7 +217,11 @@ export class PaymentService {
      SET estado = :estado
      WHERE codigo_matricula = :codMatricula
      AND codigo_ano_lectivo = :anoLectivo`,
-      { estado: 1, anoLectivo: invoice.anoLectivo, codMatricula: invoice.CodigoMatricula } as any,
+      {
+        estado: 1,
+        anoLectivo: invoice.anoLectivo,
+        codMatricula: invoice.CodigoMatricula,
+      } as any,
     );
 
     await queryRunner.query(
@@ -227,7 +240,10 @@ export class PaymentService {
       ORDER BY CODIGO DESC
       FETCH FIRST 1 ROWS ONLY
     `,
-      { codMatricula: invoice.CodigoMatricula, anoLectivo: invoice.anoLectivo } as any,
+      {
+        codMatricula: invoice.CodigoMatricula,
+        anoLectivo: invoice.anoLectivo,
+      } as any,
     );
 
     await queryRunner.query(
@@ -250,12 +266,9 @@ export class PaymentService {
   ): Promise<{ success: boolean; message?: string }> {
     try {
       if (invoice.codigoPreinscricao) {
-        await AtribuirProvaHelper.atribuirProvaSync(
-          this.httpService,
-          {
-            codigoCandidato: invoice.codigoPreinscricao,
-          },
-        );
+        await AtribuirProvaHelper.atribuirProvaSync(this.httpService, {
+          codigoCandidato: invoice.codigoPreinscricao,
+        });
 
         return { success: true };
       }
@@ -266,8 +279,7 @@ export class PaymentService {
 
       if (error instanceof AxiosError) {
         const message =
-          error.response?.data?.message ||
-          'Serviço de exames indisponível';
+          error.response?.data?.message || 'Serviço de exames indisponível';
 
         return {
           success: false,
@@ -286,15 +298,14 @@ export class PaymentService {
     const anoCorrente = this.anoAtualPrincipal;
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
 
-    if (!nOperacaoBancaria) {
-      throw new BadRequestException('Precisa de uma operação bancária');
-    }
-
-    const n_op = await this.findPaymentByN_Operacao_Bancaria(nOperacaoBancaria);
-    if (n_op) {
-      throw new BadRequestException(
-        `Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`,
-      );
+    if (nOperacaoBancaria) {
+      const n_op =
+        await this.findPaymentByN_Operacao_Bancaria(nOperacaoBancaria);
+      if (n_op) {
+        throw new BadRequestException(
+          `Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`,
+        );
+      }
     }
 
     if (!dto.codigoFactura) {
@@ -313,8 +324,11 @@ export class PaymentService {
       { codigoFactura: dto.codigoFactura } as any,
     );
 
-    const existingPayment = await this.findPaymentByCodigoFactura(dto.codigoFactura);
-    const valorDepositado = dto.valorDepositado || existingPayment?.valorDepositado || 0;
+    const existingPayment = await this.findPaymentByCodigoFactura(
+      dto.codigoFactura,
+    );
+    const valorDepositado =
+      dto.valorDepositado || existingPayment?.valorDepositado || 0;
     const estados = invoice.TotalPreco > valorDepositado ? 2 : 1;
 
     const itens = await this.dataSource.query(
@@ -337,9 +351,11 @@ export class PaymentService {
       student = await this.findAluno(invoice.CodigoMatricula, 'matricula');
     }
     if (invoice.codigoPreinscricao) {
-      student = await this.findAluno(invoice.codigoPreinscricao, 'preinscricao');
+      student = await this.findAluno(
+        invoice.codigoPreinscricao,
+        'preinscricao',
+      );
     }
-
 
     const finalPayload = {
       ...rest,
@@ -355,7 +371,8 @@ export class PaymentService {
       nOperacaoBancaria2: undefined,
       fkUtilizador: user?.sub,
       utilizador: user?.sub,
-      statusPagamento: estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
+      statusPagamento:
+        estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
       estado: estados === 1 ? 2 : 1,
       createdAt: new Date(),
     };
@@ -369,7 +386,7 @@ export class PaymentService {
       if (estados === 1) {
         for (const item of itens) {
           await queryRunner.query(
-            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado WHERE Codigo = :codigo`,
+            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado WHERE CODIGOFACTURA = :codigo`,
             { estado: estados, codigo: item.Codigo } as any,
           );
         }
@@ -387,7 +404,9 @@ export class PaymentService {
       }
 
       // 4. Verificar siglas semestrais: SEMESTRAL
-      if (this.hasMatchingSigla(itens, ['SEMESTRAL'], { caseSensitive: true })) {
+      if (
+        this.hasMatchingSigla(itens, ['SEMESTRAL'], { caseSensitive: true })
+      ) {
         await this.handleSemestral(queryRunner, invoice);
       }
       //5 Verificar se a sigla é TdEdA
@@ -422,7 +441,10 @@ export class PaymentService {
 
       // 6. Atualizar negociação de dívidas se existir
       if (negotation && negotation.length > 0) {
-        const valoRestante = Math.max(0, negotation[0].VALOR_DIVIDA - valorDepositado);
+        const valoRestante = Math.max(
+          0,
+          negotation[0].VALOR_DIVIDA - valorDepositado,
+        );
         await queryRunner.query(
           `UPDATE FK2_NEGOCIACAO_DIVIDAS
              SET VALORRESTANTE = :valoRestante
@@ -438,17 +460,16 @@ export class PaymentService {
           ? 'Pagamento atualizado com sucesso'
           : 'Pagamento criado com sucesso',
 
-        tda: tdaResult && !tdaResult.success
-          ? {
-            error: true,
-            message: tdaResult.message,
-          }
-          : {
-            error: false,
-          },
+        tda:
+          tdaResult && !tdaResult.success
+            ? {
+              error: true,
+              message: tdaResult.message,
+            }
+            : {
+              error: false,
+            },
       };
-
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -471,7 +492,87 @@ export class PaymentService {
   ): Promise<Payment2 | null> {
     return this.paymentRepository.findOne({ where: { nOperacaoBancaria2 } });
   }
+  async listarServicosPagosAluno(filter: {
+    anoLectivo?: number;
+    codigoMatricula?: number;
+    tipo?: TipoPagamento;
+  }) {
+    const {
+      anoLectivo,
+      codigoMatricula,
+      tipo = 'TODOS',
+    } = filter;
 
+    const preinscricaoResult = await this.dataSource.query(
+      `
+      SELECT ta.PRE_INCRICAO AS CODIGO_PREINSCRICAO
+      FROM FK2_TB_MATRICULAS tm
+      INNER JOIN FK2_TB_ADMISSAO ta
+        ON ta.CODIGO = tm.CODIGO_ALUNO
+      WHERE tm.CODIGO = :1
+    `,
+      [codigoMatricula],
+    );
+
+    const codigoPreinscricao = preinscricaoResult?.[0]?.CODIGO_PREINSCRICAO;
+
+    if (!codigoPreinscricao) {
+      return [];
+    }
+
+    let tipoClause = '';
+
+    if (tipo === 'MENSALIDADES') {
+      tipoClause = `
+      AND s.CODIGO IN (1149893, 1149835, 22241)
+    `;
+    }
+
+    if (tipo === 'SERVICOS') {
+      tipoClause = `
+      AND s.CODIGO NOT IN (1149893, 1149835, 22241)
+    `;
+    }
+
+    const sql = `
+    SELECT
+      pi.CODIGO,
+      DBMS_LOB.SUBSTR(s.DESCRICAO, 4000, 1) AS SERVICO,
+      pi.VALOR_TOTAL,
+      p.DATABANCO,
+      p.UPDATED_AT,
+      p.ANOLECTIVO,
+      s.CODIGO AS CODIGO_SERVICO
+    FROM FK2_TB_PAGAMENTOSI pi
+    INNER JOIN FK2_TB_PAGAMENTOS p
+      ON p.CODIGO = pi.CODIGO_PAGAMENTO
+    INNER JOIN FK2_TB_TIPO_SERVICOS s
+      ON s.CODIGO = pi.CODIGO_SERVICO
+    WHERE p.ANOLECTIVO = :1
+      AND p.ESTADO = 1
+      AND p.CODIGO_PREINSCRICAO = :2
+      AND DBMS_LOB.GETLENGTH(s.DESCRICAO) > 0
+      ${tipoClause}
+    ORDER BY
+      p.DATA,
+      p.CODIGO_FACTURA ASC
+  `;
+
+    const result = await this.dataSource.query(sql, [
+      anoLectivo,
+      codigoPreinscricao,
+    ]);
+
+    return result.map((row: any) => ({
+      codigo: row.CODIGO,
+      servico: row.SERVICO,
+      valor: row.VALOR_TOTAL,
+      data_pagamento_banco: row.DATABANCO,
+      data_validacao: row.UPDATED_AT,
+      ano_lectivo: row.ANOLECTIVO,
+      codigo_servico: row.CODIGO_SERVICO,
+    }));
+  }
   async studentPayments(query: StudentPaymentsQueryDto) {
     const {
       codigoMatricula,
@@ -585,17 +686,11 @@ export class PaymentService {
     return await this.dataSource.query(sql, [facturaCode]);
   }
 
-
   private async findAluno(codigo: number | string, by: FindAlunoBy) {
     const whereClause =
-      by === 'matricula'
-        ? `m.codigo = ${codigo}`
-        : `p.codigo = ${codigo}`;
+      by === 'matricula' ? `m.codigo = ${codigo}` : `p.codigo = ${codigo}`;
 
-    const selectClause =
-      by === 'matricula'
-        ? `p.codigo`
-        : `m.codigo`;
+    const selectClause = by === 'matricula' ? `p.codigo` : `m.codigo`;
 
     const sql = `
     SELECT ${selectClause}

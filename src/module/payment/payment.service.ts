@@ -293,94 +293,10 @@ export class PaymentService {
       };
     }
   }
-  async listarServicosPagosAluno(filter: {
-    anoLectivo?: number;
-    codigoMatricula?: number;
-    tipo?: TipoPagamento;
-  }) {
-    const {
-      anoLectivo,
-      codigoMatricula,
-      tipo = 'TODOS',
-    } = filter;
 
-    const preinscricaoResult = await this.dataSource.query(
-      `
-      SELECT ta.PRE_INCRICAO AS CODIGO_PREINSCRICAO
-      FROM FK2_TB_MATRICULAS tm
-      INNER JOIN FK2_TB_ADMISSAO ta
-        ON ta.CODIGO = tm.CODIGO_ALUNO
-      WHERE tm.CODIGO = :1
-    `,
-      [codigoMatricula],
-    );
-
-    const codigoPreinscricao = preinscricaoResult?.[0]?.CODIGO_PREINSCRICAO;
-
-    if (!codigoPreinscricao) {
-      return [];
-    }
-
-    let tipoClause = '';
-
-    if (tipo === 'MENSALIDADES') {
-      tipoClause = `
-      AND s.CODIGO IN (1149893, 1149835, 22241)
-    `;
-    }
-
-    if (tipo === 'SERVICOS') {
-      tipoClause = `
-      AND s.CODIGO NOT IN (1149893, 1149835, 22241)
-    `;
-    }
-
-    const sql = `
-    SELECT
-      pi.CODIGO,
-      DBMS_LOB.SUBSTR(s.DESCRICAO, 4000, 1) AS SERVICO,
-      pi.VALOR_TOTAL,
-      p.DATABANCO,
-      p.UPDATED_AT,
-      p.ANOLECTIVO,
-      s.CODIGO AS CODIGO_SERVICO
-    FROM FK2_TB_PAGAMENTOSI pi
-    INNER JOIN FK2_TB_PAGAMENTOS p
-      ON p.CODIGO = pi.CODIGO_PAGAMENTO
-    INNER JOIN FK2_TB_TIPO_SERVICOS s
-      ON s.CODIGO = pi.CODIGO_SERVICO
-    WHERE p.ANOLECTIVO = :1
-      AND p.ESTADO = 1
-      AND p.CODIGO_PREINSCRICAO = :2
-      AND DBMS_LOB.GETLENGTH(s.DESCRICAO) > 0
-      ${tipoClause}
-    ORDER BY
-      p.DATA,
-      p.CODIGO_FACTURA ASC
-  `;
-
-    const result = await this.dataSource.query(sql, [
-      anoLectivo,
-      codigoPreinscricao,
-    ]);
-
-    return result.map((row: any) => ({
-      codigo: row.CODIGO,
-      servico: row.SERVICO,
-      valor: row.VALOR_TOTAL,
-      data_pagamento_banco: row.DATABANCO,
-      data_validacao: row.UPDATED_AT,
-      ano_lectivo: row.ANOLECTIVO,
-      codigo_servico: row.CODIGO_SERVICO,
-    }));
-  }
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
     const anoCorrente = this.anoAtualPrincipal;
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
-
-    // if (!nOperacaoBancaria) {
-    //   throw new BadRequestException('Precisa de uma operação bancária');
-    // }
 
     if (nOperacaoBancaria) {
       const n_op =
@@ -470,7 +386,7 @@ export class PaymentService {
       if (estados === 1) {
         for (const item of itens) {
           await queryRunner.query(
-            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado WHERE Codigo = :codigo`,
+            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado WHERE CODIGOFACTURA = :codigo`,
             { estado: estados, codigo: item.Codigo } as any,
           );
         }
@@ -547,12 +463,12 @@ export class PaymentService {
         tda:
           tdaResult && !tdaResult.success
             ? {
-                error: true,
-                message: tdaResult.message,
-              }
+              error: true,
+              message: tdaResult.message,
+            }
             : {
-                error: false,
-              },
+              error: false,
+            },
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -576,7 +492,87 @@ export class PaymentService {
   ): Promise<Payment2 | null> {
     return this.paymentRepository.findOne({ where: { nOperacaoBancaria2 } });
   }
+  async listarServicosPagosAluno(filter: {
+    anoLectivo?: number;
+    codigoMatricula?: number;
+    tipo?: TipoPagamento;
+  }) {
+    const {
+      anoLectivo,
+      codigoMatricula,
+      tipo = 'TODOS',
+    } = filter;
 
+    const preinscricaoResult = await this.dataSource.query(
+      `
+      SELECT ta.PRE_INCRICAO AS CODIGO_PREINSCRICAO
+      FROM FK2_TB_MATRICULAS tm
+      INNER JOIN FK2_TB_ADMISSAO ta
+        ON ta.CODIGO = tm.CODIGO_ALUNO
+      WHERE tm.CODIGO = :1
+    `,
+      [codigoMatricula],
+    );
+
+    const codigoPreinscricao = preinscricaoResult?.[0]?.CODIGO_PREINSCRICAO;
+
+    if (!codigoPreinscricao) {
+      return [];
+    }
+
+    let tipoClause = '';
+
+    if (tipo === 'MENSALIDADES') {
+      tipoClause = `
+      AND s.CODIGO IN (1149893, 1149835, 22241)
+    `;
+    }
+
+    if (tipo === 'SERVICOS') {
+      tipoClause = `
+      AND s.CODIGO NOT IN (1149893, 1149835, 22241)
+    `;
+    }
+
+    const sql = `
+    SELECT
+      pi.CODIGO,
+      DBMS_LOB.SUBSTR(s.DESCRICAO, 4000, 1) AS SERVICO,
+      pi.VALOR_TOTAL,
+      p.DATABANCO,
+      p.UPDATED_AT,
+      p.ANOLECTIVO,
+      s.CODIGO AS CODIGO_SERVICO
+    FROM FK2_TB_PAGAMENTOSI pi
+    INNER JOIN FK2_TB_PAGAMENTOS p
+      ON p.CODIGO = pi.CODIGO_PAGAMENTO
+    INNER JOIN FK2_TB_TIPO_SERVICOS s
+      ON s.CODIGO = pi.CODIGO_SERVICO
+    WHERE p.ANOLECTIVO = :1
+      AND p.ESTADO = 1
+      AND p.CODIGO_PREINSCRICAO = :2
+      AND DBMS_LOB.GETLENGTH(s.DESCRICAO) > 0
+      ${tipoClause}
+    ORDER BY
+      p.DATA,
+      p.CODIGO_FACTURA ASC
+  `;
+
+    const result = await this.dataSource.query(sql, [
+      anoLectivo,
+      codigoPreinscricao,
+    ]);
+
+    return result.map((row: any) => ({
+      codigo: row.CODIGO,
+      servico: row.SERVICO,
+      valor: row.VALOR_TOTAL,
+      data_pagamento_banco: row.DATABANCO,
+      data_validacao: row.UPDATED_AT,
+      ano_lectivo: row.ANOLECTIVO,
+      codigo_servico: row.CODIGO_SERVICO,
+    }));
+  }
   async studentPayments(query: StudentPaymentsQueryDto) {
     const {
       codigoMatricula,

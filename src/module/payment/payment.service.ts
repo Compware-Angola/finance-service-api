@@ -386,8 +386,8 @@ export class PaymentService {
       if (estados === 1) {
         for (const item of itens) {
           await queryRunner.query(
-            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado WHERE CODIGOFACTURA = :codigo`,
-            { estado: estados, codigo: item.Codigo } as any,
+            `UPDATE FK2_FACTURA_ITEMS SET estado = :estado , VALOR_PAGO = :valor  WHERE CODIGOFACTURA = :codigo`,
+            { estado: estados, codigo: item.Codigo, valor: item.PrecoProduto } as any,
           );
         }
       }

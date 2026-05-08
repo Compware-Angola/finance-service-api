@@ -384,6 +384,7 @@ export class MonthlyFeesDiscountService {
     );
 
     const mensalidadeFinal = mensalidadeDesconto + multa;
+    const valorPago = isBolseiroIntegral ? mensalidadeFinal : 0;
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,
@@ -408,7 +409,7 @@ export class MonthlyFeesDiscountService {
       semestre: mesTemp.semestre,
       multa: multa,
       total_item: mensalidadeFinal,
-      valor_pago: 0,
+      valor_pago: valorPago,
       mensalidade: mensalidade,
       total: mensalidadeFinal,
       total_preco: mensalidade,

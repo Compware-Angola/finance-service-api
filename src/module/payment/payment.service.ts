@@ -363,7 +363,8 @@ export class PaymentService {
         'preinscricao',
       );
     }
-
+    const cleanText = (value?: string) =>
+      value?.replace(/\s+/g, '').trim();
     const finalPayload = {
       ...rest,
       anoLectivo: anoLectivo ?? anoCorrente,
@@ -374,7 +375,7 @@ export class PaymentService {
         invoice.codigoPreinscricao ??
         undefined,
       instituicaoId: undefined,
-      nOperacaoBancaria,
+      nOperacaoBancaria: cleanText(nOperacaoBancaria),
       nOperacaoBancaria2: undefined,
       fkUtilizador: user?.sub,
       utilizador: user?.sub,
@@ -440,7 +441,7 @@ export class PaymentService {
           { codigo: existingPayment.codigo },
           {
             statusPagamento: PaymentStatus.CONCLUIDO,
-            nOperacaoBancaria2: dto.nOperacaoBancaria,
+            nOperacaoBancaria2: cleanText(dto.nOperacaoBancaria),
             valorDepositado: valorDepositadoAtualizado,
             formaPagamento: dto.formaPagamento,
             fkUtilizador: user?.sub,

@@ -399,7 +399,7 @@ export class MonthlyFeesDiscountService {
       tipo_servico: '',
       codigo_matricula: codigoMatricula,
       ano_lectivo_fatura: anoLectivo,
-      estado_fatura: '0',
+      estado_fatura: statusPagamento,
       reference: '',
       ValorAPagar: mensalidadeFinal,
       valorEntregue: 0,

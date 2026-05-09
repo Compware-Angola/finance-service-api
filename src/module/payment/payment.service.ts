@@ -491,7 +491,13 @@ export class PaymentService {
   async findPaymentByN_Operacao_Bancaria(
     nOperacaoBancaria: string,
   ): Promise<Payment2 | null> {
-    return this.paymentRepository.findOne({ where: { nOperacaoBancaria } });
+
+    return this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('TRIM(UPPER(payment.nOperacaoBancaria)) = TRIM(UPPER(:value))', {
+        value: nOperacaoBancaria,
+      })
+      .getOne();
   }
   async findPaymentByCodigoFactura(
     codigoFactura: number,
@@ -501,7 +507,12 @@ export class PaymentService {
   async findPaymentByN_Operacao_Bancaria2(
     nOperacaoBancaria2: string,
   ): Promise<Payment2 | null> {
-    return this.paymentRepository.findOne({ where: { nOperacaoBancaria2 } });
+    return this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('TRIM(UPPER(payment.nOperacaoBancaria2)) = TRIM(UPPER(:value))', {
+        value: nOperacaoBancaria2,
+      })
+      .getOne();
   }
   async listarServicosPagosAluno(filter: {
     anoLectivo?: number;

@@ -297,10 +297,15 @@ export class PaymentService {
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
     const anoCorrente = this.anoAtualPrincipal;
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
+    const cleanText = (value?: string) =>
+      value?.replace(/\s+/g, '').trim();
+    console.log(nOperacaoBancaria);
+    const cleanNOperacaoBancaria = cleanText(nOperacaoBancaria);
 
-    if (nOperacaoBancaria) {
-      const n_op =
-        await this.findPaymentByN_Operacao_Bancaria(nOperacaoBancaria);
+    if (cleanNOperacaoBancaria) {
+
+
+      const n_op = await this.findPaymentByN_Operacao_Bancaria(cleanNOperacaoBancaria);
       if (n_op) {
         throw new BadRequestException(
           `Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`,
@@ -367,7 +372,7 @@ export class PaymentService {
         invoice.codigoPreinscricao ??
         undefined,
       instituicaoId: undefined,
-      nOperacaoBancaria,
+      nOperacaoBancaria: cleanNOperacaoBancaria,
       nOperacaoBancaria2: undefined,
       fkUtilizador: user?.sub,
       utilizador: user?.sub,
@@ -433,7 +438,7 @@ export class PaymentService {
           { codigo: existingPayment.codigo },
           {
             statusPagamento: PaymentStatus.CONCLUIDO,
-            nOperacaoBancaria2: dto.nOperacaoBancaria,
+            nOperacaoBancaria2: cleanNOperacaoBancaria,
             valorDepositado: valorDepositadoAtualizado,
             formaPagamento: dto.formaPagamento,
             fkUtilizador: user?.sub,
@@ -484,7 +489,13 @@ export class PaymentService {
   async findPaymentByN_Operacao_Bancaria(
     nOperacaoBancaria: string,
   ): Promise<Payment2 | null> {
-    return this.paymentRepository.findOne({ where: { nOperacaoBancaria } });
+
+    return this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('TRIM(UPPER(payment.nOperacaoBancaria)) = TRIM(UPPER(:value))', {
+        value: nOperacaoBancaria,
+      })
+      .getOne();
   }
   async findPaymentByCodigoFactura(
     codigoFactura: number,
@@ -494,7 +505,12 @@ export class PaymentService {
   async findPaymentByN_Operacao_Bancaria2(
     nOperacaoBancaria2: string,
   ): Promise<Payment2 | null> {
-    return this.paymentRepository.findOne({ where: { nOperacaoBancaria2 } });
+    return this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('TRIM(UPPER(payment.nOperacaoBancaria2)) = TRIM(UPPER(:value))', {
+        value: nOperacaoBancaria2,
+      })
+      .getOne();
   }
   async listarServicosPagosAluno(filter: {
     anoLectivo?: number;

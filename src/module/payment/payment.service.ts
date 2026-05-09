@@ -297,17 +297,15 @@ export class PaymentService {
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
     const anoCorrente = this.anoAtualPrincipal;
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
+    const cleanText = (value?: string) =>
+      value?.replace(/\s+/g, '').trim();
     console.log(nOperacaoBancaria);
+    const cleanNOperacaoBancaria = cleanText(nOperacaoBancaria);
 
-    if (nOperacaoBancaria?.toString().trim()) {
-      console.log("ENTREI");
-
-      const numeroLimpo = nOperacaoBancaria.toString().replace(/\s+/g, '');
-
-      const n_op = await this.findPaymentByN_Operacao_Bancaria(numeroLimpo);
-      console.log(n_op);
+    if (cleanNOperacaoBancaria) {
 
 
+      const n_op = await this.findPaymentByN_Operacao_Bancaria(cleanNOperacaoBancaria);
       if (n_op) {
         throw new BadRequestException(
           `Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`,
@@ -363,8 +361,7 @@ export class PaymentService {
         'preinscricao',
       );
     }
-    const cleanText = (value?: string) =>
-      value?.replace(/\s+/g, '').trim();
+
     const finalPayload = {
       ...rest,
       anoLectivo: anoLectivo ?? anoCorrente,
@@ -375,7 +372,7 @@ export class PaymentService {
         invoice.codigoPreinscricao ??
         undefined,
       instituicaoId: undefined,
-      nOperacaoBancaria: cleanText(nOperacaoBancaria),
+      nOperacaoBancaria: cleanNOperacaoBancaria,
       nOperacaoBancaria2: undefined,
       fkUtilizador: user?.sub,
       utilizador: user?.sub,
@@ -441,7 +438,7 @@ export class PaymentService {
           { codigo: existingPayment.codigo },
           {
             statusPagamento: PaymentStatus.CONCLUIDO,
-            nOperacaoBancaria2: cleanText(dto.nOperacaoBancaria),
+            nOperacaoBancaria2: cleanNOperacaoBancaria,
             valorDepositado: valorDepositadoAtualizado,
             formaPagamento: dto.formaPagamento,
             fkUtilizador: user?.sub,

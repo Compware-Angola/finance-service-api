@@ -297,10 +297,17 @@ export class PaymentService {
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
     const anoCorrente = this.anoAtualPrincipal;
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
+    console.log(nOperacaoBancaria);
 
-    if (nOperacaoBancaria) {
-      const n_op =
-        await this.findPaymentByN_Operacao_Bancaria(nOperacaoBancaria);
+    if (nOperacaoBancaria?.toString().trim()) {
+      console.log("ENTREI");
+
+      const numeroLimpo = nOperacaoBancaria.toString().replace(/\s+/g, '');
+
+      const n_op = await this.findPaymentByN_Operacao_Bancaria(numeroLimpo);
+      console.log(n_op);
+
+
       if (n_op) {
         throw new BadRequestException(
           `Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`,
@@ -484,7 +491,13 @@ export class PaymentService {
   async findPaymentByN_Operacao_Bancaria(
     nOperacaoBancaria: string,
   ): Promise<Payment2 | null> {
-    return this.paymentRepository.findOne({ where: { nOperacaoBancaria } });
+
+    return this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('TRIM(UPPER(payment.nOperacaoBancaria)) = TRIM(UPPER(:value))', {
+        value: nOperacaoBancaria,
+      })
+      .getOne();
   }
   async findPaymentByCodigoFactura(
     codigoFactura: number,
@@ -494,7 +507,12 @@ export class PaymentService {
   async findPaymentByN_Operacao_Bancaria2(
     nOperacaoBancaria2: string,
   ): Promise<Payment2 | null> {
-    return this.paymentRepository.findOne({ where: { nOperacaoBancaria2 } });
+    return this.paymentRepository
+      .createQueryBuilder('payment')
+      .where('TRIM(UPPER(payment.nOperacaoBancaria2)) = TRIM(UPPER(:value))', {
+        value: nOperacaoBancaria2,
+      })
+      .getOne();
   }
   async listarServicosPagosAluno(filter: {
     anoLectivo?: number;

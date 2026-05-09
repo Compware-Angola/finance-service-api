@@ -297,10 +297,17 @@ export class PaymentService {
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
     const anoCorrente = this.anoAtualPrincipal;
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
+    console.log(nOperacaoBancaria);
 
-    if (nOperacaoBancaria) {
-      const n_op =
-        await this.findPaymentByN_Operacao_Bancaria(nOperacaoBancaria);
+    if (nOperacaoBancaria?.toString().trim()) {
+      console.log("ENTREI");
+
+      const numeroLimpo = nOperacaoBancaria.toString().replace(/\s+/g, '');
+
+      const n_op = await this.findPaymentByN_Operacao_Bancaria(numeroLimpo);
+      console.log(n_op);
+
+
       if (n_op) {
         throw new BadRequestException(
           `Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`,

@@ -21,21 +21,20 @@ import { IsencaoModule } from './module/isencao/isencao.module';
 
 import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
 import { PaymentTfcModule } from './module/payment-tfc/payment-tfc.module';
-
+import { FormaPagamentoModule } from './module/forma-pagamento/forma-pagamento.module';
 
 @Module({
   imports: [
-
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: (() => {
         switch (process.env.NODE_ENV) {
           case 'production':
-            return '.env.prod';       
+            return '.env.prod';
           case 'preprod':
-            return '.env.preprod';    
+            return '.env.preprod';
           default:
-            return '.env.dev';        
+            return '.env.dev';
         }
       })(),
     }),
@@ -72,8 +71,8 @@ import { PaymentTfcModule } from './module/payment-tfc/payment-tfc.module';
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-        useFactory: (config: ConfigService) => ({
-        prefix: config.get<string>('BULL_PREFIX') || 'dev', 
+      useFactory: (config: ConfigService) => ({
+        prefix: config.get<string>('BULL_PREFIX') || 'dev',
         connection: {
           host: config.get<string>('REDIS_HOST') || 'localhost',
           port: config.get<number>('REDIS_PORT') || 6379,
@@ -99,6 +98,7 @@ import { PaymentTfcModule } from './module/payment-tfc/payment-tfc.module';
     DiscountModule,
     IsencaoModule,
     PaymentTfcModule,
+    FormaPagamentoModule,
   ],
   providers: [BullMQWorkerService],
 })

@@ -8,8 +8,10 @@ import {
   Body,
   UseGuards,
   Req,
+  ValidationPipe,
+  UsePipes,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { Payment } from './entities/payment.entity';
@@ -23,6 +25,9 @@ import { RequiredPermissions } from 'src/common/pipes/permissions.decorator';
 import { PermissionTypeDetails } from 'src/common/enums/permission.type';
 import { ListPaymentDTO } from './dto/list-payment.dto';
 import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
+import { ListarServicosPagosAlunoDto } from './dto/listar-servico-pagos.dto';
+import { EstatisticasService } from './estatisticas.service';
+import { EstatisticasQueryDto } from './dto/estatisticas-query.dto';
 
 @ApiTags('payment')
 @Controller('payment')
@@ -30,7 +35,8 @@ export class PaymentController {
   constructor(
     private readonly paymentService: PaymentService,
     private httpService: HttpService,
-  ) { }
+    private readonly estatisticasService: EstatisticasService,
+  ) {}
   @Post('create')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.LIQUIDAR_NOTA_PAGAMENTO.sigla)
@@ -40,9 +46,9 @@ export class PaymentController {
     @Body() createPaymentDto: CreatePaymentDto,
     @Req() req: any,
   ): Promise<Payment | any> {
-    const user = req.user; // Obter o usuário autenticado
+    const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    console.log('Usuário autenticado:', user);
+
     const payment = await this.paymentService.createPayment(
       createPaymentDto,
       user,
@@ -74,6 +80,23 @@ export class PaymentController {
       preInscritionCode,
       paginationQuery,
     );
+  }
+  @Get('servicos-pagos-aluno')
+  @ApiQuery({ name: 'anoLectivo', required: true, type: Number, example: 23 })
+  @ApiQuery({
+    name: 'codigoMatricula',
+    required: true,
+    type: Number,
+    example: 40014,
+  })
+  @ApiQuery({
+    name: 'tipo',
+    required: false,
+    enum: ['TODOS', 'MENSALIDADES', 'SERVICOS'],
+    example: 'TODOS',
+  })
+  async listarServicosPagosAluno(@Query() filter: ListarServicosPagosAlunoDto) {
+    return this.paymentService.listarServicosPagosAluno(filter);
   }
   @Get('student-payments')
   @ApiOperation({ summary: 'Listar pagamentos do aluno' })
@@ -114,5 +137,11 @@ export class PaymentController {
   })
   async findPaymentMonthly(@Query() query: FindPaymentMonthlyDTO) {
     return this.paymentService.findPaymentMonthly(query);
+  }
+
+  @Get('estatisticas')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async getEstatisticasAgrupado(@Query() query: EstatisticasQueryDto) {
+    return this.estatisticasService.getAgrupado(query);
   }
 }

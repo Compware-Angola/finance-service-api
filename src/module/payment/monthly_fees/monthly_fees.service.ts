@@ -30,6 +30,14 @@ export class MonthlyFeesService {
     if (!codigo_matricula || !codAnoLectivo) {
       return { data: [], total: 0, page, limit, totalPages: 0 };
     }
+    //Verificar se ele fez confirmação naquele ano
+    const temConfirmacao = await this.verificarConfirmacao(
+      codigo_matricula,
+      codAnoLectivo,
+    );
+    if (!temConfirmacao) {
+      return { data: [], total: 0, page, limit, totalPages: 0 };
+    }
 
     const skip = (page - 1) * limit;
 
@@ -128,14 +136,13 @@ export class MonthlyFeesService {
       .limit(limit)
       .getRawMany();
 
-    if (codAnoLectivo <= 22) {
-      const generatedPayment = await this.monthlyFeeDiscount.generatePayment({
-        codAnoLectivo: codAnoLectivo,
-        codigo_matricula: codigo_matricula,
-        status: status,
-      });
-      results.push(...generatedPayment);
-    }
+    const generatedPayment = await this.monthlyFeeDiscount.generatePayment({
+      codAnoLectivo: codAnoLectivo,
+      codigo_matricula: codigo_matricula,
+      status: status,
+    });
+    results.push(...generatedPayment);
+
     return {
       data: results,
       total,
@@ -143,6 +150,24 @@ export class MonthlyFeesService {
       limit,
       totalPages,
     };
+  }
+  async verificarConfirmacao(codigoMatricula: number, anoLectivo: number) {
+    const sql = `
+      select codigo
+      from fk2_tb_confirmacoes
+      where 1=1
+      and codigo_matricula = :codigoMatricula
+      and codigo_ano_lectivo = :anoLectivo
+    `;
+    const result = await this.dataSource.query(sql, {
+      codigoMatricula: codigoMatricula,
+      anoLectivo: anoLectivo,
+    } as any);
+
+    if (!result || result.length == 0) {
+      return false;
+    }
+    return true;
   }
   async findMonthlyStatistic({
     codigo_matricula,

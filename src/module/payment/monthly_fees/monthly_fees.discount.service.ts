@@ -384,6 +384,8 @@ export class MonthlyFeesDiscountService {
     );
 
     const mensalidadeFinal = mensalidadeDesconto + multa;
+    const valorPago = isBolseiroIntegral ? mensalidade : 0;
+
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,
@@ -397,7 +399,7 @@ export class MonthlyFeesDiscountService {
       tipo_servico: '',
       codigo_matricula: codigoMatricula,
       ano_lectivo_fatura: anoLectivo,
-      estado_fatura: '0',
+      estado_fatura: statusPagamento,
       reference: '',
       ValorAPagar: mensalidadeFinal,
       valorEntregue: 0,
@@ -408,7 +410,7 @@ export class MonthlyFeesDiscountService {
       semestre: mesTemp.semestre,
       multa: multa,
       total_item: mensalidadeFinal,
-      valor_pago: 0,
+      valor_pago: valorPago,
       mensalidade: mensalidade,
       total: mensalidadeFinal,
       total_preco: mensalidade,
@@ -418,7 +420,7 @@ export class MonthlyFeesDiscountService {
   async generatePayment({
     codAnoLectivo,
     codigo_matricula,
-    status,
+    status = 'all',
   }: TestMonthlyDTO) {
     const sqlMesTemp = `
      select

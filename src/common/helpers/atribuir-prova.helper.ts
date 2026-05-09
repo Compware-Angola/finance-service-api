@@ -22,6 +22,8 @@ export class AtribuirProvaHelper {
     payload: AtribuirProvaPayload,
   ): void {
     const url = this.getUrl(payload.codigoCandidato);
+    console.log(url);
+
 
     httpService
       .post(url, {}, {
@@ -54,6 +56,8 @@ export class AtribuirProvaHelper {
     payload: AtribuirProvaPayload,
   ): Promise<any> {
     const url = this.getUrl(payload.codigoCandidato);
+    console.log(url);
+
 
     try {
       const { lastValueFrom } = await import('rxjs');

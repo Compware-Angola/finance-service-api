@@ -293,6 +293,7 @@ export class MonthlyFeesDiscountService {
       mesTemp.data_limite,
       mesTemp.data_final,
     );
+
     return percentagemMulta;
   }
   private async existIsencaoMensalidade(
@@ -343,7 +344,8 @@ export class MonthlyFeesDiscountService {
       codigoMatricula,
       mesTemp,
     );
-    const multa = percentagemDesconto == 0 ? 0 : mensalidade * percentagemMulta;
+
+    const multa = mensalidade * percentagemMulta;
     return multa;
   }
 
@@ -403,7 +405,7 @@ export class MonthlyFeesDiscountService {
       reference: '',
       ValorAPagar: mensalidadeFinal,
       valorEntregue: 0,
-      data_vencimento: null,
+      data_vencimento: mesTemp.data_limite,
       codigo_factura: 0,
       total_preco_fatura: 0,
       desconto: desconto,

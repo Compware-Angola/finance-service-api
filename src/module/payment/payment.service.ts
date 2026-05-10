@@ -299,7 +299,7 @@ export class PaymentService {
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
     const cleanText = (value?: string) =>
       value?.replace(/\s+/g, '').trim();
-    console.log(nOperacaoBancaria);
+
     const cleanNOperacaoBancaria = cleanText(nOperacaoBancaria);
 
     if (cleanNOperacaoBancaria) {

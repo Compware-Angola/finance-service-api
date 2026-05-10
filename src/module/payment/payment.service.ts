@@ -364,6 +364,7 @@ export class PaymentService {
 
     const finalPayload = {
       ...rest,
+      totalGeral: invoice.TotalPreco || 0,
       anoLectivo: anoLectivo ?? anoCorrente,
       codigoFactura: dto.codigoFactura,
       codigoPreInscricao:

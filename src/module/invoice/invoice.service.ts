@@ -541,10 +541,10 @@ FROM (
         f.desconto                        AS desconto,
         f.totaliva                        AS total_iva,
         f.TOTAL_INCIDENCIA                AS total_incidencia,
-        
+
         -- Nome do aluno (melhor forma)
         COALESCE(p1.Nome_Completo, p2.Nome_Completo) AS nome_aluno,
-        
+
         c.designacao                      AS curso,
         po.designacao                     AS polo,
         ano.Designacao                    AS ano_lectivo,
@@ -559,7 +559,7 @@ FROM (
     LEFT JOIN FK2_TB_MATRICULAS       m   ON m.Codigo = f.CodigoMatricula
     LEFT JOIN FK2_TB_ADMISSAO         a   ON a.codigo = m.Codigo_Aluno
     LEFT JOIN FK2_TB_PREINSCRICAO     p1  ON p1.Codigo = a.pre_incricao
-    
+
     -- Join direto com pré-inscrição
     LEFT JOIN FK2_TB_PREINSCRICAO     p2  ON p2.Codigo = f.codigo_preinscricao   -- <<<< muda o nome da coluna se for diferente
 
@@ -574,8 +574,8 @@ FROM (
     ${whereClause}
 
     GROUP BY
-        f.Codigo, f.DataFactura, f.TotalPreco, f.valorapagar, f.totalmulta, 
-        f.totaliva, f.TOTAL_INCIDENCIA, f.CodigoMatricula, f.Referencia, 
+        f.Codigo, f.DataFactura, f.TotalPreco, f.valorapagar, f.totalmulta,
+        f.totaliva, f.TOTAL_INCIDENCIA, f.CodigoMatricula, f.Referencia,
         f.Descricao, f.estado, f.desconto,
         p1.Nome_Completo, p2.Nome_Completo,   -- <<<< importante
         c.designacao, po.designacao, ano.Designacao, ano.codigo
@@ -627,7 +627,8 @@ WHERE rn BETWEEN :startRow AND :endRow
       ts.Codigo                AS codigoServico,
 
       mt.id                    AS mesId,
-      mt.DESIGNACAO             AS mesDescricao
+      mt.DESIGNACAO             AS mesDescricao,
+      mt.PRESTACAO              As prestacao
 
     FROM FK2_FACTURA_ITEMS fi
 

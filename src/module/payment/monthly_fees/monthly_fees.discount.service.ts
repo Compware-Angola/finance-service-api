@@ -183,6 +183,7 @@ export class MonthlyFeesDiscountService {
               DATA_FIM
               FROM FK2_DESCONTOS_ESPECIAIS
                where SIGLA = 'DAP50_AGRO_2324'
+               and ESTADO = 1
                and  TO_DATE(:dataTemp, 'YYYY-MM-DD') BETWEEN DATA_INICIO AND DATA_FIM
               `;
       const resultadoAgro = await this.dataSource.query(sqlDescontoAgro, {
@@ -207,6 +208,7 @@ export class MonthlyFeesDiscountService {
         DATA_FIM
       FROM FK2_DESCONTOS_ESPECIAIS
       where SIGLA = 'DEN20_POSLAB'
+       and ESTADO = 1
       and  TO_DATE(:dataTemp, 'YYYY-MM-DD') BETWEEN DATA_INICIO AND DATA_FIM
       `;
       const resultadoDescontoNoturno = await this.dataSource.query(

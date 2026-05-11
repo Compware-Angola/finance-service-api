@@ -1,20 +1,17 @@
 import {
   BadRequestException,
   Injectable,
-  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { Brackets, DataSource, QueryRunner, Repository } from 'typeorm';
+import { DataSource, QueryRunner, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
-import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { InvoiceService } from '../invoice/invoice.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { StudentPaymentsQueryDto } from './dto/student-payment.dto';
 import { DecodedUserPayload } from 'src/common/types/token-validation-response.interface';
-import { UpdateAddDiscountDto } from '../discount/dto/update-add-discount.dto';
 import { Payment2 } from './entities/payment2.entity';
 import { ListPaymentDTO } from './dto/list-payment.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
@@ -335,6 +332,7 @@ export class PaymentService {
     const valorDepositado =
       dto.valorDepositado || existingPayment?.valorDepositado || 0;
     const estados = invoice.TotalPreco > valorDepositado ? 2 : 1;
+    const valor_restante = valorDepositado - invoice.TotalPreco;
 
     const itens = await this.dataSource.query(
       `
@@ -392,9 +390,7 @@ export class PaymentService {
       if (estados === 1) {
         for (const item of itens) {
           const item_formated = toLowerCaseKeys(item)
-          console.log(item_formated);
-          console.log(item_formated.codigo_fi, item_formated.precoproduto);
-          console.log("-----------------------")
+
           await queryRunner.query(
             `UPDATE FK2_FACTURA_ITEMS SET estado = :estado , VALOR_PAGO = :valor  WHERE CODIGO = :codigo`,
             { estado: estados, codigo: item_formated.codigo_fi, valor: item_formated.precoproduto } as any,
@@ -464,7 +460,16 @@ export class PaymentService {
       }
 
       await queryRunner.commitTransaction();
+      /*
+      1. Saldo na conta corrente do estudante (FK2_TB_MATRICULAS)
+      2. Saldo na conta corrente da pré-inscrição (FK2_TB_PREINSCRICAO)
+      3. Transferência/criação de crédito na conta do próximo ano letivo
+   
 
+      if (valor_restante > 0 && student?.codigo) {
+        await this.updateCreditAccount(student.codigo, valor_restante);
+      }
+ */
       return {
         message: existingPayment
           ? 'Pagamento atualizado com sucesso'
@@ -480,6 +485,42 @@ export class PaymentService {
               error: false,
             },
       };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async updateCreditAccount(preinscricao: number, valor: number) {
+    if (valor <= 0) throw new BadRequestException('Valor deve ser positivo');
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const aluno = await this.findAluno(preinscricao, 'preinscricao');
+      if (!aluno) throw new NotFoundException(`Aluno ${preinscricao} não encontrado`);
+
+      const saldo_atual = Number(aluno.saldo_atual || 0);
+      const saldo_final = saldo_atual + valor;
+
+      if (saldo_final < 0) throw new BadRequestException('Saldo insuficiente');
+
+      await queryRunner.query(
+        `UPDATE FK2_TB_PREINSCRICAO 
+       SET SALDO = :saldo_final, 
+           SALDO_ANTERIOR = :saldo_atual, 
+           OBS_SALDO = 'Pagamento de serviços', 
+           SALDO_RESET = :saldo_final, 
+           SALDO_RESET_ANTER = :saldo_atual 
+       WHERE CODIGO = :codigo`,
+        { saldo_final, saldo_atual, codigo: aluno.codigo } as any,
+      );
+
+      await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -727,7 +768,7 @@ export class PaymentService {
       throw new NotFoundException('Aluno não encontrado');
     }
 
-    return result[0];
+    return toLowerCaseKeys(result[0]);
   }
   public async findPayments(filters: ListPaymentDTO) {
     const {

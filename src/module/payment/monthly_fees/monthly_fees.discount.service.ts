@@ -19,7 +19,7 @@ export class MonthlyFeesDiscountService {
   constructor(
     private dataSource: DataSource,
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
-  ) { }
+  ) {}
   //Informações para gerar as mensalidades
 
   private async obterInfoAluno(
@@ -220,9 +220,12 @@ export class MonthlyFeesDiscountService {
     } as any);
 
     const anoInscrito = Number(resultAnoInscrito?.[0]?.CODIGO || 0);
-    console.log('@@@@||', anoInscrito);
+
     if (anoInscrito !== duracaoCurso) {
-      return false;
+      return {
+        temDesconto: false,
+        desconto: 0,
+      };
     }
 
     const sqlCadeirasInscritasAnoCorrente = `
@@ -399,19 +402,14 @@ export class MonthlyFeesDiscountService {
   private async calcularPercentagemMulta(
     codigoMatricula: number,
     mesTemp: MesTempResponse,
-    periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[] = []
-
+    periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[] = [],
   ) {
     const existMulta = await this.existIsencaoMulta(
       codigoMatricula,
-      mesTemp.id
+      mesTemp.id,
     );
     if (existMulta) return 0;
-    const percentagemMulta = obterMulta(
-      mesTemp.data_limite,
-      periodosIsentos
-
-    );
+    const percentagemMulta = obterMulta(mesTemp.data_limite, periodosIsentos);
 
     return percentagemMulta;
   }
@@ -458,13 +456,12 @@ export class MonthlyFeesDiscountService {
     mesTemp: MesTempResponse,
     percentagemDesconto: number,
     mensalidade: number,
-    periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[] = []
-
+    periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[] = [],
   ) {
     const percentagemMulta = await this.calcularPercentagemMulta(
       codigoMatricula,
       mesTemp,
-      periodosIsentos
+      periodosIsentos,
     );
 
     const multa = mensalidade * percentagemMulta;
@@ -475,7 +472,7 @@ export class MonthlyFeesDiscountService {
     anoLectivo,
     codigoMatricula,
     mesTemp,
-    periodosIsentos
+    periodosIsentos,
   }: CalcularValorMensalidadeParams) {
     const mensalidade = await this.obterMensalidade(
       codigoMatricula,
@@ -506,7 +503,7 @@ export class MonthlyFeesDiscountService {
       mesTemp,
       percentagemDesconto,
       mensalidadeDesconto,
-      periodosIsentos
+      periodosIsentos,
     );
 
     const mensalidadeFinal = mensalidadeDesconto + multa;
@@ -591,7 +588,7 @@ export class MonthlyFeesDiscountService {
         anoLectivo: codAnoLectivo,
         codigoMatricula: codigo_matricula,
         mesTemp: mesTemp,
-        periodosIsentos
+        periodosIsentos,
       });
 
       if (status == 'pending' && result.status_pagamento == 0)

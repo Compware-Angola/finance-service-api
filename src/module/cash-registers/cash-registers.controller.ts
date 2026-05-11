@@ -13,7 +13,7 @@ import {
 import { CashRegistersService } from './cash-registers.service';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
-import { OpenCashRegisterDto } from './dto/open-cash-register.dto';
+
 import { ListCashRegistersDto } from './dto/list-cash-registers.dto';
 import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
 import { PermissionsGuard } from 'src/common/secret/permissions.guard';
@@ -84,16 +84,12 @@ export class CashRegistersController {
   }
 
   @Patch(':id/open/')
-  async open(
-    @Param('id') id: string,
-    @Body() body: OpenCashRegisterDto,
-    @Req() req: any,
-  ) {
+  async open(@Param('id') id: string, @Req() req: any) {
     const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     const cashRegister = await this.service.openCashRegister(
       Number(id),
-      body.operatorId,
+      user?.sub,
     );
     AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} abriu o caixa com código ${id}`,
@@ -107,7 +103,7 @@ export class CashRegistersController {
   async close(@Param('id') id: string, @Req() req: any) {
     const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    await this.service.closeCashRegister(Number(id));
+    await this.service.closeCashRegister(Number(id), user?.sub);
     AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} fechou o caixa com código ${id}`,
       fkUtilizadorResponsavel: user?.sub,
@@ -116,29 +112,12 @@ export class CashRegistersController {
     return { message: 'Caixa fechado com sucesso' };
   }
 
-  @Patch(':id/block')
-  async block(@Param('id') id: string, @Req() req: any) {
+  @Get('meu-caixa')
+  async findByOperatorId(@Req() req: any) {
     const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.blockCashRegister(Number(id));
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} bloqueou o caixa com código ${id}`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
-    });
-    return { data: cashRegister };
-  }
-
-  @Patch(':id/unblock')
-  async unblock(@Param('id') id: string, @Req() req: any) {
-    const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.unblockCashRegister(Number(id));
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} desbloqueou o caixa com código ${id}`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
-    });
+    const cashRegister = await this.service.findCashRegisterOpenByOperatorId(
+      user?.sub,
+    );
     return { data: cashRegister };
   }
 }

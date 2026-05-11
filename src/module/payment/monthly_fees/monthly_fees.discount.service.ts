@@ -10,6 +10,7 @@ import {
   CalcularValorMensalidadeParams,
   MesTempResponse,
   ObterBolseiroParams,
+  EstudanteInfo,
 } from './types';
 import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
 import { formatDisplay } from 'src/module/util/format-date';
@@ -20,6 +21,33 @@ export class MonthlyFeesDiscountService {
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
   ) {}
   //Informações para gerar as mensalidades
+
+  private async obterInfoAluno(
+    codigoMatricula: number,
+  ): Promise<EstudanteInfo> {
+    const sqlObterInfoAluno = `
+      select c.designacao     as curso,
+       c.codigo               as codigo_curso,
+       nvl(p.polo_id,1)       as polo
+      from fk2_tb_matriculas m
+      inner join fk2_tb_cursos        c on c.codigo = m.codigo_curso
+      inner join fk2_tb_admissao      a on a.codigo = m.codigo_aluno
+      inner join fk2_tb_preinscricao  p on p.codigo = a.pre_incricao
+      where m.codigo = :codigoMatricula
+    `;
+    const resultObterInfoAluno = await this.dataSource.query(
+      sqlObterInfoAluno,
+      {
+        codigoMatricula,
+      } as any,
+    );
+
+    const row = resultObterInfoAluno?.[0];
+    if (!row) {
+      throw new BadRequestException('Nenhuma informação encontrada');
+    }
+    return toLowerCaseKeys(row);
+  }
 
   private async obterBolseiro({
     anoLectivo,
@@ -149,7 +177,86 @@ export class MonthlyFeesDiscountService {
 
     return rowMensalidade.PRECO;
   }
+  private async obterDescontoFinalista(
+    codigoMatricula: number,
+    anoLectivo: number,
+  ): Promise<any> {
+    const estudante = await this.obterInfoAluno(codigoMatricula);
 
+    const cursoId = estudante.codigo_curso;
+
+    const duracaoCursoSql = `
+    SELECT
+      DURACAO
+    FROM FK2_TB_CURSOS
+    WHERE CODIGO = :cursoId
+  `;
+
+    const resultDuracao = await this.dataSource.query(duracaoCursoSql, {
+      cursoId,
+    } as any);
+
+    const duracaoCurso = Number(resultDuracao?.[0]?.DURACAO || 0);
+    const sqlAnoInscrito = `
+    SELECT
+      cl.CODIGO AS CODIGO,
+      cl.DESIGNACAO,
+      COUNT(ftgca.CODIGO) AS QUANTIDADE_GRADES
+    FROM FK2_TB_GRADE_CURRICULAR_ALUNO ftgca
+    LEFT JOIN FK2_TB_GRADE_CURRICULAR ftgc
+      ON ftgc.CODIGO = ftgca.CODIGO_GRADE_CURRICULAR
+    LEFT JOIN FK2_TB_CLASSES cl
+      ON cl.CODIGO = ftgc.CODIGO_CLASSE
+    WHERE ftgca.CODIGO_STATUS_GRADE_CURRICULAR IN (2, 3)
+      AND ftgca.CODIGO_MATRICULA = :codigoMatricula
+      AND ftgca.CODIGO_ANO_LECTIVO = :anoLectivo
+    GROUP BY cl.CODIGO, cl.DESIGNACAO
+    ORDER BY COUNT(ftgca.CODIGO) DESC
+  `;
+
+    const resultAnoInscrito = await this.dataSource.query(sqlAnoInscrito, {
+      anoLectivo,
+      codigoMatricula,
+    } as any);
+
+    const anoInscrito = Number(resultAnoInscrito?.[0]?.CODIGO || 0);
+    console.log('@@@@||', anoInscrito);
+    if (anoInscrito !== duracaoCurso) {
+      return false;
+    }
+
+    const sqlCadeirasInscritasAnoCorrente = `
+    SELECT
+      COUNT(*) AS TOTAL
+    FROM FK2_TB_GRADE_CURRICULAR_ALUNO
+    WHERE CODIGO_MATRICULA = :codigoMatricula
+      AND CODIGO_STATUS_GRADE_CURRICULAR IN (2,3)
+      AND CODIGO_ANO_LECTIVO = :anoLectivo
+  `;
+
+    const resultCadeirasInscritasAnoCorrente = await this.dataSource.query(
+      sqlCadeirasInscritasAnoCorrente,
+      {
+        anoLectivo,
+        codigoMatricula,
+      } as any,
+    );
+
+    const totalCadeiras = Number(
+      resultCadeirasInscritasAnoCorrente?.[0]?.TOTAL || 0,
+    );
+    console.log('@@@@||', totalCadeiras);
+    if (totalCadeiras > 0 && totalCadeiras < 5) {
+      return {
+        temDesconto: true,
+        desconto: 0.5,
+      };
+    }
+    return {
+      temDesconto: false,
+      desconto: 0,
+    };
+  }
   private async obterDescontoEspecial(
     codigoMatricula: number,
     dataInicial: Date,
@@ -256,6 +363,13 @@ export class MonthlyFeesDiscountService {
       mesTemp,
     });
     if (descontoNormal.temDesconto == true) return descontoNormal.desconto;
+
+    const descontoFinalista = await this.obterDescontoFinalista(
+      codigoMatricula,
+      anoLectivo,
+    );
+    if (descontoFinalista.temDesconto == true)
+      return descontoFinalista.desconto;
     return 0;
   }
 

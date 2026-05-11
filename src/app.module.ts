@@ -22,6 +22,7 @@ import { IsencaoModule } from './module/isencao/isencao.module';
 import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
 import { PaymentTfcModule } from './module/payment-tfc/payment-tfc.module';
 import { FormaPagamentoModule } from './module/forma-pagamento/forma-pagamento.module';
+import { CashRegistersModule } from './module/cash-registers/cash-registers.module';
 
 @Module({
   imports: [
@@ -99,6 +100,7 @@ import { FormaPagamentoModule } from './module/forma-pagamento/forma-pagamento.m
     IsencaoModule,
     PaymentTfcModule,
     FormaPagamentoModule,
+    CashRegistersModule,
   ],
   providers: [BullMQWorkerService],
 })

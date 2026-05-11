@@ -19,7 +19,7 @@ export class MonthlyFeesDiscountService {
   constructor(
     private dataSource: DataSource,
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
-  ) {}
+  ) { }
   //Informações para gerar as mensalidades
 
   private async obterInfoAluno(
@@ -290,6 +290,7 @@ export class MonthlyFeesDiscountService {
               DATA_FIM
               FROM FK2_DESCONTOS_ESPECIAIS
                where SIGLA = 'DAP50_AGRO_2324'
+               and ESTADO = 1
                and  TO_DATE(:dataTemp, 'YYYY-MM-DD') BETWEEN DATA_INICIO AND DATA_FIM
               `;
       const resultadoAgro = await this.dataSource.query(sqlDescontoAgro, {
@@ -314,6 +315,7 @@ export class MonthlyFeesDiscountService {
         DATA_FIM
       FROM FK2_DESCONTOS_ESPECIAIS
       where SIGLA = 'DEN20_POSLAB'
+       and ESTADO = 1
       and  TO_DATE(:dataTemp, 'YYYY-MM-DD') BETWEEN DATA_INICIO AND DATA_FIM
       `;
       const resultadoDescontoNoturno = await this.dataSource.query(
@@ -397,15 +399,18 @@ export class MonthlyFeesDiscountService {
   private async calcularPercentagemMulta(
     codigoMatricula: number,
     mesTemp: MesTempResponse,
+    periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[] = []
+
   ) {
     const existMulta = await this.existIsencaoMulta(
       codigoMatricula,
-      mesTemp.id,
+      mesTemp.id
     );
     if (existMulta) return 0;
     const percentagemMulta = obterMulta(
       mesTemp.data_limite,
-      mesTemp.data_final,
+      periodosIsentos
+
     );
 
     return percentagemMulta;
@@ -453,10 +458,13 @@ export class MonthlyFeesDiscountService {
     mesTemp: MesTempResponse,
     percentagemDesconto: number,
     mensalidade: number,
+    periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[] = []
+
   ) {
     const percentagemMulta = await this.calcularPercentagemMulta(
       codigoMatricula,
       mesTemp,
+      periodosIsentos
     );
 
     const multa = mensalidade * percentagemMulta;
@@ -467,6 +475,7 @@ export class MonthlyFeesDiscountService {
     anoLectivo,
     codigoMatricula,
     mesTemp,
+    periodosIsentos
   }: CalcularValorMensalidadeParams) {
     const mensalidade = await this.obterMensalidade(
       codigoMatricula,
@@ -497,6 +506,7 @@ export class MonthlyFeesDiscountService {
       mesTemp,
       percentagemDesconto,
       mensalidadeDesconto,
+      periodosIsentos
     );
 
     const mensalidadeFinal = mensalidadeDesconto + multa;
@@ -568,12 +578,20 @@ export class MonthlyFeesDiscountService {
       codigo_matricula,
     } as any);
     const mesTemps: MesTempResponse[] = toLowerCaseKeys(resultado);
+    const periodosIsentos = await this.dataSource.query(
+      `
+      SELECT DATA_INICIO, DATA_FIM
+      FROM FK2_TB_DIAS_ISENTOS
+      WHERE ESTADO = 1
+      `,
+    );
     const pagamentos: any = [];
     for (const mesTemp of mesTemps) {
       const result = await this.calcularValorMensalidade({
         anoLectivo: codAnoLectivo,
         codigoMatricula: codigo_matricula,
         mesTemp: mesTemp,
+        periodosIsentos
       });
 
       if (status == 'pending' && result.status_pagamento == 0)

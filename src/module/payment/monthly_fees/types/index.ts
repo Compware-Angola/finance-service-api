@@ -1,4 +1,4 @@
-interface ObterBolseiroResponse {}
+interface ObterBolseiroResponse { }
 interface ObterBolseiroParams {
   codigoMatricula: number;
   anoLectivo: number;
@@ -8,6 +8,7 @@ interface CalcularValorMensalidadeParams {
   codigoMatricula: number;
   anoLectivo: number;
   mesTemp: MesTempResponse;
+  periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[];
 }
 
 interface CalcularDescontoParams {

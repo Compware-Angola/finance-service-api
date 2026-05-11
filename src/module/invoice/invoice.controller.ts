@@ -30,14 +30,14 @@ export class InvoiceController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Cria uma nova fatura' })
   @ApiResponse({ status: 201, "description": 'Fatura criada com sucesso.' })
-  async create(@Body() createInvoiceDto: CreateInvoiceDto){
+  async create(@Body() createInvoiceDto: CreateInvoiceDto) {
     return this.invoiceService.queueCreateInvoice(createInvoiceDto);
   }
-   @Post('no-job')
+  @Post('no-job')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Cria uma nova fatura' })
   @ApiResponse({ status: 201, "description": 'Fatura criada com sucesso.' })
-  async create2(@Body() createInvoiceDto: CreateInvoiceDto){
+  async create2(@Body() createInvoiceDto: CreateInvoiceDto) {
     return this.invoiceService.create(createInvoiceDto);
   }
 
@@ -46,7 +46,7 @@ export class InvoiceController {
   // 2. FIND ALL (GET) - COM PAGINAÇÃO
   // ------------------------------------
   @Get()
-    @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.FACTURAS.sigla)
   @ApiOperation({ summary: 'Retorna todas as faturas com paginação' })
   @ApiResponse({ status: 200, "description": 'Lista de faturas retornada com sucesso.' })
@@ -74,7 +74,7 @@ export class InvoiceController {
 
     return this.invoiceService.findByEnrollmentCode(filterQuery);
   }
-  
+
   @Delete(':id')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.DELETAR_FACTURA.sigla)
@@ -83,11 +83,11 @@ export class InvoiceController {
   @ApiResponse({ status: 200, "description": 'Fatura anulada com sucesso.', "type": Invoice })
   @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' })
   @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
-  async annulInvoice(@Param('id', ParseIntPipe) Codigo: number,@Req() req: any): Promise<Invoice> {
-     const user = req.user;
-      const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  async annulInvoice(@Param('id', ParseIntPipe) Codigo: number, @Req() req: any): Promise<Invoice> {
+    const user = req.user;
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     console.log('Usuário autenticado:', user);
-     AccessLogHelper.logAccess(this.httpService, {
+    AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} anulou a fatura com código ${Codigo}`,
       fkUtilizadorResponsavel: user.sub,
       fkOperacaoLog: 7,
@@ -103,11 +103,11 @@ export class InvoiceController {
   @ApiResponse({ status: 200, "description": 'Fatura reativada com sucesso.', "type": Invoice })
   @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' })
   @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
-  async reactivateInvoice(@Param('id', ParseIntPipe) Codigo: number,@Req() req: any): Promise<Invoice> {
-     const user = req.user;
-      const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  async reactivateInvoice(@Param('id', ParseIntPipe) Codigo: number, @Req() req: any): Promise<Invoice> {
+    const user = req.user;
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     console.log('Usuário autenticado:', user);
-     AccessLogHelper.logAccess(this.httpService, {
+    AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} reativou a fatura com código ${Codigo}`,
       fkUtilizadorResponsavel: user.sub,
       fkOperacaoLog: 7,
@@ -129,9 +129,9 @@ export class InvoiceController {
     return this.invoiceService.findOne(Codigo);
   }
 
-/**
-   * Lista os itens de uma factura pelo ID da factura
-   */
+  /**
+     * Lista os itens de uma factura pelo ID da factura
+     */
   @Get(':id/itens')
   async findInvoiceItens(
     @Param('id', ParseIntPipe) invoiceId: number,

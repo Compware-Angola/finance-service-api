@@ -32,9 +32,18 @@ export interface MesTempResponse {
   prestacao: number;
 }
 
+interface EstudanteInfo {
+  curso: number;
+  sigla: string;
+  turno: number;
+  polo: number;
+  codigo_curso: number;
+}
+
 export {
   ObterBolseiroParams,
   CalcularValorMensalidadeParams,
   CalcularDescontoParams,
   BolsaParams,
+  EstudanteInfo,
 };

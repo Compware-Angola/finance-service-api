@@ -14,7 +14,7 @@ export class MonthlyFeesService {
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
 
     private readonly monthlyFeeDiscount: MonthlyFeesDiscountService,
-  ) {}
+  ) { }
 
   async findMonthlyFees(
     paginationQuery: MonthlyFeesFilterDto,
@@ -24,56 +24,27 @@ export class MonthlyFeesService {
       page = 1,
       codigo_matricula,
       codAnoLectivo,
-      status, // ← novo campo opcional no DTO
+      status, // 'paid' | 'pending' | undefined
     } = paginationQuery;
 
     if (!codigo_matricula || !codAnoLectivo) {
       return { data: [], total: 0, page, limit, totalPages: 0 };
     }
-    //Verificar se ele fez confirmação naquele ano
+
+    // Verificação rápida de confirmação
     const temConfirmacao = await this.verificarConfirmacao(
       codigo_matricula,
       codAnoLectivo,
     );
+
     if (!temConfirmacao) {
       return { data: [], total: 0, page, limit, totalPages: 0 };
     }
 
     const skip = (page - 1) * limit;
 
-    // === QUERY DE CONTAGEM ===
-    const countQuery = this.mesTempRepo
-      .createQueryBuilder('mt')
-      .innerJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.mes_temp_id = mt.id')
-      .innerJoin('UMA_FACTURA', 'f', 'f.Codigo = fi.CodigoFactura')
-      .where("REGEXP_LIKE(TRIM(mt.ano_lectivo), '^[0-9]+$')")
-      .andWhere("REGEXP_LIKE(TRIM(f.CodigoMatricula), '^[0-9]+$')")
-      .andWhere('NVL(TO_NUMBER(TRIM(mt.ano_lectivo)), 0) = :ano', {
-        ano: codAnoLectivo,
-      })
-      .andWhere('NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0) = :matricula', {
-        matricula: codigo_matricula,
-      })
-      .andWhere("NVL(TO_CHAR(f.estado), '0') != '3'");
-    // FILTRO DE STATUS (pago / pendente)
-    if (status === 'paid') {
-      countQuery.andWhere('f.estado = 1');
-    } else if (status === 'pending') {
-      countQuery.andWhere('f.estado = 0');
-    }
-
-    const totalResult = await countQuery
-      .select('COUNT(DISTINCT mt.id)', 'total')
-      .getRawOne();
-    const total = Number(totalResult?.total || 0);
-    const totalPages = Math.ceil(total / limit);
-
-    // if (total === 0) {
-    //   return { data: [], total, page, limit, totalPages };
-    // }
-
-    // === QUERY PRINCIPAL (com os dados) ===
-    const dataQuery = this.mesTempRepo
+    // ====================== QUERY UNIFICADA ======================
+    const qb = this.mesTempRepo
       .createQueryBuilder('mt')
       .select([
         'mt.id AS "mes_temp_id"',
@@ -83,72 +54,89 @@ export class MonthlyFeesService {
         'mt.data_limite AS "data_limite"',
         'mt.semestre AS "semestre"',
         'mt.data_final_desconto AS "data_final_desconto"',
+        'mt.prestacao', // usado no order by
+
         'fi.codigo AS "id_item"',
         'fi.CodigoProduto AS "id_tipo_servico"',
         'ts.Descricao AS "descricao_servico"',
         'ts.TipoServico AS "tipo_servico"',
-        'NVL(fi.preco, ts.Preco)   AS "mensalidade"',
-        'NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0) AS "codigo_matricula"',
-        'NVL(TO_NUMBER(TRIM(f.ano_lectivo)), 0) AS "ano_lectivo_fatura"',
-        'NVL(TO_CHAR(f.estado), \'0\') AS "estado_fatura"',
-        'f.Referencia AS "reference"',
-        'f.ValorAPagar As "ValorAPagar"',
-        'f.ValorEntregue as "valorEntregue"',
-        'f.dataVencimento AS "data_vencimento"',
-        'f.Codigo AS "codigo_factura"',
-        'f.TotalPreco AS "total_preco_fatura"',
-        'fi.descontoProduto AS "desconto"',
+
+        'NVL(fi.preco, ts.Preco) AS "mensalidade"',
+        'NVL(fi.descontoProduto, 0) AS "desconto"',
         'fi.Multa AS "multa"',
         'fi.Total AS "total_item"',
         'fi.valor_pago AS "valor_pago"',
         'fi.Total AS "total"',
         'fi.preco AS "total_preco"',
-        `CASE
-         WHEN fi.valor_pago >= fi.Total THEN 1
-         WHEN fi.valor_pago > 0 AND fi.valor_pago < fi.Total THEN 2
-         ELSE 0
-       END AS "status_pagamento"
-       `,
-      ])
 
+        'NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0) AS "codigo_matricula"',
+        'NVL(TO_NUMBER(TRIM(f.ano_lectivo)), 0) AS "ano_lectivo_fatura"',
+        'f.Referencia AS "reference"',
+        'f.ValorAPagar AS "ValorAPagar"',
+        'f.ValorEntregue AS "valorEntregue"',
+        'f.dataVencimento AS "data_vencimento"',
+        'f.Codigo AS "codigo_factura"',
+        'f.TotalPreco AS "total_preco_fatura"',
+        'NVL(TO_CHAR(f.estado), \'0\') AS "estado_fatura"',
+
+        `CASE 
+         WHEN fi.valor_pago >= fi.Total THEN 1
+         WHEN fi.valor_pago > 0 THEN 2 
+         ELSE 0 
+       END AS "status_pagamento"`,
+      ])
       .innerJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.mes_temp_id = mt.id')
       .innerJoin('UMA_FACTURA', 'f', 'f.Codigo = fi.CodigoFactura')
       .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
-      .where("REGEXP_LIKE(TRIM(mt.ano_lectivo), '^[0-9]+$')")
-      .andWhere("REGEXP_LIKE(TRIM(f.CodigoMatricula), '^[0-9]+$')")
-      .andWhere('NVL(TO_NUMBER(TRIM(mt.ano_lectivo)), 0) = :ano', {
-        ano: codAnoLectivo,
-      })
-      .andWhere('NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0) = :matricula', {
-        matricula: codigo_matricula,
-      })
-      .andWhere("NVL(TO_CHAR(f.estado), '0') != '3'");
-    // MESMO FILTRO DE STATUS NA QUERY PRINCIPAL
+
+      .where('mt.ano_lectivo = :anoLectivo', { anoLectivo: codAnoLectivo })
+      .andWhere('f.CodigoMatricula = :matricula', { matricula: codigo_matricula })
+      .andWhere('f.estado != 3'); // excluído
+
+    // Filtro de status
     if (status === 'paid') {
-      dataQuery.andWhere('f.estado = 1');
+      qb.andWhere('f.estado = 1');
     } else if (status === 'pending') {
-      dataQuery.andWhere('f.estado = 0');
+      qb.andWhere('f.estado = 0');
     }
 
-    let results = await dataQuery
+    // ====================== CONTAGEM ======================
+    const total = await qb
+      .clone()
+      .select('COUNT(DISTINCT mt.id)', 'total')
+      .getRawOne()
+      .then((r) => Number(r?.total || 0));
+
+    const totalPages = Math.ceil(total / limit);
+
+    // ====================== DADOS ======================
+    const results = await qb
       .orderBy('mt.prestacao', 'ASC')
       .offset(skip)
       .limit(limit)
       .getRawMany();
 
-    const generatedPayment = await this.monthlyFeeDiscount.generatePayment({
-      codAnoLectivo: codAnoLectivo,
-      codigo_matricula: codigo_matricula,
-      status: status,
-    });
-    results.push(...generatedPayment);
+    // ====================== PAGAMENTOS A GERAR ======================
+    let generated: any[] = [];
+
+    // Só busca os a gerar se o status permitir (evita query desnecessária)
+    if (!status || status === 'pending' || status === 'all') {
+      generated = await this.monthlyFeeDiscount.generatePayment({
+        codAnoLectivo,
+        codigo_matricula,
+        status: status || 'pending', // só os pendentes por padrão
+      });
+    }
+
+    // Concatena os resultados
+    const data = [...results, ...generated];
 
     return {
-      data: results,
-      total,
+      data,
+      total: total + generated.length, // ou manter só o total da fatura se preferir
       page,
       limit,
-      totalPages,
+      totalPages: Math.ceil((total + generated.length) / limit),
     };
   }
   async verificarConfirmacao(codigoMatricula: number, anoLectivo: number) {

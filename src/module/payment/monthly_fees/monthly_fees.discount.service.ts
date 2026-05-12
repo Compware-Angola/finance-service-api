@@ -5,6 +5,7 @@ import { MesTemp } from '../payment-references/entities/mes-temp.entity';
 import { TestMonthlyDTO } from './dto/test-monthly.dto';
 import { obterMulta } from 'src/module/util/obter-multa';
 import {
+  BolseiroResult,
   CalcularDescontoParams,
   CalcularValorMensalidadeParams,
   MesTempResponse,
@@ -48,34 +49,45 @@ export class MonthlyFeesDiscountService {
 
   // ====================== DESCONTOS ======================
 
+
   private async obterBolseiro({
     anoLectivo,
     codigoMatricula,
     semestre,
-  }: ObterBolseiroParams) {
+  }: ObterBolseiroParams): Promise<BolseiroResult> {
     const sql = `
-      SELECT desconto 
-      FROM fk2_tb_bolseiros
-      WHERE codigo_matricula = :codigoMatricula
-        AND codigo_anolectivo = :anoLectivo
-        AND semestre = :semestre
-    `;
+    SELECT desconto, isentar_multa 
+    FROM fk2_tb_bolseiros
+    WHERE codigo_matricula = :codigoMatricula
+      AND codigo_anolectivo = :anoLectivo
+      AND semestre = :semestre
+  `;
 
-    const [row] = await this.dataSource.query(sql, {
-      anoLectivo,
-      codigoMatricula,
-      semestre,
-    } as any);
+    try {
+      const [row] = await this.dataSource.query(sql, {
+        anoLectivo,
+        codigoMatricula,
+        semestre,
+      } as any);
 
-    if (!row) {
-      return { bolseiro: false, desconto: 0 };
+      if (!row) {
+        return { bolseiro: false, desconto: 0, isentar_multa: false };
+      }
+
+      const desconto = Number(row.DESCONTO ?? row.desconto ?? 0);
+      const isentar_multa =
+        (row.ISENTAR_MULTA ?? row.isentar_multa)?.toUpperCase() === 'SIM';
+
+      return {
+        bolseiro: true,
+        desconto: desconto === 0 ? 1 : desconto / 100,
+        isentar_multa,
+      };
+    } catch (err) {
+      throw new Error(
+        `Erro ao obter bolseiro [matricula=${codigoMatricula}]: ${err.message}`
+      );
     }
-
-    const desconto = Number(row.DESCONTO ?? 0);
-    return {
-      bolseiro: true,
-      desconto: desconto === 0 ? 1 : desconto / 100,
-    };
   }
 
   private async obterDescontoNormal({
@@ -291,6 +303,7 @@ export class MonthlyFeesDiscountService {
     const temIsencao = await this.existIsencaoMulta(codigoMatricula, mesTemp.id);
     if (temIsencao) return 0;
 
+
     return obterMulta(mesTemp.data_limite, periodosIsentos);
   }
 
@@ -338,16 +351,20 @@ export class MonthlyFeesDiscountService {
     const descontoValor = mensalidade * percentagemDesconto;
     const mensalidadeComDesconto = mensalidade - descontoValor;
 
-    const percentagemMulta = await this.calcularPercentagemMulta(
-      codigoMatricula,
-      mesTemp,
-      periodosIsentos,
-    );
 
+    // Se for Bolseiro sem Multa nao deve calcular mas a Multa
+
+    let percentagemMulta = 0;
+    if (!bolseiroInfo.isentar_multa) {
+      percentagemMulta = await this.calcularPercentagemMulta(
+        codigoMatricula,
+        mesTemp,
+        periodosIsentos,
+      );
+    }
     const multa = mensalidadeComDesconto * percentagemMulta;
     const valorFinal = mensalidadeComDesconto + multa;
     const valorPago = isBolseiroIntegral ? mensalidade : 0;
-
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,

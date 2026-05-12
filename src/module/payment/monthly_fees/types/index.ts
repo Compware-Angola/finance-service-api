@@ -31,7 +31,11 @@ export interface MesTempResponse {
   designacao: string;
   prestacao: number;
 }
-
+export interface BolseiroResult {
+  bolseiro: boolean;
+  desconto: number;
+  isentar_multa: boolean;
+}
 interface EstudanteInfo {
   curso: number;
   sigla: string;

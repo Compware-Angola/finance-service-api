@@ -459,17 +459,19 @@ export class PaymentService {
         );
       }
 
-      await queryRunner.commitTransaction();
       /*
       1. Saldo na conta corrente do estudante (FK2_TB_MATRICULAS)
       2. Saldo na conta corrente da pré-inscrição (FK2_TB_PREINSCRICAO)
       3. Transferência/criação de crédito na conta do próximo ano letivo
-   
 
+     
       if (valor_restante > 0 && student?.codigo) {
+        console.log("ENTREI");
+
         await this.updateCreditAccount(student.codigo, valor_restante);
       }
  */
+      await queryRunner.commitTransaction();
       return {
         message: existingPayment
           ? 'Pagamento atualizado com sucesso'
@@ -501,23 +503,33 @@ export class PaymentService {
     await queryRunner.startTransaction();
 
     try {
-      const aluno = await this.findAluno(preinscricao, 'preinscricao');
-      if (!aluno) throw new NotFoundException(`Aluno ${preinscricao} não encontrado`);
+      // Leitura dentro da transação com lock para evitar race condition
+      const rows = await queryRunner.query(
+        `SELECT SALDO, SALDO_ANTERIOR, SALDO_RESET, SALDO_RESET_ANTER
+       FROM FK2_TB_PREINSCRICAO
+       WHERE CODIGO = :codigo FOR UPDATE`,
+        { codigo: preinscricao } as any,
+      );
 
-      const saldo_atual = Number(aluno.saldo_atual || 0);
+      if (!rows?.length) {
+        throw new BadRequestException('Conta não encontrada');
+      }
+
+      const { SALDO, SALDO_RESET } = rows[0];
+      const saldo_atual = Number(SALDO || 0);
+      const saldo_reset_atual = Number(SALDO_RESET || 0);
       const saldo_final = saldo_atual + valor;
-
-      if (saldo_final < 0) throw new BadRequestException('Saldo insuficiente');
+      const saldo_reset_final = saldo_reset_atual + valor;
 
       await queryRunner.query(
         `UPDATE FK2_TB_PREINSCRICAO 
        SET SALDO = :saldo_final, 
            SALDO_ANTERIOR = :saldo_atual, 
            OBS_SALDO = 'Pagamento de serviços', 
-           SALDO_RESET = :saldo_final, 
-           SALDO_RESET_ANTER = :saldo_atual 
+           SALDO_RESET = :saldo_reset_final, 
+           SALDO_RESET_ANTER = :saldo_reset_atual 
        WHERE CODIGO = :codigo`,
-        { saldo_final, saldo_atual, codigo: aluno.codigo } as any,
+        { saldo_final, saldo_atual, saldo_reset_final, saldo_reset_atual, codigo: preinscricao } as any,
       );
 
       await queryRunner.commitTransaction();
@@ -769,6 +781,22 @@ export class PaymentService {
     }
 
     return toLowerCaseKeys(result[0]);
+  }
+
+  private async getaccountBalance(preInscricao: number) {
+    //obter o balanço
+    const sql = `
+    SELECT 
+    c.SALDO          AS saldo,
+    c.SALDO_ANTERIOR AS saldo_anterior,
+    c.SALDO_RESET    AS saldo_reset,
+    c.SALDO_RESET_ANTER AS saldo_reset_anterior
+FROM fk2_tb_preinscricao c
+WHERE c.codigo = :preInscricao
+    `;
+    const [result] = await this.dataSource.query(sql, [preInscricao]);
+    return result;
+
   }
   public async findPayments(filters: ListPaymentDTO) {
     const {

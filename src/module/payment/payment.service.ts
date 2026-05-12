@@ -464,13 +464,13 @@ export class PaymentService {
       2. Saldo na conta corrente da pré-inscrição (FK2_TB_PREINSCRICAO)
       3. Transferência/criação de crédito na conta do próximo ano letivo
 
-      */
+     
       if (valor_restante > 0 && student?.codigo) {
         console.log("ENTREI");
 
         await this.updateCreditAccount(student.codigo, valor_restante);
       }
-
+ */
       await queryRunner.commitTransaction();
       return {
         message: existingPayment

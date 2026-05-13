@@ -52,11 +52,10 @@ export class CreatePaymentDto {
   @IsPositive()
   codigoPreInscricao?: number;
 
-  @ApiPropertyOptional({ example: 'Multicaixa' })
-  @IsOptional()
+  @ApiProperty({ example: 'Multicaixa' })
   @IsString()
   @Length(1, 45)
-  formaPagamento?: string;
+  formaPagamento: string;
 
   @ApiProperty({ example: 50000.0 })
   @Type(() => Number)
@@ -106,11 +105,11 @@ export class CreatePaymentDto {
   @IsPositive()
   instituicaoId?: number;
 
-  @ApiPropertyOptional({ default: 0 })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  caixaId?: number;
+  @ApiProperty({ default: 1 })
+
+  @IsInt({ message: 'O caixaId deve ser um número inteiro' })
+  @Min(1, { message: 'Deves fornecer um caixa onde o pagamento foi realizado' })
+  caixaId: number;
 
   @ApiPropertyOptional({ example: '2025-11-05T11:00:00Z' })
   @IsOptional()

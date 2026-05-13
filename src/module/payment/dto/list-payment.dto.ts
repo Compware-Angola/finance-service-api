@@ -1,4 +1,4 @@
-import { IsInt, IsNumber, IsOptional } from 'class-validator';
+import { IsDateString, IsInt, IsNumber, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
@@ -54,4 +54,22 @@ export class ListPaymentDTO extends PaginationQueryDto {
   })
   @IsOptional()
   n_operacao_bancaria2?: string;
+
+
+
+  @ApiPropertyOptional({
+    description: 'Data de início',
+    example: '2022-01-01',
+  })
+  @IsOptional()
+  @IsDateString()
+  dataInicio?: string;
+
+  @ApiPropertyOptional({
+    description: 'Data de fim',
+    example: '2022-12-31',
+  })
+  @IsOptional()
+  @IsDateString()
+  dataFim?: string;
 }

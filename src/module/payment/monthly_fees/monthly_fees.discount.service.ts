@@ -258,13 +258,14 @@ export class MonthlyFeesDiscountService {
     if (descontoNormal.temDesconto) return descontoNormal.desconto;
 
     // 4. Desconto Finalista
+    /*
     const descontoFinalista = await this.obterDescontoFinalista(
       codigoMatricula,
       anoLectivo,
       dadosAluno.duracao_curso,
     );
     if (descontoFinalista.temDesconto) return descontoFinalista.desconto;
-
+    */
     return 0;
   }
 
@@ -387,6 +388,8 @@ export class MonthlyFeesDiscountService {
       total: valorFinal,
       total_preco: mensalidade,
       status_pagamento: statusPagamento,
+      data_operacao: null,
+      data_pagamento: null
     };
   }
 

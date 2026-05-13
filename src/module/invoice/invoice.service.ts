@@ -33,6 +33,7 @@ import { InvoiceSearchDto } from './dto/get-invoice.dto';
 import { normalizeParam } from '../util/normalize-util';
 import { InvoiceItemEnum } from 'src/common/enums/invoice-item.enum';
 import { InvoiceEnum } from 'src/common/enums/invoice.enum';
+import { roundToInt } from '../util/round';
 
 type ExemptionType = { CODIGO: number; SIGLA: string };
 
@@ -127,8 +128,19 @@ export class InvoiceService {
         `Fatura com Código ${Codigo} não encontrada.`,
       );
     }
+    // ANULAR TBM OS ITENS 
+    const items = await this.invoiceItemRepository.find({
+      where: { CodigoFactura: Codigo },
+    });
+    for (const item of items) {
 
-    invoice.estado = 3; // 3 - eliminado
+      item.estado = 3;
+
+
+    }
+    await this.invoiceItemRepository.save(items);
+
+    invoice.estado = 3;
     return this.invoiceRepository.save(invoice);
   }
   async reactivateInvoice(Codigo: number): Promise<Invoice> {
@@ -140,7 +152,7 @@ export class InvoiceService {
       );
     }
 
-    invoice.estado = 0; // 0 - pendente
+    invoice.estado = 0;
     return this.invoiceRepository.save(invoice);
   }
   /**
@@ -194,7 +206,7 @@ export class InvoiceService {
 
     // 4. Gerar dados do hash/numeração da fatura
     const hashData = await this.hashService.generateInvoiceHashData(
-      invoiceData.TotalPreco ?? 0,
+      roundToInt(invoiceData.TotalPreco ?? 0),
       tipoDocId,
       anoLetivo.Codigo,
       invoiceData.polo_id ?? 1,
@@ -339,16 +351,16 @@ export class InvoiceService {
      RETURNING CODIGO INTO :outId
   `,
       {
-        totalPreco: invoiceData.TotalPreco ?? 0,
+        totalPreco: roundToInt(invoiceData.TotalPreco ?? 0),
         codigoMatricula: invoiceData.CodigoMatricula ?? null,
         referencia,
-        desconto: invoiceData.Desconto ?? 0,
-        totalIva: invoiceData.totalIVA ?? 0,
-        totalMulta: invoiceData.TotalMulta ?? 0,
-        totalIncidencia: invoiceData.total_incidencia ?? 0,
-        totalRetencao: invoiceData.total_retencao ?? 0,
-        valorAPagar: invoiceAmount,
-        valorAPagarExtenso: '', // podes implementar função para gerar por extenso
+        desconto: roundToInt(invoiceData.Desconto ?? 0),
+        totalIva: roundToInt(invoiceData.totalIVA ?? 0),
+        totalMulta: roundToInt(invoiceData.TotalMulta ?? 0),
+        totalIncidencia: roundToInt(invoiceData.total_incidencia ?? 0),
+        totalRetencao: roundToInt(invoiceData.total_retencao ?? 0),
+        valorAPagar: roundToInt(invoiceAmount ?? 0),
+        valorAPagarExtenso: '',
         descricao: invoiceData.Descricao ?? '',
         codigoDescricao: invoiceData.codigo_descricao ?? 101,
         nextFactura: hashData.numeracaoFactura,
@@ -438,20 +450,20 @@ export class InvoiceService {
             codigoProduto: itemDto.CodigoProduto,
             codigoFactura: codigoGerado,
             quantidade: itemDto.Quantidade ?? 1,
-            total: itemDto.Total ?? 0,
+            total: roundToInt(itemDto.Total ?? 0),
             obs: (itemDto.obs ?? `Item da fatura ${codigoGerado}`).substring(
               0,
               45,
             ),
-            taxaIva: itemDto.taxaIva ?? 0,
-            valorIva: itemDto.valorIva ?? 0,
-            preco: itemDto.preco ?? 0,
-            retencao: itemDto.retencao ?? 0,
-            incidencia: itemDto.incidencia ?? 0,
-            valorDesconto: itemDto.valorDesconto ?? 0,
-            descontoProduto: itemDto.descontoProduto ?? 0,
+            taxaIva: roundToInt(itemDto.taxaIva ?? 0),
+            valorIva: roundToInt(itemDto.valorIva ?? 0),
+            preco: roundToInt(itemDto.preco ?? 0),
+            retencao: roundToInt(itemDto.retencao ?? 0),
+            incidencia: roundToInt(itemDto.incidencia ?? 0),
+            valorDesconto: roundToInt(itemDto.valorDesconto ?? 0),
+            descontoProduto: roundToInt(itemDto.descontoProduto ?? 0),
             mes: itemDto.mes ?? null,
-            multa: itemDto.multa ?? 0,
+            multa: roundToInt(itemDto.multa ?? 0),
             mesTempId: itemDto.mesTempId ?? null,
             codigoAnoLectivo:
               itemDto.codigo_anoLectivo ?? savedInvoice.anoLectivo,

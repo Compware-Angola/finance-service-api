@@ -297,6 +297,12 @@ export class PaymentService {
     const cleanText = (value?: string) =>
       value?.replace(/\s+/g, '').trim();
 
+    if (!dto.caixaId) {
+      throw new BadRequestException(
+        'Precisa de uma caixa para criar um pagamento',
+      );
+    }
+
     const cleanNOperacaoBancaria = cleanText(nOperacaoBancaria);
 
     if (cleanNOperacaoBancaria) {
@@ -805,6 +811,8 @@ WHERE c.codigo = :preInscricao
       codigoMatricula,
       estado,
       nome,
+      dataInicio,
+      dataFim,
       n_operacao_bancaria2,
       n_operacao_bancaria,
       page = 1,
@@ -815,7 +823,7 @@ WHERE c.codigo = :preInscricao
     const conditions: string[] = [];
     const params: any = {};
 
-    let baseWhere = `1=1`;
+
 
     conditions.push(`1 = 1`);
 
@@ -848,6 +856,17 @@ WHERE c.codigo = :preInscricao
     if (n_operacao_bancaria2) {
       conditions.push(`pg.n_operacao_bancaria2 = :nOperacaoBancaria2`);
       params.nOperacaoBancaria2 = n_operacao_bancaria2;
+    }
+    const dateFormat = 'YYYY-MM-DD';
+
+    if (dataInicio) {
+      conditions.push(`pg.dataregisto >= TO_DATE(:dataInicio, '${dateFormat}')`);
+      params.dataInicio = dataInicio;
+    }
+
+    if (dataFim) {
+      conditions.push(`pg.dataregisto <= TO_DATE(:dataFim, '${dateFormat}') + INTERVAL '1' DAY - INTERVAL '1' SECOND`);
+      params.dataFim = dataFim;
     }
 
     if (nome) {

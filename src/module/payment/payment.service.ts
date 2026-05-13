@@ -297,6 +297,12 @@ export class PaymentService {
     const cleanText = (value?: string) =>
       value?.replace(/\s+/g, '').trim();
 
+    if (!dto.caixaId) {
+      throw new BadRequestException(
+        'Precisa de uma caixa para criar um pagamento',
+      );
+    }
+
     const cleanNOperacaoBancaria = cleanText(nOperacaoBancaria);
 
     if (cleanNOperacaoBancaria) {

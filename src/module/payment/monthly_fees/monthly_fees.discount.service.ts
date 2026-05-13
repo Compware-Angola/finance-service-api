@@ -387,6 +387,8 @@ export class MonthlyFeesDiscountService {
       total: valorFinal,
       total_preco: mensalidade,
       status_pagamento: statusPagamento,
+      data_operacao: null,
+      data_pagamento: null
     };
   }
 

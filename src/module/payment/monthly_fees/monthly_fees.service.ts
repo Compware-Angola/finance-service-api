@@ -78,6 +78,8 @@ export class MonthlyFeesService {
         'f.Codigo AS "codigo_factura"',
         'f.TotalPreco AS "total_preco_fatura"',
         'NVL(TO_CHAR(f.estado), \'0\') AS "estado_fatura"',
+        'pg.data_operacao AS "data_operacao"',
+        'pg.Data     AS "data_pagamento"',
 
         `CASE 
          WHEN fi.valor_pago >= fi.Total THEN 1
@@ -88,7 +90,7 @@ export class MonthlyFeesService {
       .innerJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.mes_temp_id = mt.id')
       .innerJoin('UMA_FACTURA', 'f', 'f.Codigo = fi.CodigoFactura')
       .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
-
+      .leftJoin('UMA_TB_PAGAMENTOS', 'pg', 'pg.codigo_factura = f.Codigo')
       .where('mt.ano_lectivo = :anoLectivo', { anoLectivo: codAnoLectivo })
       .andWhere('f.CodigoMatricula = :matricula', { matricula: codigo_matricula })
       .andWhere('f.estado != 3'); // excluído
@@ -133,7 +135,7 @@ export class MonthlyFeesService {
 
     return {
       data,
-      total: total + generated.length, // ou manter só o total da fatura se preferir
+      total: total + generated.length,
       page,
       limit,
       totalPages: Math.ceil((total + generated.length) / limit),

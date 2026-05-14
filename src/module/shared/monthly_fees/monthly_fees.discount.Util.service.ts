@@ -1,8 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
-import { InjectRepository } from '@nestjs/typeorm';
-import { MesTemp } from '../payment-references/entities/mes-temp.entity';
-import { TestMonthlyDTO } from './dto/test-monthly.dto';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { obterMulta } from 'src/module/util/obter-multa';
 import {
   BolseiroResult,
@@ -14,11 +11,12 @@ import {
 import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
 import { formatDisplay } from 'src/module/util/format-date';
 
-export class MonthlyFeesDiscountService {
+import { TestMonthlyDTO } from './dto/test-monthly.dto';
+@Injectable()
+export class MonthlyFeesDiscountUtilService {
   constructor(
     private dataSource: DataSource,
-    @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
-  ) {}
+  ) { }
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -411,6 +409,7 @@ export class MonthlyFeesDiscountService {
       valorEntregue: 0,
       data_vencimento: mesTemp.data_limite,
       desconto: descontoValor,
+      codigo_factura: null,
       semestre: mesTemp.semestre,
       multa: multa,
       total_item: valorFinal,
@@ -432,50 +431,78 @@ export class MonthlyFeesDiscountService {
   }: TestMonthlyDTO) {
     const dadosAluno = await this.obterDadosCompletosAluno(codigo_matricula);
 
-    const sqlMesTemp = `
-      SELECT
-        DATA_LIMITE,
-        DATA_FINAL,
-        DATA_INICIAL,
-        SEMESTRE,
-        ID,
-        DESIGNACAO,
-        PRESTACAO
-      FROM fk2_mes_temp tp
-      WHERE tp.ano_lectivo = :codAnoLectivo
-        AND tp.activo = 1
-        AND tp.id NOT IN (
-          SELECT it.mes_temp_id
-          FROM fk2_factura ft
-          INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
-          INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
-          WHERE ft.codigomatricula = :codigo_matricula
-            AND it.mes_temp_id IS NOT NULL
-            AND mt.ano_lectivo = :codAnoLectivo
-            AND ft.estado != 3
-        )
-    `;
 
-    const resultado = await this.dataSource.query(sqlMesTemp, {
-      codAnoLectivo,
-      codigo_matricula,
-    } as any);
 
+    // ====================== QUERY DINÂMICA ======================
+    const isAnoLectivoNumero =
+      codAnoLectivo !== undefined &&
+      codAnoLectivo !== null &&
+      !isNaN(Number(codAnoLectivo));
+
+    const sqlMesTemp = isAnoLectivoNumero
+      ? `
+    SELECT 
+      DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
+      SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
+    FROM fk2_mes_temp tp
+    WHERE tp.ano_lectivo = :codAnoLectivo
+      AND tp.activo = 1
+      AND tp.id NOT IN (
+        SELECT it.mes_temp_id
+        FROM fk2_factura ft
+        INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
+        INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
+        WHERE ft.codigomatricula = :codigo_matricula
+          AND it.mes_temp_id IS NOT NULL
+          AND mt.ano_lectivo = :codAnoLectivo
+          AND ft.estado != 3
+      )
+  `
+      : `
+  SELECT 
+  DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
+  SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
+FROM fk2_mes_temp tp
+WHERE tp.activo = 1
+  AND tp.ano_lectivo IN (
+    -- Apenas anos lectivos onde o aluno tem confirmação
+    SELECT DISTINCT cf.CODIGO_ANO_LECTIVO
+    FROM fk2_tb_confirmacoes cf
+    WHERE cf.codigo_matricula = :codigo_matricula
+  )
+  AND tp.id NOT IN (
+    SELECT it.mes_temp_id
+    FROM fk2_factura ft
+    INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
+    INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
+    WHERE ft.codigomatricula = :codigo_matricula
+      AND it.mes_temp_id IS NOT NULL
+      AND ft.estado != 3
+  )
+  `;
+
+    const queryParams = codAnoLectivo
+      ? { codAnoLectivo, codigo_matricula }
+      : { codigo_matricula };
+
+    const resultado = await this.dataSource.query(sqlMesTemp, queryParams as any);
     const mesTemps: MesTempResponse[] = toLowerCaseKeys(resultado);
 
-    const [periodosIsentos] = await Promise.all([
-      this.dataSource.query(`
-        SELECT DATA_INICIO, DATA_FIM
-        FROM FK2_TB_DIAS_ISENTOS
-        WHERE ESTADO = 1
-      `),
-    ]);
+    const periodosIsentos = await this.dataSource.query(`
+    SELECT DATA_INICIO, DATA_FIM 
+    FROM FK2_TB_DIAS_ISENTOS 
+    WHERE ESTADO = 1
+  `);
 
     const pagamentos: any[] = [];
 
     for (const mesTemp of mesTemps) {
+      console.log(mesTemp);
+
+      const anoLectivoEfetivo = codAnoLectivo ?? mesTemp.ano_lectivo;
+
       const pagamento = await this.calcularValorMensalidade({
-        anoLectivo: codAnoLectivo,
+        anoLectivo: anoLectivoEfetivo,
         codigoMatricula: codigo_matricula,
         mesTemp,
         periodosIsentos,
@@ -490,7 +517,6 @@ export class MonthlyFeesDiscountService {
         pagamentos.push(pagamento);
       }
     }
-
     return pagamentos;
   }
 }

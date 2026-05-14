@@ -7,14 +7,14 @@ import {
 } from '@nestjs/common';
 import { MonthlyFeesService } from './monthly_fees.service';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
-import { MonthlyFeesFilterDto } from './dto/monthly-fees-filter.dto'; // Novo DTO
-import { MonthlyFeesStatisticFilterDto } from './dto/monthly-fees-statistic.dto';
-import { TestMonthlyDTO } from './dto/test-monthly.dto';
+import { MonthlyFeesFilterDto } from '../../shared/monthly_fees/dto/monthly-fees-filter.dto'; // Novo DTO
+import { MonthlyFeesStatisticFilterDto } from '../../shared/monthly_fees/dto/monthly-fees-statistic.dto';
+import { TestMonthlyDTO } from '../../shared/monthly_fees/dto/test-monthly.dto';
 // ... outros imports ...
 
 @Controller('financial/monthly-fees')
 export class MonthlyFeesController {
-  constructor(private readonly monthlyFeesService: MonthlyFeesService) {}
+  constructor(private readonly monthlyFeesService: MonthlyFeesService) { }
 
   @Get()
   // ... decoradores Swagger ...

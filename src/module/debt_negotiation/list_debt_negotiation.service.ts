@@ -124,27 +124,14 @@ export class ListDebtNegotiationService {
         fa.REFERENCIA               AS factura_referencia,
         fa.DATAVENCIMENTO           AS factura_data_vencimento,
         fa.ESTADO                   AS factura_estado,
-        fa.ANO_LECTIVO              AS factura_ano_lectivo,
-        fi.CODIGO                   AS item_id,
-        fi.CODIGOPRODUTO            AS item_codigo_produto,
-        fi.QUANTIDADE               AS item_quantidade,
-        fi.PRECO                    AS item_preco,
-        fi.TOTAL                    AS item_total,
-        fi.TAXA_IVA                 AS item_taxa_iva,
-        fi.VALOR_IVA                AS item_valor_iva,
-        fi.VALOR_DESCONTO           AS item_valor_desconto,
-        fi.MULTA                    AS item_multa,
-        fi.MES                      AS item_mes,
-        fi.ESTADO                   AS item_estado,
-        fi.VALOR_PAGO               AS item_valor_pago,
-        fi.VALOR_A_TRANSPORTAR      AS item_valor_a_transportar,
-        fi.OBS                      AS item_obs
+        fa.ANO_LECTIVO              AS factura_ano_lectivo
+  
       FROM FK2_TB_NEGOCIACAO_FACTURA nf
       LEFT JOIN FK2_FACTURA fa        ON fa.CODIGO = nf.CODIGO_FACTURA
-      LEFT JOIN FK2_FACTURA_ITEMS fi    ON fi.CODIGOFACTURA = fa.CODIGO
+      
       WHERE nf.CODIGO_NEGOCIACAO IN (${negociacaoIds.join(',')})
         AND nf.DELETED_AT IS NULL
-      ORDER BY nf.CODIGO_NEGOCIACAO, fa.CODIGO, fi.CODIGO
+      ORDER BY nf.CODIGO_NEGOCIACAO, fa.CODIGO
     `;
 
       const facturasRaw: any[] = await this.dataSource.query(facturasSql);
@@ -152,6 +139,7 @@ export class ListDebtNegotiationService {
       // Agrupa: negociacaoId → [facturas com seus itens]
       // Estrutura intermediária: Map<negociacaoId, Map<facturaId, { ...dadosFactura, itens: [...] }>>
       const negociacaoFacturasTemp = new Map<number, Map<number, any>>();
+
 
       for (const row of facturasRaw) {
         const negId = Number(row.CODIGO_NEGOCIACAO);
@@ -164,7 +152,7 @@ export class ListDebtNegotiationService {
 
         if (!facturasDoNeg.has(faId)) {
           facturasDoNeg.set(faId, {
-            id: faId,
+            codigo: faId,
             data: row.FACTURA_DATA,
             total_preco: Number(row.FACTURA_TOTAL_PRECO ?? 0),
             valor_apagar: Number(row.FACTURA_VALOR_APAGAR ?? 0),
@@ -179,30 +167,11 @@ export class ListDebtNegotiationService {
             referencia: row.FACTURA_REFERENCIA,
             data_vencimento: row.FACTURA_DATA_VENCIMENTO,
             estado: row.FACTURA_ESTADO,
-            ano_lectivo: row.FACTURA_ANO_LECTIVO,
-            itens: [] as any[],
+            ano_lectivo: row.FACTURA_ANO_LECTIVO
           });
         }
 
-        // Adiciona o item (se existir — LEFT JOIN pode retornar item_id NULL)
-        if (row.ITEM_ID != null) {
-          facturasDoNeg.get(faId)!.itens.push({
-            id: Number(row.ITEM_ID),
-            codigo_produto: Number(row.ITEM_CODIGO_PRODUTO),
-            quantidade: Number(row.ITEM_QUANTIDADE ?? 0),
-            preco: Number(row.ITEM_PRECO ?? 0),
-            total: Number(row.ITEM_TOTAL ?? 0),
-            taxa_iva: Number(row.ITEM_TAXA_IVA ?? 0),
-            valor_iva: Number(row.ITEM_VALOR_IVA ?? 0),
-            valor_desconto: Number(row.ITEM_VALOR_DESCONTO ?? 0),
-            multa: Number(row.ITEM_MULTA ?? 0),
-            mes: row.ITEM_MES,
-            estado: row.ITEM_ESTADO,
-            valor_pago: Number(row.ITEM_VALOR_PAGO ?? 0),
-            valor_a_transportar: Number(row.ITEM_VALOR_A_TRANSPORTAR ?? 0),
-            obs: row.ITEM_OBS,
-          });
-        }
+
       }
 
       // Converte para o Map final: negociacaoId → array de facturas

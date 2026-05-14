@@ -16,6 +16,7 @@ import { AnoLectivoUtil } from '../util/current-academic-year';
 import { InvoiceItemDto } from '../invoice/dto/create-invoice-itens.dto';
 import { safeNumber } from '../util/formate-number';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { MensalidadeItemDto, ServicoItemDto } from './dto/util.dto';
 
 type AlunoInfo = {
   matricula: number;
@@ -296,52 +297,50 @@ export class CreateDebtNegotiationService {
     };
   }
 
-  private mapMensalidadesParaItens(itensMensalidades: any[]): InvoiceItemDto[] {
+  private mapMensalidadesParaItens(itensMensalidades: MensalidadeItemDto[]): InvoiceItemDto[] {
     return itensMensalidades.map(d => ({
-      CodigoProduto: d.codigo_propina ?? null,
+      CodigoProduto: d.mes_temp_id ?? null,
       Quantidade: 1,
       Total: safeNumber(d.total),
-      obs: d.mes_propina
-        ? `Mensalidade de ${d.mes_propina}`.substring(0, 45)
+      obs: d.obs
+        ? `Mensalidade de ${d.mes}`.substring(0, 45)
         : d.servico
-          ? `Mensalidade/Serviço: ${d.servico}`.substring(0, 45)
+          ? `Mensalidade/Serviço: ${d.obs}`.substring(0, 45)
           : '',
-      taxaIva: safeNumber(d.taxa_multa),
+      taxaIva: safeNumber(d.multa),
       valorIva: safeNumber(d.valor_iva),
       preco: safeNumber(d.valor),
       retencao: 0,
       incidencia: safeNumber(d.incidencia),
       valorDesconto: safeNumber(d.desconto),
-      descontoProduto: safeNumber(d.taxa_desconto),
-      mes: d.mes_propina ?? null,
+      descontoProduto: safeNumber(d.desconto),
+      mes: d.mes ?? null,
       multa: safeNumber(d.multa),
       mesTempId: d.mes_temp_id ?? undefined,
-      codigo_anoLectivo: safeNumber(d.codigo_anoLectivo),
+      codigo_anoLectivo: safeNumber(d.ano_lectivo),
       estado: 0,
       valorPago: 0,
       valorATransportar: 0,
     }));
   }
 
-  private mapServicosParaItens(itensServicos: any[]): InvoiceItemDto[] {
+  private mapServicosParaItens(itensServicos: ServicoItemDto[]): InvoiceItemDto[] {
     return itensServicos.map(d => ({
       CodigoProduto: safeNumber(d.codidigo_servico),
       Quantidade: 1,
       Total: safeNumber(d.total),
-      obs: (d.servico || d.taxa_descricao)
-        ? `${d.servico ?? 'Serviço/Taxa'}: ${d.taxa_descricao ?? d.servico}`.substring(0, 45)
+      obs: (d.servico || d.obs)
+        ? `${d.servico ?? 'Serviço/Taxa'}: ${d.obs ?? d.servico}`.substring(0, 45)
         : '',
-      taxaIva: safeNumber(d.taxa_multa),
+      taxaIva: safeNumber(d.multa),
       valorIva: safeNumber(d.valor_iva),
       preco: safeNumber(d.valor),
       retencao: 0,
       incidencia: safeNumber(d.incidencia),
       valorDesconto: safeNumber(d.desconto),
-      descontoProduto: safeNumber(d.taxa_desconto),
-      mes: d.mes_propina ?? null,
+      descontoProduto: safeNumber(d.desconto),
       multa: safeNumber(d.multa),
-      mesTempId: d.mes_temp_id ?? undefined,
-      codigo_anoLectivo: safeNumber(d.codigo_anoLectivo),
+      codigo_anoLectivo: safeNumber(d.ano_lectivo),
       estado: 0,
       valorPago: 0,
       valorATransportar: 0,

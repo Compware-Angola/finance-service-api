@@ -20,6 +20,13 @@ export class MensalidadeItemDto {
   mes_temp_id: number;
 
   @ApiProperty({
+    description: 'Mês da propina (e.g., "2024-02-01 a 2024-02-29").',
+    example: "2024-02",
+  })
+  @IsString()
+  mes: string;
+
+  @ApiProperty({
     description: 'Valor em string formatada (e.g., "46000.00").',
     example: "46000.00",
   })
@@ -51,10 +58,10 @@ export class MensalidadeItemDto {
 
   @ApiProperty({
     description: 'Ano letivo (e.g., "2023-2024").',
-    example: "2023-2024",
+    example: 23,
   })
-  @IsString()
-  ano_lectivo: string;
+  @IsInt()
+  ano_lectivo: number;
 
   @ApiProperty({
     description: 'Taxa de desconto.',
@@ -97,6 +104,15 @@ export class MensalidadeItemDto {
   @IsInt()
   @IsOptional()
   codigo_factura?: number;
+
+  @ApiProperty({
+    description: 'Observação.',
+    type: String,
+    example: "Mensalidade",
+  })
+  @IsString()
+  @IsOptional()
+  obs?: string;
 }
 
 // === ITEM DE SERVIÇO ===
@@ -125,11 +141,11 @@ export class ServicoItemDto {
   codidigo_servico: string;
 
   @ApiProperty({
-    description: 'Código do ano letivo (e.g., "23").',
-    example: "23",
+    description: 'Código do ano letivo (e.g., 23).',
+    example: 23,
   })
-  @IsString()
-  codigo_anoLectivo: string;
+  @IsInt()
+  ano_lectivo: number;
 
   @ApiProperty({
     description: 'Valor do serviço.',
@@ -194,6 +210,23 @@ export class ServicoItemDto {
   })
   @IsNumber()
   valor_iva: number;
+  @ApiProperty({
+    description: 'Observação.',
+    type: String,
+    example: "Serviço",
+  })
+  @IsString()
+  @IsOptional()
+  obs?: string;
+
+  @ApiProperty({
+    description: 'Serviço.',
+    type: String,
+    example: "Serviço",
+  })
+  @IsString()
+  @IsOptional()
+  servico?: string;
 }
 
 export type FaturaItemUnion = MensalidadeItemDto | ServicoItemDto;

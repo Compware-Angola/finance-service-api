@@ -31,4 +31,9 @@ export class CreateAddDiscountDto {
   @IsNotEmpty()
   @IsNumber()
   semestre: number;
+
+  @ApiProperty({ description: 'Codigo da Afectacao' })
+  @IsNotEmpty()
+  @IsNumber()
+  afectacao: number;
 }

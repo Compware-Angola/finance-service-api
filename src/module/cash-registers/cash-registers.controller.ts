@@ -46,6 +46,15 @@ export class CashRegistersController {
   async findAll(@Query() query: ListCashRegistersDto) {
     return { data: await this.service.findAll(query) };
   }
+  @Get('meu-caixa')
+  async findByOperatorId(@Req() req: any) {
+    console.log(req.user);
+    const user = req.user;
+    const cashRegister = await this.service.findCashRegisterOpenByOperatorId(
+      user?.sub,
+    );
+    return { data: cashRegister };
+  }
 
   @Get(':id')
   async findOne(@Param('id') id: string) {
@@ -110,14 +119,5 @@ export class CashRegistersController {
       ip: ip,
     });
     return { message: 'Caixa fechado com sucesso' };
-  }
-
-  @Get('meu-caixa')
-  async findByOperatorId(@Req() req: any) {
-    const user = req.user;
-    const cashRegister = await this.service.findCashRegisterOpenByOperatorId(
-      user?.sub,
-    );
-    return { data: cashRegister };
   }
 }

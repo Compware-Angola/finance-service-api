@@ -71,9 +71,5 @@ export type GetAllDebtNegotiationsResponse = {
     size: number;
     desconto: number;
     precoTotal: number;
-    bolsa: number;
-    saldo_reset: number;
-    somaValorDividaRecurso: number;
 
-    somaDividaFacturas: number;
 }

@@ -23,9 +23,9 @@ export class NegotiationService {
             codAnoLectivo
         } = paginationQuery;
 
-        if (!codigo_matricula) return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0, bolsa: 0, saldo_reset: 0, somaValorDividaRecurso: 0, somaDividaFacturas: 0 };
+        if (!codigo_matricula) return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0 };
         const aluno = await this.obterDadosCompletosAluno(codigo_matricula);
-        if (aluno.estado_matricula.toUpperCase() == 'DIPLOMADO') return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0, bolsa: 0, saldo_reset: 0, somaValorDividaRecurso: 0, somaDividaFacturas: 0 };
+        if (aluno.estado_matricula.toUpperCase() == 'DIPLOMADO') return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0 };
 
 
         // ====================== FILTRO DE ANO LECTIVO ======================
@@ -102,25 +102,69 @@ export class NegotiationService {
         });
 
         const data = [...results, ...generated];
+        const recorrencias = await this.mapRecorrenciasAdicionais(
+            await this.obterRecorrenciasAdicionais(
+                codigo_matricula,
+                codAnoLectivo,
+            ),
+        );
 
 
+        const mensalidades = toLowerCaseKeys(data);
+        const outrosServicos = toLowerCaseKeys(recorrencias);
+
+        // Junta tudo para calcular os totais
+        const todosItens = [...mensalidades, ...outrosServicos];
+
+        // Apenas itens não pagos (status_pagamento != 1)
+        const itensPendentes = mensalidades.filter((m: any) => m.status_pagamento !== 1);
+
+        // ── Mensalidades ──────────────────────────────────────────
+        const totalMensalidades = itensPendentes.reduce(
+            (acc: number, m: any) => acc + (Number(m.total_item ?? m.total) || 0), 0
+        );
+
+        const desconto = [
+            ...itensPendentes,
+            ...outrosServicos,
+        ].reduce((acc: number, m: any) => acc + (Number(m.desconto ?? m.fi_descontoproduto) || 0), 0);
+
+        // ── Outros Serviços ───────────────────────────────────────
+        const totalOutrosServicos = outrosServicos.reduce(
+            (acc: number, s: any) => acc + (Number(s.total) || 0), 0
+        );
+
+        // ── IVA (soma dos valor_iva de OutrosServicos) ────────────
+        const totalIVA = outrosServicos.reduce(
+            (acc: number, s: any) => acc + (Number(s.valor_iva) || 0), 0
+        );
+
+        // ── Incidência (base de cálculo antes do IVA) ─────────────
+        const total_incidencia = outrosServicos.reduce(
+            (acc: number, s: any) => acc + (Number(s.incidencia) || 0), 0
+        );
+
+        // ── Retenção ──────────────────────────────────────────────
+        const percentagem_retencao = aluno?.percentagem_retencao ?? 0;
+        const total_retencao = (total_incidencia * percentagem_retencao) / 100;
+
+        // ── Totais finais ─────────────────────────────────────────
+        const totalDivida = totalMensalidades + totalOutrosServicos;
+        const precoTotal = totalDivida - desconto + totalIVA;
+        const size = itensPendentes.length + outrosServicos.length;
 
         return {
-            Mensalidades: toLowerCaseKeys(data),
-            OutrosServicos: toLowerCaseKeys([]),
-            anoAtual: 0,
-            totalIVA: 0,
-            percentagem_retencao: 0,
-            totalDivida: 0,
-            total_incidencia: 0,
-            total_retencao: 0,
-            size: 0,
-            desconto: 0,
-            precoTotal: 0,
-            bolsa: 0,
-            saldo_reset: 0,
-            somaValorDividaRecurso: 0,
-            somaDividaFacturas: 0
+            Mensalidades: mensalidades,
+            OutrosServicos: outrosServicos,
+            anoAtual: Number(codAnoLectivo) || 0,
+            totalIVA,
+            percentagem_retencao,
+            totalDivida,
+            total_incidencia,
+            total_retencao,
+            size,
+            desconto,
+            precoTotal,
         };
     }
     private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -148,5 +192,135 @@ export class NegotiationService {
         }
 
         return toLowerCaseKeys(row);
+    }
+    private async obterRecorrenciasAdicionais(
+        codigo_matricula: number,
+        codAnoLectivo?: number,
+    ) {
+        const filtros: string[] = [
+            `ia.codigo_matricula = :codigo_matricula`,
+            `ia.estado != 'anulado'`,
+            `f.estado NOT IN (1, 3)`,
+            `f.corrente = 1`,
+            `ia.codigo_tipo_avaliacao IN (7,11,22)`,
+        ];
+
+        const params: any = {
+            codigo_matricula,
+        };
+
+        if (codAnoLectivo) {
+            filtros.push(`ia.codigo_ano_lectivo = :codAnoLectivo`);
+            params.codAnoLectivo = codAnoLectivo;
+        }
+
+        const sql = `
+        SELECT 
+          f.Codigo                        AS f_codigo,
+          MAX(f.ValorAPagar)              AS f_valorapagar,
+          gc.Codigo                       AS gc_codigo,
+          ia.codigo_tipo_avaliacao        AS codigo_tipo_avaliacao,
+          MAX(fi.preco)                   AS fi_preco,
+          MAX(fi.Multa)                   AS fi_multa,
+          MAX(fi.descontoProduto)         AS fi_descontoproduto,
+          MAX(fi.Total)                   AS fi_total,
+          MAX(d.Designacao)               AS d_designacao,
+          MAX(al.Codigo)                  AS al_codigo,
+          MAX(al.Designacao)              AS al_designacao,
+          MAX(ts.Codigo)                  AS ts_codigo,
+          MAX(fi.incidencia)              AS fi_incidencia,
+          MAX(fi.valor_iva)               AS fi_valor_iva,
+          MAX(fi.taxa_iva)                AS fi_taxa_iva,
+          MAX(tt.descricao)               AS tt_descricao
+
+        FROM FK2_INSCRICAO_AVALIACOES ia
+
+        LEFT JOIN FK2_FACTURA f
+          ON f.Codigo = ia.codigo_factura
+
+        LEFT JOIN FK2_FACTURA_ITEMS fi
+          ON fi.CodigoFactura = f.Codigo
+
+        LEFT JOIN FK2_TB_ANO_LECTIVO al
+          ON al.Codigo = f.ano_lectivo
+
+        LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+          ON ts.Codigo = fi.CodigoProduto
+
+        LEFT JOIN FK2_TIPO_TAXAS tt
+          ON tt.id = ts.taxa_iva_id
+
+        LEFT JOIN FK2_TB_GRADE_CURRICULAR gc
+          ON gc.Codigo = ts.CODIGO_GRADE_CURRILULAR
+
+        LEFT JOIN FK2_TB_DISCIPLINAS d
+          ON d.Codigo = gc.Codigo_Disciplina
+
+        WHERE ${filtros.join(' AND ')}
+
+        GROUP BY
+          gc.Codigo,
+          f.Codigo,
+          ia.codigo_tipo_avaliacao
+
+        ORDER BY gc.Codigo
+    `;
+
+        const result = await this.dataSource.query(sql, params);
+
+        return toLowerCaseKeys(result);
+    }
+    private async mapRecorrenciasAdicionais(recorrenciasAdicionaisRaw: any[]) {
+        let recorrencias: any[] = [];
+
+        for (const raw of recorrenciasAdicionaisRaw) {
+            console.log(raw);
+
+
+            const codGradeCurricular = raw.gc_codigo;
+
+            const servico = this.montarNomeServico(
+                raw.d_designacao || '',
+                raw.codigo_tipo_avaliacao,
+            );
+            recorrencias.push({
+                codGradeCurricular,
+                codFacturaOutrosServicos: raw.f_codigo,
+                valor: Number(raw.fi_preco),
+                multa: Number(raw.fi_multa),
+                total: Number(raw.fi_total),
+                servico,
+                ano_lectivo: raw.al_designacao,
+                taxa_multa: 0,
+                taxa_desconto: 0,
+                codidigo_servico: Number(raw.ts_codigo),
+                codigo_anoLectivo: Number(raw.al_codigo),
+                desconto: Number(raw.fi_descontoproduto),
+                incidencia: Number(raw.fi_incidencia),
+                valor_iva: Number(raw.fi_valor_iva),
+                tipo_taxas: Number(raw.fi_taxa_iva),
+                taxa_descricao: raw.tt_descricao,
+            });
+        }
+
+        return recorrencias;
+    }
+    private montarNomeServico(
+        designacao: string,
+        codigoTipoAvaliacao?: number,
+    ): string {
+        switch (Number(codigoTipoAvaliacao)) {
+            case 7:
+                return `Rec. ${designacao}`;
+
+            case 22:
+                return `Melhoria. ${designacao}`;
+
+            case 11:
+                return `Exame Especial. ${designacao}`;
+
+            default:
+                return designacao;
+        }
     }
 }

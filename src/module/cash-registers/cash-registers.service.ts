@@ -12,6 +12,7 @@ import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
 import { ListCashRegistersDto } from './dto/list-cash-registers.dto';
 import { CashRegisterMovement } from './entities/cash-register-movement.entity';
 import { OpenCashRegisterParams } from './types';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 
 @Injectable()
 export class CashRegistersService {
@@ -103,12 +104,9 @@ export class CashRegistersService {
 
   async openCashRegister(data: OpenCashRegisterParams) {
     const { id, openingAmount, operatorId } = data;
-
     return this.dataSource.transaction(async (manager) => {
       const cashRegisterRepository = manager.getRepository(CashRegister);
-
       const movementRepository = manager.getRepository(CashRegisterMovement);
-
       const existingCashRegister = await cashRegisterRepository.findOne({
         where: {
           operatorId,
@@ -152,12 +150,9 @@ export class CashRegistersService {
         collectedDepositAmount: 0,
         collectedPaymentAmount: 0,
         invoicedPaymentAmount: 0,
-
         status: 'aberto',
         finalStatus: 'pendente',
-
         dateAt: new Date(),
-
         createdAt: new Date(),
       });
 
@@ -169,27 +164,29 @@ export class CashRegistersService {
 
   async avaliableCashRegistersForOpening(search?: string) {
     const query = this.repository.createQueryBuilder('cashRegister');
-    query.where('cashRegister.deletedAt IS NULL');
-    query.andWhere('cashRegister.blocked = :blocked', {
-      blocked: 'N',
-    });
-    query.andWhere('cashRegister.status = :status', {
-      status: 'fechado',
-    });
-    if (search) {
+
+    query
+      .where('cashRegister.deletedAt IS NULL')
+      .andWhere('cashRegister.blocked = :blocked', { blocked: 'N' })
+      .andWhere('cashRegister.status = :status', { status: 'fechado' });
+
+    if (search?.trim()) {
+      const normalized = `%${search.trim().toUpperCase()}%`;
+
       query.andWhere(
         new Brackets((qb) => {
-          qb.where('UPPER(cashRegister.name) LIKE UPPER(:search)', {
-            search: `%${search.trim()}%`,
-          }).orWhere('UPPER(cashRegister.code) LIKE UPPER(:search)', {
-            search: `%${search.trim()}%`,
+          qb.where('UPPER(cashRegister.name) LIKE :search', {
+            search: normalized,
+          }).orWhere('UPPER(cashRegister.code) LIKE :search', {
+            search: normalized,
           });
         }),
       );
     }
+
     query.orderBy('cashRegister.id', 'DESC');
-    const result = await query.getMany();
-    return { data: result };
+
+    return query.getMany();
   }
 
   async closeCashRegister(id: number, operatorId: number) {
@@ -222,5 +219,34 @@ export class CashRegistersService {
     });
 
     return cashRegister;
+  }
+
+  async getCashRegisterSummaryByPaymentMethod(params: {
+    operadorId: number;
+    caixaId: number;
+  }) {
+    const { operadorId, caixaId } = params;
+    const result = await this.dataSource.query(
+      `
+      SELECT
+      forma_pagamento.CODIGO AS forma_pagamento_codigo,
+      forma_pagamento.DESCRICAO AS forma_pagamento,
+      SUM(pagamentos.VALOR_DEPOSITADO) AS total
+      FROM  FK2_TB_PAGAMENTOS pagamentos
+      INNER JOIN FK2_TB_FORMA_PAGAMENTO forma_pagamento
+      ON forma_pagamento.CODIGO = pagamentos.FORMA_PAGAMENTO
+      WHERE pagamentos.FK_UTILIZADOR = :operadorId
+      AND pagamentos.CAIXA_ID = :caixaId
+      AND pagamentos.ESTADO = 2
+      AND TRUNC(pagamentos.CREATED_AT) = TRUNC(SYSDATE)
+      GROUP BY
+        forma_pagamento.CODIGO,
+        forma_pagamento.DESCRICAO
+      ORDER BY forma_pagamento.DESCRICAO`,
+
+      [operadorId, caixaId],
+    );
+
+    return toLowerCaseKeys(result);
   }
 }

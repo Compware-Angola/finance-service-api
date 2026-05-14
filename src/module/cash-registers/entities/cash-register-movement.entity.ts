@@ -48,7 +48,7 @@ export class CashRegisterMovement {
   totalCollectedAmount?: number;
 
   @Column({
-    name: 'VALOR_ARRECADADO_DEPOSITO',
+    name: 'VALOR_ARRECADADO_DEPOSITOS',
     type: 'number',
     nullable: true,
     default: 0,

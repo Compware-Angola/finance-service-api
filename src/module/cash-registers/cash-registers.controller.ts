@@ -25,14 +25,13 @@ import { HttpService } from '@nestjs/axios';
 import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
 import { OpenCashRegisterDto } from './dto/open-cash-register.dto';
 @ApiTags('caixas')
-@UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
 @Controller('caixas')
 export class CashRegistersController {
   constructor(
     private readonly service: CashRegistersService,
     private httpService: HttpService,
   ) {}
-
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @Post()
   async create(@Body() body: CreateCashRegisterDto, @Req() req: any) {
     const user = req.user;
@@ -45,12 +44,12 @@ export class CashRegistersController {
     });
     return { data: cashRegister };
   }
-
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @Get()
   async findAll(@Query() query: ListCashRegistersDto) {
     return { data: await this.service.findAll(query) };
   }
-
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @Get('disponiveis')
   async avaliableCashRegistersForOpening(
     @Query() query: ListCashRegistersForOpeningDto,
@@ -59,7 +58,7 @@ export class CashRegistersController {
       data: await this.service.avaliableCashRegistersForOpening(query.search),
     };
   }
-
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @Get('meu-caixa')
   async findByOperatorId(@Req() req: any) {
     console.log(req.user);
@@ -69,13 +68,26 @@ export class CashRegistersController {
     );
     return { data: cashRegister };
   }
-
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const cashRegister = await this.service.findOne(Number(id));
     return { data: cashRegister };
   }
 
+  @Get(':operadorId/:caixaId/resumo')
+  async getCashRegisterSummaryByPaymentMethod(
+    @Param('caixaId') caixaId: string,
+    @Param('operadorId') operadorId: string,
+  ) {
+    const cashRegister =
+      await this.service.getCashRegisterSummaryByPaymentMethod({
+        caixaId: Number(caixaId),
+        operadorId: Number(operadorId),
+      });
+    return { data: cashRegister };
+  }
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -92,7 +104,7 @@ export class CashRegistersController {
     });
     return { data: cashRegister };
   }
-
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @Delete(':id')
   async remove(@Param('id') id: string, @Req() req: any) {
     const user = req.user;
@@ -105,7 +117,7 @@ export class CashRegistersController {
     });
     return { data: cashRegister };
   }
-
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @Patch(':id/open')
   async open(
     @Param('id') id: string,
@@ -132,7 +144,7 @@ export class CashRegistersController {
       data: cashRegister,
     };
   }
-
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @Patch(':id/close')
   async close(@Param('id') id: string, @Req() req: any) {
     const user = req.user;

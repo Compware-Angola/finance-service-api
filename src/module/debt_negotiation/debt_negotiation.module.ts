@@ -42,6 +42,8 @@ import { InvoiceNumberingAndHashService } from '../invoice/invoice-numbering-has
 import { CompanyKey } from 'src/common/config/security/key-company';
 import { ListDebtNegotiationController } from './list_debt_negotiation.controller';
 import { ListDebtNegotiationService } from './list_debt_negotiation.service';
+import { MonthlyFeesDiscountUtilService } from '../shared/monthly_fees/monthly_fees.discount.Util.service';
+import { NegotiationService } from './negotiation.service';
 
 @Module({
   imports: [
@@ -75,9 +77,10 @@ import { ListDebtNegotiationService } from './list_debt_negotiation.service';
       DebtNegotiation,
     ]),
   ],
-  controllers: [DebtNegotiationController,ListDebtNegotiationController],
+  controllers: [DebtNegotiationController, ListDebtNegotiationController],
   providers: [
     DebtNegotiationService,
+    NegotiationService,
     CreateDebtNegotiationService,
     ListDebtNegotiationService,
     AnoLectivoUtil,
@@ -85,7 +88,8 @@ import { ListDebtNegotiationService } from './list_debt_negotiation.service';
     PropinaAlunoService,
     InvoiceService,
     InvoiceNumberingAndHashService,
-    CompanyKey, 
+    CompanyKey,
+    MonthlyFeesDiscountUtilService,
   ],
 })
-export class DebtNegotiationModule {}
+export class DebtNegotiationModule { }

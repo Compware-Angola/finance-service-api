@@ -23,6 +23,8 @@ import {
 import { DebtNegotiationService } from './debt_negotiation.service';
 import { CreateDebtNegotiationDto } from './dto/create-debt_negotiation.dto';
 import { CreateDebtNegotiationService } from './debt.create.service';
+import { NegotiationService } from './negotiation.service';
+import { GetDebtDtoNew } from './dto/find-debit.dto';
 
 @ApiTags('Negociação de Dívidas')
 @ApiBearerAuth()
@@ -31,6 +33,7 @@ export class DebtNegotiationController {
   constructor(
     private readonly debtNegotiationService: DebtNegotiationService,
     private readonly createDebtNegotiationService: CreateDebtNegotiationService,
+    private readonly negotiationService: NegotiationService,
   ) { }
 
   @Post(':codigo_matricula')
@@ -80,5 +83,19 @@ export class DebtNegotiationController {
       preinscricaoId,
       tipoCandidatura
     );
+  }
+
+
+  @Get("new-routes")
+  @ApiOperation({ summary: 'Obter dívidas pendentes do aluno' })
+  @ApiResponse({
+    status: 200,
+    description: 'Dívidas retornadas com sucesso',
+    type: Object,
+  })
+  @ApiResponse({ status: 400, "description": 'Parâmetros inválidos' })
+  @ApiResponse({ status: 404, "description": 'Aluno não encontrado' })
+  async getAllDebtNegotiations(@Query(ValidationPipe) query: GetDebtDtoNew) {
+    return this.negotiationService.getAllDebtNegotiations(query)
   }
 }

@@ -45,3 +45,13 @@ export class ListCashRegistersDto {
   @IsIn(['S', 'N'])
   blocked?: string;
 }
+
+export class ListCashRegistersForOpeningDto {
+  @ApiPropertyOptional({
+    example: 'Caixa 1',
+    description: 'Nome ou código do caixa',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
+}

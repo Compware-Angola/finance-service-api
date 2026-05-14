@@ -8,6 +8,7 @@ import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { FilterAddDiscountDto } from './dto/filter-add-discount.dto';
 import { CreateAddDiscountDto } from './dto/create-add-discount.dto';
 import { UpdateAddDiscountDto } from './dto/update-add-discount.dto';
+import { PaymentType } from 'src/common/enums/type-payment.enum';
 
 @Injectable()
 export class DiscountService {
@@ -59,6 +60,10 @@ export class DiscountService {
     if (result.length > 0) {
       throw new BadRequestException('Matrícula já possui bolsa.');
     }
+    const afectacao =
+      createDto.afectacao == 2
+        ? PaymentType.PAGAMENTO_GLOBAL
+        : PaymentType.PAGAMENTO_PROPINA;
 
     const sql = `
       INSERT INTO FK2_TB_DESCONTOS_ALUNOO (
@@ -69,10 +74,10 @@ export class DiscountService {
         INSTITUICAO_ID,
         ESTATUS_DESCONTO_ID,
         SEMESTRE,
-        CREATED_AT
+        CREATED_AT,
         --ISENTAR_MULTA,
         --CODIGO_TIPO_DESCONTO,
-        --AFECTACAO
+        AFECTACAO
       ) VALUES (
         :codigoMatricula,
         :codigoTaxa,
@@ -81,20 +86,21 @@ export class DiscountService {
         :codigoInstituicao,
         1,
         :semestre,
-        sysdate
+        sysdate,
+        :afectacao
       )
     `;
+    const params = {
+      codigoMatricula: createDto.codigoMatricula,
+      codigoTaxa: createDto.codigoTaxa,
+      codigoAnoLectivo: createDto.codigoAno,
+      observacao: createDto.observacao,
+      codigoInstituicao: createDto.codigoInstituicao,
+      semestre: createDto.semestre,
+      afectacao: afectacao,
+    };
 
-    const params = [
-      createDto.codigoMatricula,
-      createDto.codigoTaxa,
-      createDto.codigoAno,
-      createDto.observacao,
-      createDto.codigoInstituicao,
-      createDto.semestre,
-    ];
-
-    await this.dataSource.query(sql, params);
+    await this.dataSource.query(sql, params as any);
   }
 
   async update(id: number, updateDto: UpdateDiscountDto) {
@@ -281,7 +287,7 @@ export class DiscountService {
     whereConditions.push('a.DELETED_AT IS NULL');
     const TipoPagamento = {
       PAGAMENTO_GLOBAL: {
-        valor: null,
+        valor: 'Pagamento Global',
         campo: 'PAGAMENTO_GLOBAL',
       },
       PAGAMENTO_PROPINA: {
@@ -383,6 +389,7 @@ export class DiscountService {
                                                        a.OBSERVACAO,
                                                        a.CREATED_AT,
                                                        a.CODIGO
+
                                                      FROM FK2_TB_DESCONTOS_ALUNOO a
                                                         , FK2_TB_TIPO_DESCONTOS b
                                                         , FK2_DESCONTOS_ESPECIAIS c
@@ -427,7 +434,7 @@ export class DiscountService {
   }
 
   async removeAddDiscount(codigo: number) {
-  const checkSql = `
+    const checkSql = `
     SELECT 1
     FROM FK2_TB_DESCONTOS_ALUNOO
     WHERE CODIGO = :codigo
@@ -435,21 +442,19 @@ export class DiscountService {
     FETCH FIRST 1 ROWS ONLY
   `;
 
-  const exists = await this.dataSource.query(checkSql, [codigo]);
+    const exists = await this.dataSource.query(checkSql, [codigo]);
 
-  if (exists.length === 0) {
-    throw new BadRequestException('Desconto não existe.');
-  }
+    if (exists.length === 0) {
+      throw new BadRequestException('Desconto não existe.');
+    }
 
-  const sql = `
+    const sql = `
     UPDATE FK2_TB_DESCONTOS_ALUNOO
     SET DELETED_AT = SYSDATE
     WHERE CODIGO = :codigo
       AND DELETED_AT IS NULL
   `;
 
-  await this.dataSource.query(sql, [codigo]);
-}
-
-
+    await this.dataSource.query(sql, [codigo]);
+  }
 }

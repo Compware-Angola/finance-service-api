@@ -21,7 +21,7 @@ export class MonthlyFeesDiscountUtilService {
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
     const sql = `
-      SELECT 
+      SELECT
         c.designacao           as curso,
         c.codigo               as codigo_curso,
         c.sigla                as sigla,
@@ -47,14 +47,13 @@ export class MonthlyFeesDiscountUtilService {
 
   // ====================== DESCONTOS ======================
 
-
   private async obterBolseiro({
     anoLectivo,
     codigoMatricula,
     semestre,
   }: ObterBolseiroParams): Promise<BolseiroResult> {
     const sql = `
-    SELECT desconto, isentar_multa 
+    SELECT desconto, isentar_multa
     FROM fk2_tb_bolseiros
     WHERE codigo_matricula = :codigoMatricula
       AND codigo_anolectivo = :anoLectivo
@@ -83,7 +82,7 @@ export class MonthlyFeesDiscountUtilService {
       };
     } catch (err) {
       throw new Error(
-        `Erro ao obter bolseiro [matricula=${codigoMatricula}]: ${err.message}`
+        `Erro ao obter bolseiro [matricula=${codigoMatricula}]: ${err.message}`,
       );
     }
   }
@@ -92,16 +91,26 @@ export class MonthlyFeesDiscountUtilService {
     anoLectivo,
     codigoMatricula,
     semestre,
-  }: { anoLectivo: number; codigoMatricula: number; semestre: number }) {
+    dataLimite,
+  }: {
+    anoLectivo: number;
+    codigoMatricula: number;
+    semestre: number;
+    dataLimite: Date;
+  }) {
+    const dataStr = formatDisplay(dataLimite);
     const sql = `
       SELECT de.TAXA as VALOR_DESCONTO
       FROM FK2_TB_DESCONTOS_ALUNOO da
-      INNER JOIN FK2_DESCONTOS_ESPECIAIS de ON da.CODIGO_TIPO_DESCONTO = de.id
+      INNER JOIN FK2_DESCONTOS_ESPECIAIS de ON da.TIPO_TAXA_DESCONTO_ESPECIAL	 = de.id
       WHERE da.codigo_matricula = :codigoMatricula
         AND da.codigo_anolectivo = :anoLectivo
         AND da.afectacao = 'Pagamento de Propina'
         AND (da.semestre = :semestre OR da.semestre = 3)
         AND da.deleted_at IS NULL
+        AND da.ESTATUS_DESCONTO_ID = 1
+        AND de.ESTADO = 1
+        AND TO_DATE(:dataStr, 'YYYY-MM-DD') BETWEEN de.DATA_INICIO AND de.DATA_FIM
       FETCH FIRST 1 ROW ONLY
     `;
 
@@ -109,6 +118,7 @@ export class MonthlyFeesDiscountUtilService {
       anoLectivo,
       codigoMatricula,
       semestre,
+      dataStr,
     } as any);
 
     if (row?.VALOR_DESCONTO != null) {
@@ -137,7 +147,7 @@ export class MonthlyFeesDiscountUtilService {
       )
       SELECT de.TAXA
       FROM aluno a
-      JOIN FK2_DESCONTOS_ESPECIAIS de 
+      JOIN FK2_DESCONTOS_ESPECIAIS de
         ON de.ESTADO = 1
        AND TO_DATE(:dataStr, 'YYYY-MM-DD') BETWEEN de.DATA_INICIO AND de.DATA_FIM
       WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324')
@@ -166,7 +176,7 @@ export class MonthlyFeesDiscountUtilService {
     duracaoCurso: number,
   ) {
     const sql = `
-      SELECT 
+      SELECT
         COUNT(*) AS total_cadeiras,
         MAX(cl.codigo) AS ano_inscrito
       FROM FK2_TB_GRADE_CURRICULAR_ALUNO ftgca
@@ -252,6 +262,7 @@ export class MonthlyFeesDiscountUtilService {
       anoLectivo,
       codigoMatricula,
       semestre: mesTemp.semestre,
+      dataLimite: mesTemp.data_limite,
     });
     if (descontoNormal.temDesconto) return descontoNormal.desconto;
 
@@ -268,7 +279,10 @@ export class MonthlyFeesDiscountUtilService {
   }
 
   // ====================== ISENÇÕES ======================
-  private async existIsencaoMulta(codigoMatricula: number, mesTempId: number): Promise<boolean> {
+  private async existIsencaoMulta(
+    codigoMatricula: number,
+    mesTempId: number,
+  ): Promise<boolean> {
     const sql = `
       SELECT COUNT(*) AS TOTAL
       FROM FK2_TB_ISENCOE_MULTA
@@ -277,11 +291,17 @@ export class MonthlyFeesDiscountUtilService {
         AND UPPER(ESTADO_ISENSAO) = 'ACTIVO'
     `;
 
-    const [row] = await this.dataSource.query(sql, { codigoMatricula, mesTempId } as any);
+    const [row] = await this.dataSource.query(sql, {
+      codigoMatricula,
+      mesTempId,
+    } as any);
     return Number(row?.TOTAL || 0) > 0;
   }
 
-  private async existIsencaoMensalidade(codigoMatricula: number, mesTempId: number): Promise<boolean> {
+  private async existIsencaoMensalidade(
+    codigoMatricula: number,
+    mesTempId: number,
+  ): Promise<boolean> {
     const sql = `
       SELECT COUNT(*) AS TOTAL
       FROM FK2_TB_ISENCOES
@@ -290,7 +310,10 @@ export class MonthlyFeesDiscountUtilService {
         AND UPPER(ESTADO_ISENSAO) = 'ACTIVO'
     `;
 
-    const [row] = await this.dataSource.query(sql, { codigoMatricula, mesTempId } as any);
+    const [row] = await this.dataSource.query(sql, {
+      codigoMatricula,
+      mesTempId,
+    } as any);
     return Number(row?.TOTAL || 0) > 0;
   }
 
@@ -299,9 +322,11 @@ export class MonthlyFeesDiscountUtilService {
     mesTemp: MesTempResponse,
     periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[],
   ): Promise<number> {
-    const temIsencao = await this.existIsencaoMulta(codigoMatricula, mesTemp.id);
+    const temIsencao = await this.existIsencaoMulta(
+      codigoMatricula,
+      mesTemp.id,
+    );
     if (temIsencao) return 0;
-
 
     return obterMulta(mesTemp.data_limite, periodosIsentos);
   }
@@ -313,7 +338,10 @@ export class MonthlyFeesDiscountUtilService {
   ): Promise<number> {
     if (isBolseiroIntegral) return 1;
 
-    const temIsencao = await this.existIsencaoMensalidade(codigoMatricula, mesTempId);
+    const temIsencao = await this.existIsencaoMensalidade(
+      codigoMatricula,
+      mesTempId,
+    );
     return temIsencao ? 4 : 0;
   }
 
@@ -325,7 +353,11 @@ export class MonthlyFeesDiscountUtilService {
     periodosIsentos,
     dadosAluno,
   }: CalcularValorMensalidadeParams & { dadosAluno: any }) {
-    const mensalidade = await this.obterMensalidade(codigoMatricula, anoLectivo, dadosAluno);
+    const mensalidade = await this.obterMensalidade(
+      codigoMatricula,
+      anoLectivo,
+      dadosAluno,
+    );
 
     const percentagemDesconto = await this.calcularDesconto({
       anoLectivo,
@@ -349,7 +381,6 @@ export class MonthlyFeesDiscountUtilService {
 
     const descontoValor = mensalidade * percentagemDesconto;
     const mensalidadeComDesconto = mensalidade - descontoValor;
-
 
     // Se for Bolseiro sem Multa nao deve calcular mas a Multa
 
@@ -388,7 +419,7 @@ export class MonthlyFeesDiscountUtilService {
       total_preco: mensalidade,
       status_pagamento: statusPagamento,
       data_operacao: null,
-      data_pagamento: null
+      data_pagamento: null,
     };
   }
 

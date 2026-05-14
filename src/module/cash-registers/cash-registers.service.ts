@@ -95,17 +95,17 @@ export class CashRegistersService {
   }
 
   async openCashRegister(id: number, operatorId: number) {
-    // const existingCashRegister = await this.repository.findOne({
-    //   where: {
-    //     operatorId,
-    //     status: 'aberto',
-    //     deletedAt: IsNull(),
-    //   },
-    // });
+    const existingCashRegister = await this.repository.findOne({
+      where: {
+        operatorId,
+        status: 'aberto',
+        deletedAt: IsNull(),
+      },
+    });
 
-    // if (existingCashRegister) {
-    //   throw new BadRequestException('Operador já tem um caixa aberto');
-    // }
+    if (existingCashRegister) {
+      throw new BadRequestException('Operador já tem um caixa aberto');
+    }
 
     const cashRegister = await this.findOne(id);
 
@@ -130,11 +130,11 @@ export class CashRegistersService {
       throw new BadRequestException('Caixa já está fechado');
     }
 
-    // if (cashRegister.operatorId !== operatorId) {
-    //   throw new BadRequestException(
-    //     'Operador não pode fechar o caixa, em uso por outro operador',
-    //   );
-    // }
+    if (cashRegister.operatorId !== operatorId) {
+      throw new BadRequestException(
+        'Operador não pode fechar o caixa, em uso por outro operador',
+      );
+    }
 
     await this.repository.update(id, {
       status: 'fechado',
@@ -146,15 +146,11 @@ export class CashRegistersService {
   async findCashRegisterOpenByOperatorId(operatorId: number) {
     const cashRegister = await this.repository.findOne({
       where: {
-        operatorId,
+        operatorId: operatorId,
         status: 'aberto',
         deletedAt: IsNull(),
       },
     });
-
-    if (!cashRegister) {
-      throw new NotFoundException('Operador sem caixa aberto');
-    }
 
     return cashRegister;
   }

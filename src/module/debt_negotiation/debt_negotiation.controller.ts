@@ -22,7 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { DebtNegotiationService } from './debt_negotiation.service';
 import { CreateDebtNegotiationDto } from './dto/create-debt_negotiation.dto';
-import { CreateDebtNegotiationService } from './debt.create.service';
+import { CreateDebtNegotiationService } from './negotation.create.service';
 import { NegotiationService } from './negotiation.service';
 import { GetDebtDtoNew } from './dto/find-debit.dto';
 
@@ -72,7 +72,7 @@ export class DebtNegotiationController {
   })
   @ApiResponse({ status: 400, "description": 'Parâmetros inválidos' })
   @ApiResponse({ status: 404, "description": 'Aluno não encontrado' })
-  async getAllDebtNegotiations(@Query(ValidationPipe) query: GetDebtDtoNew) {
+  async getDebtsInformation(@Query(ValidationPipe) query: GetDebtDtoNew) {
     return this.negotiationService.getAllDebtNegotiations(query)
   }
 }

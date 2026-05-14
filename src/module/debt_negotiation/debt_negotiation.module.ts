@@ -37,7 +37,7 @@ import { MesesPagarService } from './meses-pagar.service';
 import { PropinaAlunoService } from './propina-aluno.service';
 import { InvoiceService } from '../invoice/invoice.service';
 
-import { CreateDebtNegotiationService } from './debt.create.service';
+import { CreateDebtNegotiationService } from './negotation.create.service';
 import { InvoiceNumberingAndHashService } from '../invoice/invoice-numbering-hash.service';
 import { CompanyKey } from 'src/common/config/security/key-company';
 import { ListDebtNegotiationController } from './list_debt_negotiation.controller';

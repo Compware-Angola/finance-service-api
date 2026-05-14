@@ -113,9 +113,6 @@ export class NegotiationService {
         const mensalidades = toLowerCaseKeys(data);
         const outrosServicos = toLowerCaseKeys(recorrencias);
 
-        // Junta tudo para calcular os totais
-        const todosItens = [...mensalidades, ...outrosServicos];
-
         // Apenas itens não pagos (status_pagamento != 1)
         const itensPendentes = mensalidades.filter((m: any) => m.status_pagamento !== 1);
 

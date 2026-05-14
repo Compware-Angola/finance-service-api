@@ -20,7 +20,7 @@ export interface PagedResult<T> {
 
 @Injectable()
 export class ListDebtNegotiationService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(private readonly dataSource: DataSource) { }
   async findNegotiations(
     filter: GetDebtNegotiationFilterDto,
   ): Promise<PagedResult<any>> {
@@ -35,7 +35,6 @@ export class ListDebtNegotiationService {
       nome,
     } = filter;
 
-    // Validações mínimas (ajuste conforme sua regra de negócio)
     if (!codigoAnoLectivo) {
       throw new BadRequestException(
         'O ano letivo é obrigatório para listar negociações.',
@@ -48,7 +47,7 @@ export class ListDebtNegotiationService {
        QUERY PRINCIPAL PAGINADA
        ============================================= */
     const dataSql = `
-    SELECT
+  SELECT
     nd.id,
     m.codigo                        AS codigo_matricula,
     p.NOME_COMPLETO                 AS nome,
@@ -56,8 +55,8 @@ export class ListDebtNegotiationService {
     nd.VALOR_DIVIDA                 AS valor_divida,
     nd.QTD_PRESTACOES               AS prestacoes,
     nd.CREATED_AT                   AS data_criacao,
-    mi.designacao                          AS mes_inicial,
-    mf.designacao                          AS mes_final,
+    mi.designacao                   AS mes_inicial,
+    mf.designacao                   AS mes_final,
     nd.PRIMEIROVALORAPAGAR          AS primeiro_valor_pagar,
     nd.VALORPRESTACOES              AS valor_prestacao,
     nd.VALORRESTANTE                AS valor_restante,
@@ -66,33 +65,25 @@ export class ListDebtNegotiationService {
     nd.TIPO_NEGOCIACAO_ID           AS tipo_negociacao_id,
     c.FACULDADE_ID                  AS faculdade_id,
     f.DESIGNACAO                    AS faculdade
-FROM FK2_NEGOCIACAO_DIVIDAS nd
-INNER JOIN FK2_TB_MATRICULAS m
-       ON m.codigo = nd.CODIGO_MATRICULA
-INNER JOIN FK2_TB_ADMISSAO a
-       ON a.codigo = m.CODIGO_ALUNO
-INNER JOIN FK2_TB_PREINSCRICAO p
-       ON p.codigo = a.PRE_INCRICAO
-LEFT  JOIN FK2_TB_CURSOS c
-       ON c.codigo = m.CODIGO_CURSO
-LEFT  JOIN fk2_meses_calendario mi
-       ON mi.id = nd.ID_MES_INICIAL
-LEFT  JOIN fk2_meses_calendario mf
-       ON mf.id = nd.ID_MES_FINAL
-LEFT  JOIN FK2_FACTURA fa
-       ON fa.codigo = nd.CODIGO_FATURA
-LEFT  JOIN FK2_TB_FACULDADE f
-       ON f.codigo = c.FACULDADE_ID
-WHERE 1=1
-  AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
-  AND (:codigoCurso IS NULL      OR c.codigo = :codigoCurso)
-  AND (:tipoNegociacaoId IS NULL OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
-  AND (:faculdadeId IS NULL      OR c.FACULDADE_ID = :faculdadeId)
-  AND (:codigoMatricula IS NULL  OR m.codigo = :codigoMatricula)
-  AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
-ORDER BY nd.CREATED_AT ASC
-OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
-    `;
+  FROM FK2_NEGOCIACAO_DIVIDAS nd
+  INNER JOIN FK2_TB_MATRICULAS m       ON m.codigo    = nd.CODIGO_MATRICULA
+  INNER JOIN FK2_TB_ADMISSAO a         ON a.codigo    = m.CODIGO_ALUNO
+  INNER JOIN FK2_TB_PREINSCRICAO p     ON p.codigo    = a.PRE_INCRICAO
+  LEFT  JOIN FK2_TB_CURSOS c           ON c.codigo    = m.CODIGO_CURSO
+  LEFT  JOIN fk2_meses_calendario mi   ON mi.id       = nd.ID_MES_INICIAL
+  LEFT  JOIN fk2_meses_calendario mf   ON mf.id       = nd.ID_MES_FINAL
+  LEFT  JOIN FK2_FACTURA fa            ON fa.codigo   = nd.CODIGO_FATURA
+  LEFT  JOIN FK2_TB_FACULDADE f        ON f.codigo    = c.FACULDADE_ID
+  WHERE 1=1
+    AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
+    AND (:codigoCurso IS NULL      OR c.codigo             = :codigoCurso)
+    AND (:tipoNegociacaoId IS NULL OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
+    AND (:faculdadeId IS NULL      OR c.FACULDADE_ID        = :faculdadeId)
+    AND (:codigoMatricula IS NULL  OR m.codigo             = :codigoMatricula)
+    AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
+  ORDER BY nd.CREATED_AT ASC
+  OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+  `;
 
     const rawResults = await this.dataSource.query(dataSql, {
       codigoAnoLectivo,
@@ -106,87 +97,193 @@ OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
     } as any);
 
     /* =============================================
+       QUERY DE FACTURAS + ITENS (para os IDs da página)
+       ============================================= */
+    let facturasMap: Map<number, any[]> = new Map();
+
+    if (rawResults.length > 0) {
+      // Extrai os IDs das negociações da página atual
+      const negociacaoIds: number[] = rawResults.map((r: any) => Number(r.ID ?? r.id));
+
+      // Uma única query que traz facturas + itens para todas as negociações da página
+      const facturasSql = `
+      SELECT
+        nf.CODIGO_NEGOCIACAO,
+        fa.CODIGO                   AS factura_id,
+        fa.DATAFACTURA              AS factura_data,
+        fa.TOTALPRECO               AS factura_total_preco,
+        fa.VALORAPAGAR              AS factura_valor_apagar,
+        fa.VALORENTREGUE            AS factura_valor_entregue,
+        fa.DESCONTO                 AS factura_desconto,
+        fa.TOTALIVA                 AS factura_total_iva,
+        fa.TOTALMULTA               AS factura_total_multa,
+        fa.TOTAL_INCIDENCIA         AS factura_total_incidencia,
+        fa.TOTAL_RETENCAO           AS factura_total_retencao,
+        fa.VALORAPAGAREXTENSO       AS factura_valor_apagar_extenso,
+        fa.DESCRICAO                AS factura_descricao,
+        fa.REFERENCIA               AS factura_referencia,
+        fa.DATAVENCIMENTO           AS factura_data_vencimento,
+        fa.ESTADO                   AS factura_estado,
+        fa.ANO_LECTIVO              AS factura_ano_lectivo,
+        fi.CODIGO                   AS item_id,
+        fi.CODIGOPRODUTO            AS item_codigo_produto,
+        fi.QUANTIDADE               AS item_quantidade,
+        fi.PRECO                    AS item_preco,
+        fi.TOTAL                    AS item_total,
+        fi.TAXA_IVA                 AS item_taxa_iva,
+        fi.VALOR_IVA                AS item_valor_iva,
+        fi.VALOR_DESCONTO           AS item_valor_desconto,
+        fi.MULTA                    AS item_multa,
+        fi.MES                      AS item_mes,
+        fi.ESTADO                   AS item_estado,
+        fi.VALOR_PAGO               AS item_valor_pago,
+        fi.VALOR_A_TRANSPORTAR      AS item_valor_a_transportar,
+        fi.OBS                      AS item_obs
+      FROM FK2_TB_NEGOCIACAO_FACTURA nf
+      LEFT JOIN FK2_FACTURA fa        ON fa.CODIGO = nf.CODIGO_FACTURA
+      LEFT JOIN FK2_FACTURA_ITEMS fi    ON fi.CODIGOFACTURA = fa.CODIGO
+      WHERE nf.CODIGO_NEGOCIACAO IN (${negociacaoIds.join(',')})
+        AND nf.DELETED_AT IS NULL
+      ORDER BY nf.CODIGO_NEGOCIACAO, fa.CODIGO, fi.CODIGO
+    `;
+
+      const facturasRaw: any[] = await this.dataSource.query(facturasSql);
+
+      // Agrupa: negociacaoId → [facturas com seus itens]
+      // Estrutura intermediária: Map<negociacaoId, Map<facturaId, { ...dadosFactura, itens: [...] }>>
+      const negociacaoFacturasTemp = new Map<number, Map<number, any>>();
+
+      for (const row of facturasRaw) {
+        const negId = Number(row.CODIGO_NEGOCIACAO);
+        const faId = Number(row.FACTURA_ID);
+
+        if (!negociacaoFacturasTemp.has(negId)) {
+          negociacaoFacturasTemp.set(negId, new Map());
+        }
+        const facturasDoNeg = negociacaoFacturasTemp.get(negId)!;
+
+        if (!facturasDoNeg.has(faId)) {
+          facturasDoNeg.set(faId, {
+            id: faId,
+            data: row.FACTURA_DATA,
+            total_preco: Number(row.FACTURA_TOTAL_PRECO ?? 0),
+            valor_apagar: Number(row.FACTURA_VALOR_APAGAR ?? 0),
+            valor_entregue: Number(row.FACTURA_VALOR_ENTREGUE ?? 0),
+            desconto: Number(row.FACTURA_DESCONTO ?? 0),
+            total_iva: Number(row.FACTURA_TOTAL_IVA ?? 0),
+            total_multa: Number(row.FACTURA_TOTAL_MULTA ?? 0),
+            total_incidencia: Number(row.FACTURA_TOTAL_INCIDENCIA ?? 0),
+            total_retencao: Number(row.FACTURA_TOTAL_RETENCAO ?? 0),
+            valor_apagar_extenso: row.FACTURA_VALOR_APAGAR_EXTENSO,
+            descricao: row.FACTURA_DESCRICAO,
+            referencia: row.FACTURA_REFERENCIA,
+            data_vencimento: row.FACTURA_DATA_VENCIMENTO,
+            estado: row.FACTURA_ESTADO,
+            ano_lectivo: row.FACTURA_ANO_LECTIVO,
+            itens: [] as any[],
+          });
+        }
+
+        // Adiciona o item (se existir — LEFT JOIN pode retornar item_id NULL)
+        if (row.ITEM_ID != null) {
+          facturasDoNeg.get(faId)!.itens.push({
+            id: Number(row.ITEM_ID),
+            codigo_produto: Number(row.ITEM_CODIGO_PRODUTO),
+            quantidade: Number(row.ITEM_QUANTIDADE ?? 0),
+            preco: Number(row.ITEM_PRECO ?? 0),
+            total: Number(row.ITEM_TOTAL ?? 0),
+            taxa_iva: Number(row.ITEM_TAXA_IVA ?? 0),
+            valor_iva: Number(row.ITEM_VALOR_IVA ?? 0),
+            valor_desconto: Number(row.ITEM_VALOR_DESCONTO ?? 0),
+            multa: Number(row.ITEM_MULTA ?? 0),
+            mes: row.ITEM_MES,
+            estado: row.ITEM_ESTADO,
+            valor_pago: Number(row.ITEM_VALOR_PAGO ?? 0),
+            valor_a_transportar: Number(row.ITEM_VALOR_A_TRANSPORTAR ?? 0),
+            obs: row.ITEM_OBS,
+          });
+        }
+      }
+
+      // Converte para o Map final: negociacaoId → array de facturas
+      for (const [negId, facturasMap_] of negociacaoFacturasTemp) {
+        facturasMap.set(negId, Array.from(facturasMap_.values()));
+      }
+    }
+
+    /* =============================================
        QUERY DE CONTAGEM TOTAL
        ============================================= */
     const countSql = `
-      SELECT COUNT(*) AS TOTAL
-      FROM FK2_NEGOCIACAO_DIVIDAS nd
-      INNER JOIN FK2_TB_MATRICULAS m
-             ON m.codigo = nd.CODIGO_MATRICULA
-      INNER JOIN FK2_TB_ADMISSAO a
-       ON a.codigo = m.CODIGO_ALUNO
-      INNER JOIN FK2_TB_PREINSCRICAO p
-       ON p.codigo = a.PRE_INCRICAO
-      LEFT  JOIN FK2_TB_CURSOS c
-             ON c.codigo = m.CODIGO_CURSO
-
-      WHERE 1=1
-        AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
-        AND (:codigoCurso IS NULL          OR c.codigo = :codigoCurso)
-        AND (:tipoNegociacaoId IS NULL     OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
-        AND (:faculdadeId IS NULL          OR c.FACULDADE_ID = :faculdadeId)
-        AND (:codigoMatricula IS NULL  OR m.codigo = :codigoMatricula)
-        AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
-    `;
+    SELECT COUNT(*) AS TOTAL
+    FROM FK2_NEGOCIACAO_DIVIDAS nd
+    INNER JOIN FK2_TB_MATRICULAS m   ON m.codigo = nd.CODIGO_MATRICULA
+    INNER JOIN FK2_TB_ADMISSAO a     ON a.codigo = m.CODIGO_ALUNO
+    INNER JOIN FK2_TB_PREINSCRICAO p ON p.codigo = a.PRE_INCRICAO
+    LEFT  JOIN FK2_TB_CURSOS c       ON c.codigo = m.CODIGO_CURSO
+    WHERE 1=1
+      AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
+      AND (:codigoCurso IS NULL          OR c.codigo              = :codigoCurso)
+      AND (:tipoNegociacaoId IS NULL     OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
+      AND (:faculdadeId IS NULL          OR c.FACULDADE_ID        = :faculdadeId)
+      AND (:codigoMatricula IS NULL      OR m.codigo              = :codigoMatricula)
+      AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
+  `;
 
     /* =============================================
-   QUERY DE ESTATÍSTICAS (SUM)
-   ============================================= */
+       QUERY DE ESTATÍSTICAS (SUM)
+       ============================================= */
     const statsSql = `
-  SELECT
+    SELECT
       COALESCE(SUM(nd.VALOR_DIVIDA), 0)        AS total_dividas,
       COALESCE(SUM(nd.PRIMEIROVALORAPAGAR), 0) AS total_primeiro_valor_apagar,
       COALESCE(SUM(nd.VALORRESTANTE), 0)       AS total_restante
-  FROM FK2_NEGOCIACAO_DIVIDAS nd
-  INNER JOIN FK2_TB_MATRICULAS m
-         ON m.codigo = nd.CODIGO_MATRICULA
-  INNER JOIN FK2_TB_ADMISSAO a
-       ON a.codigo = m.CODIGO_ALUNO
-  INNER JOIN FK2_TB_PREINSCRICAO p
-       ON p.codigo = a.PRE_INCRICAO
-  LEFT  JOIN FK2_TB_CURSOS c
-         ON c.codigo = m.CODIGO_CURSO
+    FROM FK2_NEGOCIACAO_DIVIDAS nd
+    INNER JOIN FK2_TB_MATRICULAS m   ON m.codigo = nd.CODIGO_MATRICULA
+    INNER JOIN FK2_TB_ADMISSAO a     ON a.codigo = m.CODIGO_ALUNO
+    INNER JOIN FK2_TB_PREINSCRICAO p ON p.codigo = a.PRE_INCRICAO
+    LEFT  JOIN FK2_TB_CURSOS c       ON c.codigo = m.CODIGO_CURSO
+    WHERE 1=1
+      AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
+      AND (:codigoCurso IS NULL      OR c.codigo              = :codigoCurso)
+      AND (:tipoNegociacaoId IS NULL OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
+      AND (:faculdadeId IS NULL      OR c.FACULDADE_ID        = :faculdadeId)
+      AND (:codigoMatricula IS NULL  OR m.codigo              = :codigoMatricula)
+      AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
+  `;
 
-  WHERE 1=1
-    AND nd.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
-    AND (:codigoCurso IS NULL      OR c.codigo = :codigoCurso)
-    AND (:tipoNegociacaoId IS NULL OR nd.TIPO_NEGOCIACAO_ID = :tipoNegociacaoId)
-    AND (:faculdadeId IS NULL      OR c.FACULDADE_ID = :faculdadeId)
-    AND (:codigoMatricula IS NULL  OR m.codigo = :codigoMatricula)
-    AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
-`;
-
-    const totalResult = await this.dataSource.query(countSql, {
+    const sharedParams = {
       codigoAnoLectivo,
       codigoCurso: codigoCurso ?? null,
       tipoNegociacaoId: tipoNegociacaoId ?? null,
       faculdadeId: faculdadeId ?? null,
       codigoMatricula: codigoMatricula ?? null,
       nome: nome ?? null,
-    } as any);
-    const [statsResult] = await this.dataSource.query(statsSql, {
-      codigoAnoLectivo,
-      codigoCurso: codigoCurso ?? null,
-      tipoNegociacaoId: tipoNegociacaoId ?? null,
-      faculdadeId: faculdadeId ?? null,
-      codigoMatricula: codigoMatricula ?? null,
-      nome: nome ?? null,
-    } as any);
+    };
+
+    const [totalResult, [statsResult]] = await Promise.all([
+      this.dataSource.query(countSql, sharedParams as any),
+      this.dataSource.query(statsSql, sharedParams as any),
+    ]);
 
     const total = Number(totalResult[0]?.TOTAL ?? 0);
     const totalPages = Math.ceil(total / limit);
 
+    // Monta o resultado final: cada negociação recebe seu array de facturas
+    const data = toLowerCaseKeys(rawResults).map((neg: any) => ({
+      ...neg,
+      facturas: facturasMap.get(Number(neg.id)) ?? [],
+    }));
+
     return {
-      data: toLowerCaseKeys(rawResults),
+      data,
       total,
       page,
       limit,
       totalPages,
       stats: {
         totalDividas: Number(statsResult?.TOTAL_DIVIDAS ?? 0),
-        totalPrimeiroValorApagar: Number(
-          statsResult?.TOTAL_PRIMEIRO_VALOR_APAGAR ?? 0,
-        ),
+        totalPrimeiroValorApagar: Number(statsResult?.TOTAL_PRIMEIRO_VALOR_APAGAR ?? 0),
         totalRestante: Number(statsResult?.TOTAL_RESTANTE ?? 0),
       },
     };

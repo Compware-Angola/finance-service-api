@@ -378,6 +378,7 @@ export class MonthlyFeesDiscountUtilService {
       valorEntregue: 0,
       data_vencimento: mesTemp.data_limite,
       desconto: descontoValor,
+      codigo_factura: null,
       semestre: mesTemp.semestre,
       multa: multa,
       total_item: valorFinal,

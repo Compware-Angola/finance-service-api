@@ -109,7 +109,7 @@ export class MonthlyFeesService {
       .getRawOne()
       .then((r) => Number(r?.total || 0));
 
-    const totalPages = Math.ceil(total / limit);
+
 
     // ====================== DADOS ======================
     const results = await qb

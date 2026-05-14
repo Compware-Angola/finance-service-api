@@ -1,13 +1,6 @@
-// debt-negotiation.service.ts
-import {
-  Injectable,
-  BadRequestException,
-  Logger,
-
-} from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In as TypeOrmIn, DeepPartial } from 'typeorm';
-import { randomInt } from 'crypto';
 import { CreateDebtNegotiationDto } from './dto/create-debt_negotiation.dto';
 import { TbPreinscricao } from './entities/tb-preinscricao.entity';
 import { Invoice } from '../invoice/entities/invoice.entity';
@@ -22,33 +15,51 @@ import { InvoiceService } from '../invoice/invoice.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { InvoiceItemDto } from '../invoice/dto/create-invoice-itens.dto';
 import { safeNumber } from '../util/formate-number';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+
+type AlunoInfo = {
+  matricula: number;
+  codigo_inscricao: number;
+  alunoCacuaco: number;
+  desconto: number;
+  codigoTipoCandidatura: number;
+  polo_id: number;
+};
 
 @Injectable()
 export class CreateDebtNegotiationService {
   private readonly logger = new Logger(CreateDebtNegotiationService.name);
-  private anoAtualPrincipal: any;
+  private anoAtualPrincipal: number;
 
   constructor(
     private readonly anoLectivoUtil: AnoLectivoUtil,
-    @InjectRepository(Invoice) private invoiceRepo: Repository<Invoice>,
-    @InjectRepository(InvoiceItem) private invoiceItemRepo: Repository<InvoiceItem>,
-    @InjectRepository(TbPreinscricao) private preinscricaoRepo: Repository<TbPreinscricao>,
-    @InjectRepository(TbMatricula) private matriculaRepo: Repository<TbMatricula>,
-    @InjectRepository(TbAdmissao) private admissaoRepo: Repository<TbAdmissao>,
-    @InjectRepository(AcademicYear) private academicYearRepo: Repository<AcademicYear>,
-    @InjectRepository(DebtNegotiation) private negotiationRepo: Repository<DebtNegotiation>,
-    @InjectRepository(InscricaoAvaliacao) private avaliacaoRepo: Repository<InscricaoAvaliacao>,
-    private dataSource: DataSource,
+    @InjectRepository(Invoice) private readonly invoiceRepo: Repository<Invoice>,
+    @InjectRepository(InvoiceItem) private readonly invoiceItemRepo: Repository<InvoiceItem>,
+    @InjectRepository(TbPreinscricao) private readonly preinscricaoRepo: Repository<TbPreinscricao>,
+    @InjectRepository(TbMatricula) private readonly matriculaRepo: Repository<TbMatricula>,
+    @InjectRepository(TbAdmissao) private readonly admissaoRepo: Repository<TbAdmissao>,
+    @InjectRepository(AcademicYear) private readonly academicYearRepo: Repository<AcademicYear>,
+    @InjectRepository(DebtNegotiation) private readonly negotiationRepo: Repository<DebtNegotiation>,
+    @InjectRepository(InscricaoAvaliacao) private readonly avaliacaoRepo: Repository<InscricaoAvaliacao>,
+    private readonly dataSource: DataSource,
     private readonly invoiceService: InvoiceService,
-  ) { this.initAnoAtual(); InvoiceItem.setRepository(this.invoiceItemRepo); DebtNegotiation.setRepository(this.negotiationRepo) }
-  private async initAnoAtual() {
+  ) {
+    this.initAnoAtual();
+    InvoiceItem.setRepository(this.invoiceItemRepo);
+    DebtNegotiation.setRepository(this.negotiationRepo);
+  }
+
+  private async initAnoAtual(): Promise<void> {
     this.anoAtualPrincipal = await this.anoLectivoUtil.getAnoAtualId();
   }
 
+  // ============================================================
+  // MÉTODO PRINCIPAL
+  // ============================================================
 
   async createDebtNegotiation(
     dto: CreateDebtNegotiationDto,
-    codigo_matricula: any,
+    codigo_matricula: number,
   ) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -59,149 +70,70 @@ export class CreateDebtNegotiationService {
       const aluno = await this.getAlunoPorMatricula(codigo_matricula);
       if (!aluno) throw new BadRequestException('Matrícula não encontrada');
 
-      // 2. Ano letivo atual
+      // 2. Buscar ano letivo atual
       const anoLectivo = await this.academicYearRepo.findOne({
         where: { Codigo: this.anoAtualPrincipal },
       });
       if (!anoLectivo) throw new BadRequestException('Ano letivo não encontrado');
 
       // 3. Verificar se já existe negociação neste ano
-      const hasNegotiation = await this.negotiationRepo.findOne({
+      const negociacaoExistente = await this.negotiationRepo.findOne({
         where: {
           codigo_matricula: aluno.matricula,
           codigo_ano_lectivo: this.anoAtualPrincipal,
         },
       });
 
-      if (hasNegotiation) {
+      if (!negociacaoExistente) {
         throw new BadRequestException(
           `Aluno ${aluno.matricula} já possui negociação no ano letivo ${anoLectivo.Designacao}`,
         );
       }
 
-      // Itens da dívida (ambos os tipos)
-      const itensMensalidades = dto.fatura_item_mensalidades || [];
-      const itensServicos = dto.fatura_item_servicos || [];
+      // 4. Separar itens por tipo
+      const itensMensalidades = dto.Mensalidades ?? [];
+      const itensServicos = dto.OutrosServicos ?? [];
+      const todosItensDto = [...itensMensalidades, ...itensServicos];
 
-      let valorApagar = dto.totalDivida ?? 0;
-      const saldo_reset = dto.saldo_reset || 0;
-      const valorOriginal = dto.totalDivida ?? 0;
-      valorApagar = valorOriginal;
-
-      // 4. Aplicar saldo reset (se < 50%)
-      if (saldo_reset > 0 && saldo_reset < valorApagar / 2) {
-        valorApagar -= saldo_reset;
-        await queryRunner.manager.update(
-          TbPreinscricao,
-          { Codigo: aluno.codigo_inscricao },
-          { saldo_reset: 0, saldo_reset_anter: saldo_reset },
-        );
-      }
-
-      // 5. Determinar tipo de negociação
+      // 5. Determinar tipo e calcular valores
+      // 6 . Se valor pago na 
       const isTotal = dto.tipoPagamento === 'TOTAL';
       const tipo_negociacao_id = isTotal ? 2 : 1;
+      const valorOriginal = parseFloat((dto.totalDivida ?? 0).toFixed(2));
 
-      // 6. Validação e cálculo dos 50%
-      let primeiroValorApagar: number;
-      let valorRestante: number = 0;
+      const { primeiroValorApagar, valorRestante } = this.calcularValoresPagamento(
+        isTotal,
+        valorOriginal
+      );
 
-      if (isTotal) {
-        primeiroValorApagar = parseFloat(valorApagar.toFixed(2));
-      } else {
-        const metadeOriginal = parseFloat((valorOriginal / 2).toFixed(2));
-        const pagoNaHora = parseFloat((dto.valor_pago_na_hora || 0).toFixed(2));
-
-        if (pagoNaHora < metadeOriginal) {
-          throw new BadRequestException(
-            `Para negociação parcelada, o valor pago na hora deve ser exatamente ${metadeOriginal} (50% da dívida original: ${valorOriginal}). Recebido: ${pagoNaHora}.`,
-          );
-        }
-
-        primeiroValorApagar = parseFloat((metadeOriginal - saldo_reset).toFixed(2));
-        valorRestante = parseFloat(metadeOriginal.toFixed(2));
-      }
-
-      const dataISO = new Date().toISOString();
+      // 6. Montar base da fatura
+      const totalMulta = todosItensDto.reduce((s, d) => s + (d.multa ?? 0), 0);
 
       const baseInvoiceDto: Partial<CreateInvoiceDto> = {
-        DataFactura: dataISO,
+        DataFactura: new Date().toISOString(),
         polo_id: aluno.polo_id || 1,
-        TotalPreco: 0, // será sobrescrito ou recalculado no service
-        codigo_descricao: 5,
+        TotalPreco: 0,
         ValorAPagar: 0,
         Descricao: '',
+        codigo_descricao: 5,
         tipo_documento_factura_id: 2,
-        Desconto: dto.desconto || 0,
-        totalIVA: dto.totalIVA || 0,
-        total_incidencia: dto.total_incidencia || 0,
-        total_retencao: dto.total_retencao || 0,
-        TotalMulta: [...itensMensalidades, ...itensServicos].reduce((s, d) => s + (d.multa || 0), 0),
+        Desconto: dto.desconto ?? 0,
+        totalIVA: dto.totalIVA ?? 0,
+        total_incidencia: dto.total_incidencia ?? 0,
+        total_retencao: dto.total_retencao ?? 0,
+        TotalMulta: totalMulta,
         canal: 1,
         CodigoMatricula: aluno.matricula,
         codigo_preinscricao: aluno.codigo_inscricao,
       };
 
-      // =============================================
-      // Montar TODOS os itens (mensalidades + serviços) num único array
-      // =============================================
-      const todosItens: InvoiceItemDto[] = [];
+      // 7. Mapear todos os itens para InvoiceItemDto
+      const todosItens: InvoiceItemDto[] = [
+        ...this.mapMensalidadesParaItens(itensMensalidades),
+        ...this.mapServicosParaItens(itensServicos),
+      ];
 
-
-      // A. Itens de mensalidades
-      itensMensalidades.forEach((d) => {
-        todosItens.push({
-          CodigoProduto: d.codigo_propina ?? null,
-          Quantidade: 1,
-          Total: safeNumber(d.total),
-          obs: d.mes_propina
-            ? `Mensalidade de ${d.mes_propina}`.substring(0, 45)
-            : (d.servico ? `Mensalidade/Serviço: ${d.servico}`.substring(0, 45) : ""),
-          taxaIva: safeNumber(d.taxa_multa),
-          valorIva: safeNumber(d.valor_iva),
-          preco: safeNumber(d.valor),
-          retencao: 0,
-          incidencia: safeNumber(d.incidencia),
-          valorDesconto: safeNumber(d.desconto),
-          descontoProduto: safeNumber(d.taxa_desconto),
-          mes: d.mes_propina ?? null,
-          multa: safeNumber(d.multa),
-          mesTempId: d.mes_temp_id ?? undefined,
-          codigo_anoLectivo: safeNumber(d.codigo_anoLectivo),
-          estado: 0,
-          valorPago: 0,
-          valorATransportar: 0,
-        });
-      });
-
-      // B. Itens de serviços/outros
-      itensServicos.forEach((d) => {
-        todosItens.push({
-          CodigoProduto: safeNumber(d.codidigo_servico),
-          Quantidade: 1,
-          Total: safeNumber(d.total),
-          obs: d.servico || d.taxa_descricao
-            ? `${d.servico || 'Serviço/Taxa'}: ${d.taxa_descricao || d.servico}`.substring(0, 45)
-            : "",
-          taxaIva: safeNumber(d.taxa_multa),
-          valorIva: safeNumber(d.valor_iva),
-          preco: safeNumber(d.valor),
-          retencao: 0,
-          incidencia: safeNumber(d.incidencia),
-          valorDesconto: safeNumber(d.desconto),
-          descontoProduto: safeNumber(d.taxa_desconto),
-          mes: d.mes_propina ?? null,
-          multa: safeNumber(d.multa),
-          mesTempId: d.mes_temp_id ?? undefined,
-          codigo_anoLectivo: safeNumber(d.codigo_anoLectivo),
-          estado: 0,
-          valorPago: 0,
-          valorATransportar: 0,
-        });
-      });
-      // =============================================
-      // 7. CRIAR FATURA 1 - ENTRADA (com todos os itens)
-      // =============================================
+      // 8. Criar fatura de entrada
       const faturaEntrada = await this.invoiceService.create({
         ...baseInvoiceDto,
         Descricao: isTotal
@@ -209,100 +141,131 @@ export class CreateDebtNegotiationService {
           : 'Negociação de Dívida - Entrada 50%',
         TotalPreco: dto.totalDivida ?? dto.precoTotal ?? 0,
         ValorAPagar: primeiroValorApagar,
-        itens: todosItens,  // Todos os itens (mensalidades + serviços) aqui!
+        itens: todosItens,
       } as CreateInvoiceDto);
 
-      // =============================================
-      // 8. CRIAR FATURA 2 - SALDO RESTANTE (se parcelado)
-      // =============================================
+      // 9. Criar fatura de saldo restante (apenas parcelado)
       let faturaSaldo: Invoice | null = null;
 
       if (!isTotal && valorRestante > 0) {
-        const itensParaSaldo: InvoiceItemDto[] = [];
-
         faturaSaldo = await this.invoiceService.create({
           ...baseInvoiceDto,
           Descricao: 'Negociação de Dívida - Saldo Restante (Parcelado)',
           TotalPreco: valorRestante,
           ValorAPagar: valorRestante,
           itens: todosItens,
-          // dataVencimento: ... (opcional)
         } as CreateInvoiceDto);
       }
-      // =============================================
-      // 9. REGISTAR FACTURA NA NOVA TABELA
-      // =============================================
 
-      await queryRunner.manager.query(`
-      INSERT INTO renegociacoes (codigo_preinscricao, codigo_factura, codigo_tipo_negociacao, valor_original, data_negociacao, data_pagamento, valor_recebido, status)
-VALUES (${aluno.codigo_inscricao}, ${faturaEntrada.Codigo}, ${tipo_negociacao_id}, ${valorOriginal}, '${new Date().toISOString()}', '${new Date().toISOString()}', ${dto.valor_pago_na_hora}, 1)
-      `)
-      // =============================================
-      // 10. Atualizar faturas antigas (anular e redirecionar)
-      // =============================================
-      const codigosAntigos = [
-        ...itensMensalidades.map(d => d.codFacturaOutrosServicos),
-        ...itensServicos.map(d => d.codFacturaOutrosServicos),
-      ].filter(Boolean);
+      // 10. Anular faturas antigas e redirecionar avaliações
+      const codigosAntigos: number[] = [
+        // Códigos das Mensalidades
+        ...itensMensalidades
+          .map(item => item.codigo_factura)
+          .filter((id): id is number => id !== undefined && id !== null),
+
+        // Códigos dos Outros Serviços
+        ...itensServicos
+          .map(item => item.codfacturaoutrosservicos)
+          .filter((id): id is number => id !== undefined && id !== null),
+      ];
+
+      // Remover duplicados (opcional, mas recomendado)
+      const codigosAntigosUnicos = [...new Set(codigosAntigos)];
 
       if (codigosAntigos.length > 0) {
         await queryRunner.manager.update(
           Invoice,
-          { Codigo: TypeOrmIn(codigosAntigos) },
+          { Codigo: TypeOrmIn(codigosAntigosUnicos) },
           { estado: 3 },
         );
 
         await queryRunner.manager.update(
           InscricaoAvaliacao,
-          { codigo_factura: TypeOrmIn(codigosAntigos) },
+          { codigo_factura: TypeOrmIn(codigosAntigosUnicos) },
           { codigo_factura: faturaEntrada.Codigo },
         );
       }
 
-      // =============================================
-      // 10. Cálculo para prestações mensais (mantido apenas para mensalidades)
-      // =============================================
-      const mesesComPropina = itensMensalidades.filter((d) => d.mes_propina);
-      const qtd_meses = mesesComPropina.length;
-      const totalItensMensal = mesesComPropina.reduce((s, d) => s + Number(d.total ?? 0), 0);
-      const valorPrestacaoMensal = qtd_meses > 0 ? totalItensMensal / qtd_meses : 0;
 
-      // =============================================
-      // 11. Criar a negociação
-      // =============================================
+      // 11. Calcular prestações + meses inicial e final (VERSÃO ROBUSTA)
+
+
+      const qtd_meses = itensMensalidades?.length ?? 0;
+
+      let id_mes_inicial: number = 0;
+      let id_mes_final: number | null = null;
+
+
+      if (qtd_meses > 0) {
+        const ordenadas = [...itensMensalidades].sort(
+          (a, b) => Number(a.mes_temp_id) - Number(b.mes_temp_id)
+        );
+
+        id_mes_inicial = Number(ordenadas[0].mes_temp_id);
+        id_mes_final = Number(ordenadas[ordenadas.length - 1].mes_temp_id);
+
+      }
+
+      // Cálculo seguro de valorPrestacaoMensal
+      let valorPrestacaoMensal = 0;
+
+      if (qtd_meses > 0) {
+        const totalMensal = itensMensalidades.reduce((sum, item) => {
+          const valor = Number(item.total) || Number(item.valor) || 0;
+          return sum + (isNaN(valor) ? 0 : valor);
+        }, 0);
+
+        valorPrestacaoMensal = parseFloat((totalMensal / qtd_meses).toFixed(2));
+      }
+
+      // Evita NaN
+      if (isNaN(valorPrestacaoMensal)) valorPrestacaoMensal = 0;
+
+
+      // 12. Criar registo de negociação
       const negociacao = queryRunner.manager.create(DebtNegotiation, {
-        valor_divida: parseFloat(valorApagar.toFixed(2)),
-        primeiroValorApagar: parseFloat(primeiroValorApagar.toFixed(2)),
+        valor_divida: valorOriginal,
+        primeiroValorApagar,
+        valorRestante,
         codigo_matricula: aluno.matricula,
         codigo_ano_lectivo: anoLectivo.Codigo,
         codigo_fatura: faturaEntrada.Codigo,
-        valorRestante: parseFloat(valorRestante.toFixed(2)),
         qtd_prestacoes: qtd_meses,
-        tipo_negociacao_id: tipo_negociacao_id,
-        valorPrestacoes: parseFloat(valorPrestacaoMensal.toFixed(2)),
-        id_mes_inicial: 0,
-        id_mes_final: 0,
-        mesesQuitar: 0,
+        tipo_negociacao_id,
+        valorPrestacoes: valorPrestacaoMensal,
+        id_mes_inicial: id_mes_inicial,
+        id_mes_final: id_mes_final,
+        mesesQuitar: qtd_meses,
         mesesParImpar: '',
         estado: 1,
       } as DeepPartial<DebtNegotiation>);
-
       await queryRunner.manager.save(negociacao);
 
-      // =============================================
-      // Commit e retorno
-      // =============================================
+      // 13. Registar faturas na tabela de relação
+      await queryRunner.manager.query(
+        `INSERT INTO FK2_TB_NEGOCIACAO_FACTURA (CODIGO_FACTURA, CODIGO_NEGOCIACAO) VALUES (:codigo_factura, :codigo_negociacao)`,
+        { codigo_factura: faturaEntrada.Codigo, codigo_negociacao: negociacao.id } as any,
+      );
+
+      if (!isTotal && faturaSaldo?.Codigo) {
+        await queryRunner.manager.query(
+          `INSERT INTO FK2_TB_NEGOCIACAO_FACTURA (CODIGO_FACTURA, CODIGO_NEGOCIACAO) VALUES (:codigo_factura, :codigo_negociacao)`,
+          { codigo_factura: faturaSaldo.Codigo, codigo_negociacao: negociacao.id } as any,
+        );
+      }
+
       await queryRunner.commitTransaction();
 
       return {
         mensagem: 'Negociação criada com sucesso',
         fatura_entrada_id: faturaEntrada.Codigo,
-        //  fatura_saldo_id: faturaSaldo ? faturaSaldo.Codigo : null,
+        fatura_saldo_id: faturaSaldo?.Codigo ?? null,
         tipo: isTotal ? 'TOTAL' : 'PARCELADO',
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error('Erro na negociação de dívida', error?.stack || error);
+      this.logger.error('Erro na negociação de dívida', error?.stack ?? error);
       throw error instanceof BadRequestException
         ? error
         : new BadRequestException(error.message || 'Erro ao processar negociação de dívida');
@@ -311,45 +274,104 @@ VALUES (${aluno.codigo_inscricao}, ${faturaEntrada.Codigo}, ${tipo_negociacao_id
     }
   }
 
-  // ===============================
-  // MÉTODOS AUXILIARES
-  // ===============================
+  // ============================================================
+  // MÉTODOS PRIVADOS
+  // ============================================================
 
+  private calcularValoresPagamento(
+    isTotal: boolean,
+    valorOriginal: number
+  ): { primeiroValorApagar: number; valorRestante: number } {
+    if (isTotal) {
+      return {
+        primeiroValorApagar: valorOriginal,
+        valorRestante: 0,
+      };
+    }
 
-
-
-  private async getAlunoPorMatricula(codigo_matricula: number): Promise<{
-    matricula: number;
-    codigo_inscricao: number;
-    alunoCacuaco: number;
-    desconto: number;
-    codigoTipoCandidatura: number;
-    polo_id: number;
-  } | null> {
-    const raw = await this.matriculaRepo
-      .createQueryBuilder('m')
-      .select([
-        'm.Codigo AS m_codigo',
-        'pre.Codigo AS pre_codigo',
-        'pre.AlunoCacuaco AS pre_alunocacuaco',
-        'pre.desconto AS pre_desconto',
-        'pre.polo_id',
-        'pre.codigo_tipo_candidatura AS pre_codigo_tipo_candidatura',
-      ])
-      .innerJoin('UMA_TB_ADMISSAO', 'a', 'a.codigo = m.Codigo_Aluno')
-      .innerJoin('UMA_TB_PREINSCRICAO', 'pre', 'pre.Codigo = a.pre_incricao')
-      .where('m.Codigo = :codigo', { codigo: codigo_matricula })
-      .getRawOne();
-
-    if (!raw) return null;
-
+    const metade = parseFloat((valorOriginal / 2).toFixed(2));
     return {
-      matricula: Number(raw.M_CODIGO),
-      polo_id: Number(raw.polo_id),
-      codigo_inscricao: Number(raw.PRE_CODIGO),
-      alunoCacuaco: raw.PRE_ALUNOCACUACO,
-      desconto: Number(raw.PRE_DESCONTO),
-      codigoTipoCandidatura: Number(raw.PRE_CODIGO_TIPO_CANDIDATURA),
+      primeiroValorApagar: metade,
+      valorRestante: metade,
     };
   }
+
+  private mapMensalidadesParaItens(itensMensalidades: any[]): InvoiceItemDto[] {
+    return itensMensalidades.map(d => ({
+      CodigoProduto: d.codigo_propina ?? null,
+      Quantidade: 1,
+      Total: safeNumber(d.total),
+      obs: d.mes_propina
+        ? `Mensalidade de ${d.mes_propina}`.substring(0, 45)
+        : d.servico
+          ? `Mensalidade/Serviço: ${d.servico}`.substring(0, 45)
+          : '',
+      taxaIva: safeNumber(d.taxa_multa),
+      valorIva: safeNumber(d.valor_iva),
+      preco: safeNumber(d.valor),
+      retencao: 0,
+      incidencia: safeNumber(d.incidencia),
+      valorDesconto: safeNumber(d.desconto),
+      descontoProduto: safeNumber(d.taxa_desconto),
+      mes: d.mes_propina ?? null,
+      multa: safeNumber(d.multa),
+      mesTempId: d.mes_temp_id ?? undefined,
+      codigo_anoLectivo: safeNumber(d.codigo_anoLectivo),
+      estado: 0,
+      valorPago: 0,
+      valorATransportar: 0,
+    }));
+  }
+
+  private mapServicosParaItens(itensServicos: any[]): InvoiceItemDto[] {
+    return itensServicos.map(d => ({
+      CodigoProduto: safeNumber(d.codidigo_servico),
+      Quantidade: 1,
+      Total: safeNumber(d.total),
+      obs: (d.servico || d.taxa_descricao)
+        ? `${d.servico ?? 'Serviço/Taxa'}: ${d.taxa_descricao ?? d.servico}`.substring(0, 45)
+        : '',
+      taxaIva: safeNumber(d.taxa_multa),
+      valorIva: safeNumber(d.valor_iva),
+      preco: safeNumber(d.valor),
+      retencao: 0,
+      incidencia: safeNumber(d.incidencia),
+      valorDesconto: safeNumber(d.desconto),
+      descontoProduto: safeNumber(d.taxa_desconto),
+      mes: d.mes_propina ?? null,
+      multa: safeNumber(d.multa),
+      mesTempId: d.mes_temp_id ?? undefined,
+      codigo_anoLectivo: safeNumber(d.codigo_anoLectivo),
+      estado: 0,
+      valorPago: 0,
+      valorATransportar: 0,
+    }));
+  }
+
+  private async getAlunoPorMatricula(codigo_matricula: number): Promise<AlunoInfo | null> {
+    const sql = `
+        SELECT 
+            m.Codigo AS matricula,
+            pre.Codigo AS codigo_inscricao,
+            pre.AlunoCacuaco AS alunoCacuaco,
+            pre.desconto AS desconto,
+            pre.polo_id AS polo_id,
+            pre.codigo_tipo_candidatura AS codigoTipoCandidatura
+            FROM fk2_tb_matriculas m
+            INNER JOIN fk2_tb_cursos        c ON c.codigo = m.codigo_curso
+            INNER JOIN fk2_tb_admissao      a ON a.codigo = m.codigo_aluno
+            INNER JOIN fk2_tb_preinscricao  pre ON pre.codigo = a.pre_incricao
+            WHERE m.Codigo =:codigo_matricula
+            FETCH FIRST 1 ROWS ONLY
+    `;
+
+    const raw = await this.dataSource.query(sql, { codigo_matricula } as any);
+
+    if (!raw || raw.length === 0) return null;
+
+    const result = raw[0];
+
+    return toLowerCaseKeys(result);
+  }
+
 }

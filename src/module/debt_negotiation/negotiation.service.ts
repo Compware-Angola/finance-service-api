@@ -118,7 +118,7 @@ export class NegotiationService {
 
         // ── Mensalidades ──────────────────────────────────────────
         const totalMensalidades = itensPendentes.reduce(
-            (acc: number, m: any) => acc + (Number(m.total_item ?? m.total) || 0), 0
+            (acc: number, m: any) => acc + (Number(m.total ?? m.total_item) || 0), 0
         );
 
         const desconto = [

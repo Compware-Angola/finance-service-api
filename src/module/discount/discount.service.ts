@@ -228,31 +228,31 @@ export class DiscountService {
 
   async updateAddDiscount(id: number, updateDto: UpdateAddDiscountDto) {
     const setClauses: string[] = [];
-    const params: any[] = [];
+    const params: any = {};
 
     if (updateDto.observacao !== undefined) {
       setClauses.push('OBSERVACAO = :observacao');
-      params.push(updateDto.observacao);
+      params.observacao = updateDto.observacao; // ← atribuição por chave
     }
     if (updateDto.codigoAno !== undefined) {
       setClauses.push('CODIGO_ANOLECTIVO = :codigoAno');
-      params.push(updateDto.codigoAno);
+      params.codigoAno = updateDto.codigoAno;
     }
     if (updateDto.codigoTaxa !== undefined) {
       setClauses.push('TIPO_TAXA_DESCONTO_ESPECIAL = :codigoTaxa');
-      params.push(updateDto.codigoTaxa);
+      params.codigoTaxa = updateDto.codigoTaxa;
     }
     if (updateDto.codigoInstituicao !== undefined) {
       setClauses.push('INSTITUICAO_ID = :codigoInstituicao');
-      params.push(updateDto.codigoInstituicao);
+      params.codigoInstituicao = updateDto.codigoInstituicao;
     }
     if (updateDto.semestre !== undefined) {
       setClauses.push('SEMESTRE = :semestre');
-      params.push(updateDto.semestre);
+      params.semestre = updateDto.semestre;
     }
     if (updateDto.codigoMatricula !== undefined) {
       setClauses.push('CODIGO_MATRICULA = :codigoMatricula');
-      params.push(updateDto.codigoMatricula);
+      params.codigoMatricula = updateDto.codigoMatricula;
     }
 
     if (setClauses.length === 0) {
@@ -260,11 +260,11 @@ export class DiscountService {
     }
 
     const sql = `
-      UPDATE FK2_TB_DESCONTOS_ALUNOO
-      SET ${setClauses.join(', ')}
-      WHERE ID = :id
-    `;
-    params.push(id);
+    UPDATE FK2_TB_DESCONTOS_ALUNOO
+    SET ${setClauses.join(', ')}
+    WHERE codigo = :id
+  `;
+    params.id = id;
 
     await this.dataSource.query(sql, params);
   }

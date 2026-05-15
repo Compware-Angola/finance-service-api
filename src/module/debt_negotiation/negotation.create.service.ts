@@ -299,7 +299,7 @@ export class CreateDebtNegotiationService {
 
   private mapMensalidadesParaItens(itensMensalidades: MensalidadeItemDto[]): InvoiceItemDto[] {
     return itensMensalidades.map(d => ({
-      CodigoProduto: d.mes_temp_id ?? null,
+      CodigoProduto: d.codigo_servico ?? null,
       Quantidade: 1,
       Total: safeNumber(d.total),
       obs: d.obs

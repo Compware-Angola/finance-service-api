@@ -20,6 +20,14 @@ export class MensalidadeItemDto {
   mes_temp_id: number;
 
   @ApiProperty({
+    description: 'Código do serviço (e.g., 11739).',
+    type: Number,
+    example: 11739,
+  })
+  @IsInt()
+  codigo_servico: number;
+
+  @ApiProperty({
     description: 'Mês da propina (e.g., "2024-02-01 a 2024-02-29").',
     example: "2024-02",
   })

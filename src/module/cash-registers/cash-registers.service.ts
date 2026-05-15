@@ -5,49 +5,61 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, Brackets, DataSource } from 'typeorm';
+
+import { Brackets, DataSource, IsNull, Repository } from 'typeorm';
+
 import { CashRegister } from './entities/cash-register.entity';
+import { CashRegisterMovement } from './entities/cash-register-movement.entity';
+
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
 import { ListCashRegistersDto } from './dto/list-cash-registers.dto';
-import { CashRegisterMovement } from './entities/cash-register-movement.entity';
+
 import { OpenCashRegisterParams } from './types';
-import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+
+import { CashRegisterStatus, YesNo } from './enums/cash-register-status.enum';
+import { randomInt } from 'crypto';
 
 @Injectable()
 export class CashRegistersService {
   constructor(
     @InjectRepository(CashRegister)
-    private readonly repository: Repository<CashRegister>,
-
-    @InjectRepository(CashRegisterMovement)
-    private readonly movementRepository: Repository<CashRegisterMovement>,
+    private readonly cashRegisterRepository: Repository<CashRegister>,
 
     private readonly dataSource: DataSource,
   ) {}
 
+  /*
+  |--------------------------------------------------------------------------
+  | CRUD
+  |--------------------------------------------------------------------------
+  */
+
   async create(data: CreateCashRegisterDto) {
-    const cashRegister = this.repository.create({
+    const cashRegister = this.cashRegisterRepository.create({
       ...data,
-      status: 'fechado',
-      blocked: 'N',
+      status: CashRegisterStatus.CLOSED,
+      blocked: YesNo.NO,
     });
 
-    return this.repository.save(cashRegister);
+    return this.cashRegisterRepository.save(cashRegister);
   }
 
   async findAll(filters?: ListCashRegistersDto) {
-    const query = this.repository.createQueryBuilder('cashRegister');
+    const query =
+      this.cashRegisterRepository.createQueryBuilder('cashRegister');
 
     query.where('cashRegister.deletedAt IS NULL');
 
-    if (filters?.search) {
+    if (filters?.search?.trim()) {
+      const search = `%${filters.search.trim()}%`;
+
       query.andWhere(
         new Brackets((qb) => {
           qb.where('UPPER(cashRegister.name) LIKE UPPER(:search)', {
-            search: `%${filters.search}%`,
+            search,
           }).orWhere('UPPER(cashRegister.code) LIKE UPPER(:search)', {
-            search: `%${filters.search}%`,
+            search,
           });
         }),
       );
@@ -70,8 +82,8 @@ export class CashRegistersService {
     return query.getMany();
   }
 
-  async findOne(id: number) {
-    const cashRegister = await this.repository.findOne({
+  async findById(id: number) {
+    const cashRegister = await this.cashRegisterRepository.findOne({
       where: {
         id,
         deletedAt: IsNull(),
@@ -86,37 +98,48 @@ export class CashRegistersService {
   }
 
   async update(id: number, data: UpdateCashRegisterDto) {
-    const cashRegister = await this.findOne(id);
+    const cashRegister = await this.findById(id);
 
     Object.assign(cashRegister, data);
 
-    return this.repository.save(cashRegister);
+    return this.cashRegisterRepository.save(cashRegister);
   }
 
-  async remove(id: number, deletedBy?: number) {
-    const cashRegister = await this.findOne(id);
+  async softDelete(id: number, deletedBy?: number) {
+    const cashRegister = await this.findById(id);
 
     cashRegister.deletedAt = new Date();
     cashRegister.deletedBy = deletedBy;
 
-    return this.repository.save(cashRegister);
+    return this.cashRegisterRepository.save(cashRegister);
   }
 
-  async openCashRegister(data: OpenCashRegisterParams) {
-    const { id, openingAmount, operatorId } = data;
+  /*
+  |--------------------------------------------------------------------------
+  | OPEN / CLOSE
+  |--------------------------------------------------------------------------
+  */
+
+  async open(params: OpenCashRegisterParams) {
+    const code = await generateRandomCode();
+
+    const { id, openingAmount, operatorId, adminId } = params;
+
     return this.dataSource.transaction(async (manager) => {
       const cashRegisterRepository = manager.getRepository(CashRegister);
+
       const movementRepository = manager.getRepository(CashRegisterMovement);
-      const existingCashRegister = await cashRegisterRepository.findOne({
+
+      const operatorCashRegister = await cashRegisterRepository.findOne({
         where: {
           operatorId,
-          status: 'aberto',
+          status: CashRegisterStatus.OPEN,
           deletedAt: IsNull(),
         },
       });
 
-      if (existingCashRegister) {
-        throw new BadRequestException('Operador já tem um caixa aberto');
+      if (operatorCashRegister) {
+        throw new BadRequestException('Operador já possui um caixa aberto');
       }
 
       const cashRegister = await cashRegisterRepository.findOne({
@@ -130,28 +153,29 @@ export class CashRegistersService {
         throw new NotFoundException('Caixa não encontrado');
       }
 
-      if (cashRegister.blocked === 'S') {
-        throw new BadRequestException('Caixa bloqueado');
-      }
+      this.validateCashRegisterAvailability(cashRegister);
 
-      if (cashRegister.status === 'aberto') {
-        throw new BadRequestException('Caixa já está aberto');
-      }
-
-      cashRegister.status = 'aberto';
+      cashRegister.status = CashRegisterStatus.OPEN;
       cashRegister.operatorId = operatorId;
+      cashRegister.code = code.toString();
+      cashRegister.createdBy = adminId;
 
       await cashRegisterRepository.save(cashRegister);
+
       const movement = movementRepository.create({
         cashRegisterId: cashRegister.id,
         operatorId,
         openingAmount,
+
         totalCollectedAmount: 0,
         collectedDepositAmount: 0,
         collectedPaymentAmount: 0,
         invoicedPaymentAmount: 0,
-        status: 'aberto',
+
+        status: CashRegisterStatus.OPEN,
         finalStatus: 'pendente',
+        adminStatus: 'pendente',
+
         dateAt: new Date(),
         createdAt: new Date(),
       });
@@ -162,13 +186,92 @@ export class CashRegistersService {
     });
   }
 
-  async avaliableCashRegistersForOpening(search?: string) {
-    const query = this.repository.createQueryBuilder('cashRegister');
+  async close(cashRegisterId: number, operatorId: number) {
+    return this.dataSource.transaction(async (manager) => {
+      const cashRegisterRepository = manager.getRepository(CashRegister);
+
+      const movementRepository = manager.getRepository(CashRegisterMovement);
+
+      const operatorCashRegister = await cashRegisterRepository.findOne({
+        where: {
+          operatorId,
+          status: CashRegisterStatus.OPEN,
+          deletedAt: IsNull(),
+        },
+      });
+
+      if (!operatorCashRegister) {
+        throw new BadRequestException('Operador não possui caixa aberto');
+      }
+
+      const cashRegister = await cashRegisterRepository.findOne({
+        where: {
+          id: cashRegisterId,
+          deletedAt: IsNull(),
+        },
+      });
+
+      if (!cashRegister) {
+        throw new NotFoundException('Caixa não encontrado');
+      }
+
+      const movement = await movementRepository.findOne({
+        where: {
+          cashRegisterId,
+          operatorId,
+          status: CashRegisterStatus.OPEN,
+          deletedAt: IsNull(),
+        },
+      });
+      if (!movement) {
+        throw new NotFoundException(
+          'Movimento de caixa em aberto não encontrado',
+        );
+      }
+      const closingDate = new Date();
+      movement.status = CashRegisterStatus.CLOSED;
+      movement.finalStatus = 'fechado';
+      movement.adminStatus = 'pendente';
+      movement.closingDate = closingDate;
+
+      operatorCashRegister.status = CashRegisterStatus.CLOSED;
+      operatorCashRegister.operatorId = null as any;
+      await cashRegisterRepository.save(operatorCashRegister);
+      await movementRepository.save(movement);
+      console.log({ operatorCashRegister, movement });
+
+      return cashRegister;
+    });
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | FINDERS
+  |--------------------------------------------------------------------------
+  */
+
+  async findOpenByOperatorId(operatorId: number) {
+    return this.cashRegisterRepository.findOne({
+      where: {
+        operatorId,
+        status: CashRegisterStatus.OPEN,
+        deletedAt: IsNull(),
+      },
+    });
+  }
+
+  async findAvailableForOpening(search?: string) {
+    const query =
+      this.cashRegisterRepository.createQueryBuilder('cashRegister');
 
     query
       .where('cashRegister.deletedAt IS NULL')
-      .andWhere('cashRegister.blocked = :blocked', { blocked: 'N' })
-      .andWhere('cashRegister.status = :status', { status: 'fechado' });
+      .andWhere('cashRegister.blocked = :blocked', {
+        blocked: YesNo.NO,
+      })
+      .andWhere('cashRegister.status = :status', {
+        status: CashRegisterStatus.CLOSED,
+      });
 
     if (search?.trim()) {
       const normalized = `%${search.trim().toUpperCase()}%`;
@@ -189,64 +292,35 @@ export class CashRegistersService {
     return query.getMany();
   }
 
-  async closeCashRegister(id: number, operatorId: number) {
-    const cashRegister = await this.findOne(id);
+  /*
+  |--------------------------------------------------------------------------
+  | VALIDATIONS
+  |--------------------------------------------------------------------------
+  */
 
-    if (cashRegister.status === 'fechado') {
-      throw new BadRequestException('Caixa já está fechado');
+  async validateOperatorOpenCashRegister(operatorId: number) {
+    const cashRegister = await this.findOpenByOperatorId(operatorId);
+
+    if (!cashRegister) {
+      throw new BadRequestException('Operador não possui caixa aberto');
     }
-
-    if (cashRegister.operatorId !== operatorId) {
-      throw new BadRequestException(
-        'Operador não pode fechar o caixa, em uso por outro operador',
-      );
-    }
-
-    await this.repository.update(id, {
-      status: 'fechado',
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      operatorId: null as any,
-    });
-  }
-
-  async findCashRegisterOpenByOperatorId(operatorId: number) {
-    const cashRegister = await this.repository.findOne({
-      where: {
-        operatorId: operatorId,
-        status: 'aberto',
-        deletedAt: IsNull(),
-      },
-    });
 
     return cashRegister;
   }
 
-  async getCashRegisterSummaryByPaymentMethod(params: {
-    operadorId: number;
-    caixaId: number;
-  }) {
-    const { operadorId, caixaId } = params;
-    const result = await this.dataSource.query(
-      `
-      SELECT
-      forma_pagamento.CODIGO AS forma_pagamento_codigo,
-      forma_pagamento.DESCRICAO AS forma_pagamento,
-      SUM(pagamentos.VALOR_DEPOSITADO) AS total
-      FROM  FK2_TB_PAGAMENTOS pagamentos
-      INNER JOIN FK2_TB_FORMA_PAGAMENTO forma_pagamento
-      ON forma_pagamento.CODIGO = pagamentos.FORMA_PAGAMENTO
-      WHERE pagamentos.FK_UTILIZADOR = :operadorId
-      AND pagamentos.CAIXA_ID = :caixaId
-      AND pagamentos.ESTADO = 2
-      AND TRUNC(pagamentos.CREATED_AT) = TRUNC(SYSDATE)
-      GROUP BY
-        forma_pagamento.CODIGO,
-        forma_pagamento.DESCRICAO
-      ORDER BY forma_pagamento.DESCRICAO`,
+  private validateCashRegisterAvailability(cashRegister: CashRegister) {
+    if (cashRegister.blocked === YesNo.YES) {
+      throw new BadRequestException('Caixa bloqueado');
+    }
 
-      [operadorId, caixaId],
-    );
-
-    return toLowerCaseKeys(result);
+    if (cashRegister.status === CashRegisterStatus.OPEN) {
+      throw new BadRequestException('Caixa já está aberto');
+    }
   }
+}
+
+async function generateRandomCode() {
+  const coded = randomInt(100000, 999999);
+
+  return coded;
 }

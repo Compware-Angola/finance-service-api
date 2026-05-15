@@ -24,101 +24,49 @@ import { ApiTags } from '@nestjs/swagger';
 import { HttpService } from '@nestjs/axios';
 import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
 import { OpenCashRegisterDto } from './dto/open-cash-register.dto';
+import { CashRegisterSummaryService } from './cash-register-summary.service';
 @ApiTags('caixas')
 @Controller('caixas')
+@UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
 export class CashRegistersController {
   constructor(
-    private readonly service: CashRegistersService,
-    private httpService: HttpService,
+    private readonly cashRegistersService: CashRegistersService,
+    private readonly summaryService: CashRegisterSummaryService,
+    private readonly httpService: HttpService,
   ) {}
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-  @Post()
-  async create(@Body() body: CreateCashRegisterDto, @Req() req: any) {
-    const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.create(body);
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} criou um caixa`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
-    });
-    return { data: cashRegister };
-  }
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+
   @Get()
   async findAll(@Query() query: ListCashRegistersDto) {
-    return { data: await this.service.findAll(query) };
-  }
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-  @Get('disponiveis')
-  async avaliableCashRegistersForOpening(
-    @Query() query: ListCashRegistersForOpeningDto,
-  ) {
     return {
-      data: await this.service.avaliableCashRegistersForOpening(query.search),
+      data: await this.cashRegistersService.findAll(query),
     };
   }
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-  @Get('meu-caixa')
-  async findByOperatorId(@Req() req: any) {
-    console.log(req.user);
-    const user = req.user;
-    const cashRegister = await this.service.findCashRegisterOpenByOperatorId(
-      user?.sub,
-    );
-    return { data: cashRegister };
+  @Get('me')
+  async findMyOpenCashRegister(@Req() req: any) {
+    return {
+      data: await this.cashRegistersService.findOpenByOperatorId(req.user.sub),
+    };
   }
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const cashRegister = await this.service.findOne(Number(id));
-    return { data: cashRegister };
+  @Get('me/resumo')
+  async getMySummary(@Req() req: any) {
+    console.log(req.user);
+    return {
+      data: await this.summaryService.getMySummary(req.user.sub),
+    };
+  }
+  @Get('disponiveis')
+  async findAvailableForOpening(
+    @Query()
+    query: ListCashRegistersForOpeningDto,
+  ) {
+    return {
+      data: await this.cashRegistersService.findAvailableForOpening(
+        query.search,
+      ),
+    };
   }
 
-  @Get(':operadorId/:caixaId/resumo')
-  async getCashRegisterSummaryByPaymentMethod(
-    @Param('caixaId') caixaId: string,
-    @Param('operadorId') operadorId: string,
-  ) {
-    const cashRegister =
-      await this.service.getCashRegisterSummaryByPaymentMethod({
-        caixaId: Number(caixaId),
-        operadorId: Number(operadorId),
-      });
-    return { data: cashRegister };
-  }
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-  @Patch(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() body: UpdateCashRegisterDto,
-    @Req() req: any,
-  ) {
-    const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.update(Number(id), body);
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} atualizou o caixa com código ${id}`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
-    });
-    return { data: cashRegister };
-  }
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-  @Delete(':id')
-  async remove(@Param('id') id: string, @Req() req: any) {
-    const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.remove(Number(id));
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} removeu o caixa com código ${id}`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
-    });
-    return { data: cashRegister };
-  }
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-  @Patch(':id/open')
+  @Patch(':id/abrir')
   async open(
     @Param('id') id: string,
     @Body() body: OpenCashRegisterDto,
@@ -126,35 +74,40 @@ export class CashRegistersController {
   ) {
     const user = req.user;
 
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-
-    const cashRegister = await this.service.openCashRegister({
+    const cashRegister = await this.cashRegistersService.open({
       id: Number(id),
-      operatorId: user?.sub,
-      openingAmount: body?.openingAmount ?? 0,
+      operatorId: user.sub,
+      openingAmount: body.openingAmount ?? 0,
+      adminId: user.sub,
     });
 
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} abriu o caixa com código ${id}`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip,
-    });
+    this.log(req, user, `abriu o caixa ${id}`);
 
     return {
       data: cashRegister,
     };
   }
-  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+
   @Patch(':id/close')
   async close(@Param('id') id: string, @Req() req: any) {
     const user = req.user;
+
+    await this.cashRegistersService.close(Number(id), user.sub);
+
+    this.log(req, user, `fechou o caixa ${id}`);
+
+    return {
+      message: 'Caixa fechado com sucesso',
+    };
+  }
+
+  private log(req: any, user: any, descricao: string) {
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    await this.service.closeCashRegister(Number(id), user?.sub);
+
     AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} fechou o caixa com código ${id}`,
+      descricao: `Utilizador ${user?.nome} ${descricao}`,
       fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
+      ip,
     });
-    return { message: 'Caixa fechado com sucesso' };
   }
 }

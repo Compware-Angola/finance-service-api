@@ -23,6 +23,7 @@ import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
 import { PaymentTfcModule } from './module/payment-tfc/payment-tfc.module';
 import { FormaPagamentoModule } from './module/forma-pagamento/forma-pagamento.module';
 import { CashRegistersModule } from './module/cash-registers/cash-registers.module';
+import { UtilizadorModule } from './module/utilizadores/utilizador.module';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { CashRegistersModule } from './module/cash-registers/cash-registers.modu
     PaymentTfcModule,
     FormaPagamentoModule,
     CashRegistersModule,
+    UtilizadorModule,
   ],
   providers: [BullMQWorkerService],
 })

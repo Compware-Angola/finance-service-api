@@ -56,6 +56,14 @@ export class CashRegisterMovement {
   collectedDepositAmount?: number;
 
   @Column({
+    name: 'VALOR_ARRECADADO_TPA',
+    type: 'number',
+    nullable: true,
+    default: 0,
+  })
+  collectedTpaAmount?: number;
+
+  @Column({
     name: 'VALOR_ARRECADADO_PAGAMENTO',
     type: 'number',
     nullable: true,

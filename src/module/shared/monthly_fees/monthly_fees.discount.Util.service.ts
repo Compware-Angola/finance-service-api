@@ -210,9 +210,9 @@ export class MonthlyFeesDiscountUtilService {
     codigoMatricula: number,
     anoLectivo: number,
     dadosAluno: any,
-  ): Promise<number> {
+  ): Promise<{ codigo_servico: number, preco: number, descricao: string }> {
     const sql = `
-      SELECT PRECO
+      SELECT PRECO,CODIGO,DESCRICAO
       FROM FK2_TB_TIPO_SERVICOS
       WHERE DESCRICAO LIKE 'Propina ' || :curso || '%'
         AND CODIGO_ANO_LECTIVO = :anoLectivo
@@ -232,7 +232,7 @@ export class MonthlyFeesDiscountUtilService {
       throw new BadRequestException('Nenhuma mensalidade encontrada');
     }
 
-    return Number(row.PRECO);
+    return { preco: Number(row.PRECO), codigo_servico: Number(row.CODIGO), descricao: row.DESCRICAO };
   }
 
   // ====================== CÁLCULO DE DESCONTO ======================
@@ -379,8 +379,8 @@ export class MonthlyFeesDiscountUtilService {
       mesTemp.id,
     );
 
-    const descontoValor = mensalidade * percentagemDesconto;
-    const mensalidadeComDesconto = mensalidade - descontoValor;
+    const descontoValor = mensalidade.preco * percentagemDesconto;
+    const mensalidadeComDesconto = mensalidade.preco - descontoValor;
 
     // Se for Bolseiro sem Multa nao deve calcular mas a Multa
 
@@ -414,9 +414,11 @@ export class MonthlyFeesDiscountUtilService {
       multa: multa,
       total_item: valorFinal,
       valor_pago: valorPago,
-      mensalidade: mensalidade,
+      mensalidade: mensalidade.preco,
+      codigo_servico: mensalidade.codigo_servico,
+      descricao_servico: mensalidade.descricao,
       total: valorFinal,
-      total_preco: mensalidade,
+      total_preco: mensalidade.preco,
       status_pagamento: statusPagamento,
       data_operacao: null,
       data_pagamento: null,

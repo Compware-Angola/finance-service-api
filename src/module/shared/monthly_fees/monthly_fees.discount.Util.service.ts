@@ -14,7 +14,7 @@ import { formatDisplay } from 'src/module/util/format-date';
 import { TestMonthlyDTO } from './dto/test-monthly.dto';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -387,6 +387,7 @@ export class MonthlyFeesDiscountUtilService {
     // Se for Bolseiro sem Multa nao deve calcular mas a Multa
 
     let percentagemMulta = 0;
+    /*
     if (!bolseiroInfo.isentar_multa) {
       percentagemMulta = await this.calcularPercentagemMulta(
         codigoMatricula,
@@ -394,6 +395,7 @@ export class MonthlyFeesDiscountUtilService {
         periodosIsentos,
       );
     }
+    */
     const multa = mensalidadeComDesconto * percentagemMulta;
     const valorFinal = mensalidadeComDesconto + multa;
     const valorPago = isBolseiroIntegral ? mensalidade.preco : 0;

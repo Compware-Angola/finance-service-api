@@ -14,9 +14,7 @@ import { formatDisplay } from 'src/module/util/format-date';
 import { TestMonthlyDTO } from './dto/test-monthly.dto';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
-  constructor(
-    private dataSource: DataSource,
-  ) { }
+  constructor(private dataSource: DataSource) {}
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -138,7 +136,7 @@ export class MonthlyFeesDiscountUtilService {
 
     const sql = `
       WITH aluno AS (
-        SELECT c.sigla, p.codigo_turno as turno
+        SELECT c.sigla, p.codigo_turno as turno, p.anolectivo as anolectivo
         FROM fk2_tb_matriculas m
         JOIN fk2_tb_cursos c ON c.codigo = m.codigo_curso
         JOIN fk2_tb_admissao a ON a.codigo = m.codigo_aluno
@@ -150,7 +148,7 @@ export class MonthlyFeesDiscountUtilService {
       JOIN FK2_DESCONTOS_ESPECIAIS de
         ON de.ESTADO = 1
        AND TO_DATE(:dataStr, 'YYYY-MM-DD') BETWEEN de.DATA_INICIO AND de.DATA_FIM
-      WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324')
+      WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324' AND a.anolectivo = 21)
          OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB')
       FETCH FIRST 1 ROW ONLY
     `;
@@ -210,7 +208,7 @@ export class MonthlyFeesDiscountUtilService {
     codigoMatricula: number,
     anoLectivo: number,
     dadosAluno: any,
-  ): Promise<{ codigo_servico: number, preco: number, descricao: string }> {
+  ): Promise<{ codigo_servico: number; preco: number; descricao: string }> {
     const sql = `
       SELECT PRECO,CODIGO,DESCRICAO
       FROM FK2_TB_TIPO_SERVICOS
@@ -232,7 +230,11 @@ export class MonthlyFeesDiscountUtilService {
       throw new BadRequestException('Nenhuma mensalidade encontrada');
     }
 
-    return { preco: Number(row.PRECO), codigo_servico: Number(row.CODIGO), descricao: row.DESCRICAO };
+    return {
+      preco: Number(row.PRECO),
+      codigo_servico: Number(row.CODIGO),
+      descricao: row.DESCRICAO,
+    };
   }
 
   // ====================== CÁLCULO DE DESCONTO ======================
@@ -433,8 +435,6 @@ export class MonthlyFeesDiscountUtilService {
   }: TestMonthlyDTO) {
     const dadosAluno = await this.obterDadosCompletosAluno(codigo_matricula);
 
-
-
     // ====================== QUERY DINÂMICA ======================
     const isAnoLectivoNumero =
       codAnoLectivo !== undefined &&
@@ -443,7 +443,7 @@ export class MonthlyFeesDiscountUtilService {
 
     const sqlMesTemp = isAnoLectivoNumero
       ? `
-    SELECT 
+    SELECT
       DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
       SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
     FROM fk2_mes_temp tp
@@ -461,7 +461,7 @@ export class MonthlyFeesDiscountUtilService {
       )
   `
       : `
-  SELECT 
+  SELECT
   DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
   SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
 FROM fk2_mes_temp tp
@@ -487,12 +487,15 @@ WHERE tp.activo = 1
       ? { codAnoLectivo, codigo_matricula }
       : { codigo_matricula };
 
-    const resultado = await this.dataSource.query(sqlMesTemp, queryParams as any);
+    const resultado = await this.dataSource.query(
+      sqlMesTemp,
+      queryParams as any,
+    );
     const mesTemps: MesTempResponse[] = toLowerCaseKeys(resultado);
 
     const periodosIsentos = await this.dataSource.query(`
-    SELECT DATA_INICIO, DATA_FIM 
-    FROM FK2_TB_DIAS_ISENTOS 
+    SELECT DATA_INICIO, DATA_FIM
+    FROM FK2_TB_DIAS_ISENTOS
     WHERE ESTADO = 1
   `);
 

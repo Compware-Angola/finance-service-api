@@ -394,7 +394,7 @@ export class MonthlyFeesDiscountUtilService {
     }
     const multa = mensalidadeComDesconto * percentagemMulta;
     const valorFinal = mensalidadeComDesconto + multa;
-    const valorPago = isBolseiroIntegral ? mensalidade : 0;
+    const valorPago = isBolseiroIntegral ? mensalidade.preco : 0;
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,

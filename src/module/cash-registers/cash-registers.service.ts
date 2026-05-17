@@ -15,7 +15,11 @@ import { ListCashRegistersDto } from './dto/list-cash-registers.dto';
 
 import { OpenCashRegisterParams } from './types';
 
-import { CashRegisterStatus, YesNo } from './enums/cash-register-status.enum';
+import {
+  CashRegisterStatus,
+  PaymentMethod,
+  YesNo,
+} from './enums/cash-register-status.enum';
 import { randomInt } from 'crypto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { ListOperatorsDto } from './dto/list-operators.dto';
@@ -111,7 +115,7 @@ export class CashRegistersService {
   }
 
   async open(params: OpenCashRegisterParams) {
-    const code = await generateRandomCode();
+    const code = generateRandomCode();
 
     const { id, openingAmount, operatorId, adminId } = params;
 
@@ -156,7 +160,6 @@ export class CashRegistersService {
         cashRegisterId: cashRegister.id,
         operatorId,
         openingAmount,
-
         totalCollectedAmount: 0,
         collectedDepositAmount: 0,
         collectedPaymentAmount: 0,
@@ -203,9 +206,7 @@ export class CashRegistersService {
   async close(cashRegisterId: number, operatorId: number) {
     return this.dataSource.transaction(async (manager) => {
       const cashRegisterRepository = manager.getRepository(CashRegister);
-
       const movementRepository = manager.getRepository(CashRegisterMovement);
-
       const operatorCashRegister = await cashRegisterRepository.findOne({
         where: {
           operatorId,
@@ -213,11 +214,9 @@ export class CashRegistersService {
           deletedAt: IsNull(),
         },
       });
-
       if (!operatorCashRegister) {
         throw new BadRequestException('Operador não possui caixa aberto');
       }
-
       const cashRegister = await cashRegisterRepository.findOne({
         where: {
           id: cashRegisterId,
@@ -242,18 +241,27 @@ export class CashRegistersService {
           'Movimento de caixa em aberto não encontrado',
         );
       }
+      const { totalCash, totalCard } = await this.calculateCashRegisterSummary({
+        operatorId,
+        cashRegisterId: cashRegister.id,
+        createdAt: movement.createdAt,
+      });
       const closingDate = new Date();
+
       movement.status = CashRegisterStatus.CLOSED;
       movement.finalStatus = 'fechado';
       movement.adminStatus = 'pendente';
       movement.closingDate = closingDate;
+      movement.collectedPaymentAmount = totalCash;
+      movement.collectedTpaAmount = totalCard;
+      movement.totalCollectedAmount =
+        Number(movement.openingAmount ?? 0) + totalCash + totalCard;
 
       operatorCashRegister.status = CashRegisterStatus.CLOSED;
       operatorCashRegister.operatorId = null as any;
-      await cashRegisterRepository.save(operatorCashRegister);
+      operatorCashRegister.code = null as any;
       await movementRepository.save(movement);
-      console.log({ operatorCashRegister, movement });
-
+      await cashRegisterRepository.save(operatorCashRegister);
       return cashRegister;
     });
   }
@@ -380,9 +388,46 @@ export class CashRegistersService {
       throw new BadRequestException('Caixa já está aberto');
     }
   }
+  private async calculateCashRegisterSummary(params: {
+    operatorId: number;
+    cashRegisterId: number;
+    createdAt: Date;
+  }) {
+    const result = await this.dataSource.query(
+      `
+    SELECT
+      SUM(
+        CASE
+          WHEN pagamentos.FORMA_PAGAMENTO = ${PaymentMethod.CASH}
+          THEN pagamentos.VALOR_DEPOSITADO
+          ELSE 0
+        END
+      ) AS total_cash,
+
+      SUM(
+        CASE
+          WHEN pagamentos.FORMA_PAGAMENTO =${PaymentMethod.CARD}
+          THEN pagamentos.VALOR_DEPOSITADO
+          ELSE 0
+        END
+      ) AS total_card
+    FROM FK2_TB_PAGAMENTOS pagamentos
+    WHERE pagamentos.FK_UTILIZADOR = :1
+      AND pagamentos.CAIXA_ID = :2
+      AND pagamentos.ESTADO = 2
+      AND pagamentos.CREATED_AT >= :3
+    `,
+      [params.operatorId, params.cashRegisterId, params.createdAt],
+    );
+    console.log(result);
+    return {
+      totalCash: Number(result[0]?.TOTAL_CASH || 0),
+      totalCard: Number(result[0]?.TOTAL_CARD || 0),
+    };
+  }
 }
 
-async function generateRandomCode() {
+function generateRandomCode() {
   const coded = randomInt(100000, 999999);
 
   return coded;

@@ -1,9 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-
 import { DataSource, IsNull, Repository } from 'typeorm';
-
 import { CashRegistersService } from './cash-registers.service';
-
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CashRegisterMovement } from './entities/cash-register-movement.entity';
@@ -56,7 +53,12 @@ export class CashRegisterSummaryService {
       [operatorId, cashRegisterId, cashRegister.createdAt],
     );
 
-    return toLowerCaseKeys(paymentSummary);
+    const summary = toLowerCaseKeys(paymentSummary);
+
+    return {
+      summary,
+      openingAmount: cashRegister.openingAmount ?? 0,
+    };
   }
 
   async getMySummary(operatorId: number) {

@@ -37,61 +37,24 @@ export class CashRegisterSummaryService {
     }
 
     const paymentSummary = await this.dataSource.query(
-      `
-  SELECT
+      `SELECT
     forma_pagamento.CODIGO    AS forma_pagamento_codigo,
     forma_pagamento.DESCRICAO AS forma_pagamento,
     SUM(pagamentos.VALOR_DEPOSITADO) AS total
-  
-
-
   FROM FK2_TB_PAGAMENTOS pagamentos
   INNER JOIN FK2_TB_FORMA_PAGAMENTO forma_pagamento
     ON forma_pagamento.CODIGO = pagamentos.FORMA_PAGAMENTO
-
-
   WHERE pagamentos.FK_UTILIZADOR = :1
     AND pagamentos.CAIXA_ID      = :2
     AND pagamentos.ESTADO        = 2
     AND pagamentos.CREATED_AT   >= :3
-
   GROUP BY
     forma_pagamento.CODIGO,
     forma_pagamento.DESCRICAO
-
   ORDER BY forma_pagamento.DESCRICAO
   `,
       [operatorId, cashRegisterId, cashRegister.createdAt],
     );
-
-    const paymentSummary2 = await this.dataSource.query(
-      `
-  SELECT
-    forma_pagamento.CODIGO    AS forma_pagamento_codigo,
-    forma_pagamento.DESCRICAO AS forma_pagamento,
-    pagamentos.VALOR_DEPOSITADO AS valor_depositado,
-    movimento.CODIGO AS movimento_id
-
-  FROM FK2_TB_PAGAMENTOS pagamentos
-
-  INNER JOIN FK2_TB_FORMA_PAGAMENTO forma_pagamento
-    ON forma_pagamento.CODIGO = pagamentos.FORMA_PAGAMENTO
-INNER JOIN FK2_TB_MOVIMENTOS_CAIXAS movimento
-  ON movimento.CAIXA_ID = pagamentos.CAIXA_ID
-
-  WHERE pagamentos.FK_UTILIZADOR = :1
-    AND pagamentos.CAIXA_ID      = :2
-    AND pagamentos.ESTADO        = 2
-    AND movimento.CODIGO         = :3
-
-
-
-  
-  `,
-      [operatorId, cashRegisterId, cashRegister.id],
-    );
-
-    console.log({ paymentSummary2 });
 
     return toLowerCaseKeys(paymentSummary);
   }

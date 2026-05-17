@@ -11,8 +11,6 @@ import { Brackets, DataSource, IsNull, Repository } from 'typeorm';
 import { CashRegister } from './entities/cash-register.entity';
 import { CashRegisterMovement } from './entities/cash-register-movement.entity';
 
-import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
-import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
 import { ListCashRegistersDto } from './dto/list-cash-registers.dto';
 
 import { OpenCashRegisterParams } from './types';
@@ -30,16 +28,6 @@ export class CashRegistersService {
 
     private readonly dataSource: DataSource,
   ) {}
-
-  async create(data: CreateCashRegisterDto) {
-    const cashRegister = this.cashRegisterRepository.create({
-      ...data,
-      status: CashRegisterStatus.CLOSED,
-      blocked: YesNo.NO,
-    });
-
-    return this.cashRegisterRepository.save(cashRegister);
-  }
 
   async findAll(filters?: ListCashRegistersDto) {
     const { page = 1, limit = 10 } = filters || {};
@@ -122,23 +110,6 @@ export class CashRegistersService {
     return cashRegister;
   }
 
-  async update(id: number, data: UpdateCashRegisterDto) {
-    const cashRegister = await this.findById(id);
-
-    Object.assign(cashRegister, data);
-
-    return this.cashRegisterRepository.save(cashRegister);
-  }
-
-  async softDelete(id: number, deletedBy?: number) {
-    const cashRegister = await this.findById(id);
-
-    cashRegister.deletedAt = new Date();
-    cashRegister.deletedBy = deletedBy;
-
-    return this.cashRegisterRepository.save(cashRegister);
-  }
-
   async open(params: OpenCashRegisterParams) {
     const code = await generateRandomCode();
 
@@ -203,6 +174,30 @@ export class CashRegistersService {
 
       return cashRegister;
     });
+  }
+  async verifyMyCashRegister({
+    openingCode,
+    operatorId,
+  }: {
+    openingCode: string;
+    operatorId: number;
+  }) {
+    const cashRegister = await this.cashRegisterRepository.findOne({
+      where: {
+        operatorId,
+        deletedAt: IsNull(),
+      },
+    });
+
+    if (!cashRegister) {
+      throw new NotFoundException('Caixa não encontrado');
+    }
+
+    if (cashRegister.code !== openingCode) {
+      throw new BadRequestException('Código de abertura inválido');
+    }
+
+    return cashRegister;
   }
 
   async close(cashRegisterId: number, operatorId: number) {
@@ -304,12 +299,6 @@ export class CashRegistersService {
 
     return query.getMany();
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | VALIDATIONS
-  |--------------------------------------------------------------------------
-  */
 
   async validateOperatorOpenCashRegister(operatorId: number) {
     const cashRegister = await this.findOpenByOperatorId(operatorId);

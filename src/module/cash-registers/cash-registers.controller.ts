@@ -11,8 +11,6 @@ import {
   Req,
 } from '@nestjs/common';
 import { CashRegistersService } from './cash-registers.service';
-import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
-import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
 
 import {
   ListCashRegistersDto,
@@ -25,10 +23,10 @@ import { HttpService } from '@nestjs/axios';
 import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
 import { OpenCashRegisterDto } from './dto/open-cash-register.dto';
 import { CashRegisterSummaryService } from './cash-register-summary.service';
-import { ListUtilizadorDto } from '../utilizadores/dto/list-utilizador.dto';
 import { ListOperatorsDto } from './dto/list-operators.dto';
+import { VerifyMyCashRegisterDto } from './dto/verify-my-cash-register.dto';
 @ApiTags('caixas')
-@Controller('caixas')
+@Controller('cash-registers')
 @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
 export class CashRegistersController {
   constructor(
@@ -53,7 +51,7 @@ export class CashRegistersController {
       data: await this.cashRegistersService.findOpenByOperatorId(req.user.sub),
     };
   }
-  @Get('me/resumo')
+  @Get('me/summary')
   async getMySummary(@Req() req: any) {
     console.log(req.user);
     return {
@@ -61,7 +59,7 @@ export class CashRegistersController {
     };
   }
 
-  @Get('disponiveis')
+  @Get('available')
   async findAvailableForOpening(
     @Query()
     query: ListCashRegistersForOpeningDto,
@@ -73,7 +71,7 @@ export class CashRegistersController {
     };
   }
 
-  @Patch(':id/abrir')
+  @Patch(':id/open')
   async open(
     @Param('id') id: string,
     @Body() body: OpenCashRegisterDto,
@@ -104,6 +102,17 @@ export class CashRegistersController {
     return {
       message: 'Caixa fechado com sucesso',
     };
+  }
+  @Post('me/verify-opening-code')
+  async verifyMyCashRegister(
+    @Req() req: any,
+    @Body() body: VerifyMyCashRegisterDto,
+  ) {
+    const user = req.user;
+    return await this.cashRegistersService.verifyMyCashRegister({
+      openingCode: body.openingCode,
+      operatorId: user.sub,
+    });
   }
 
   private log(req: any, user: any, descricao: string) {

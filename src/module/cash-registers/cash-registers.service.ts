@@ -48,13 +48,13 @@ export class CashRegistersService {
     const queryBuilder = this.dataSource
       .createQueryBuilder()
       .select([
-        'C.CODIGO AS id',
+        'C.CODIGO AS code',
         'C.NOME AS name',
         'C.STATUS_ AS status',
+        'C.CODE AS opening_code',
         'C.BLOQUEIO AS blocked',
-        'C.OPERADOR_ID AS operatorId',
-        'UTI.PK_UTILIZADOR AS operatorCode',
-        'UTI.NOME AS operatorName',
+        'UTI.PK_UTILIZADOR AS operator_code',
+        'UTI.NOME AS operator_name',
       ])
       .from('FK2_TB_CAIXAS', 'C')
       .leftJoin(

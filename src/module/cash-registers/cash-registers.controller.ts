@@ -29,7 +29,7 @@ import { ListUtilizadorDto } from '../utilizadores/dto/list-utilizador.dto';
 import { ListOperatorsDto } from './dto/list-operators.dto';
 @ApiTags('caixas')
 @Controller('caixas')
-// @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+@UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
 export class CashRegistersController {
   constructor(
     private readonly cashRegistersService: CashRegistersService,
@@ -39,9 +39,7 @@ export class CashRegistersController {
 
   @Get()
   async findAll(@Query() query: ListCashRegistersDto) {
-    return {
-      data: await this.cashRegistersService.findAll(query),
-    };
+    return await this.cashRegistersService.findAll(query);
   }
 
   @Get('operators/available')
@@ -85,12 +83,10 @@ export class CashRegistersController {
 
     const cashRegister = await this.cashRegistersService.open({
       id: Number(id),
-      operatorId: user.sub,
+      operatorId: body.operatorId,
       openingAmount: body.openingAmount ?? 0,
       adminId: user.sub,
     });
-
-    this.log(req, user, `abriu o caixa ${id}`);
 
     return {
       data: cashRegister,

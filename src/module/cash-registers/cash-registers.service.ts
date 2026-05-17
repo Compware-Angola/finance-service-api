@@ -19,6 +19,8 @@ import { OpenCashRegisterParams } from './types';
 
 import { CashRegisterStatus, YesNo } from './enums/cash-register-status.enum';
 import { randomInt } from 'crypto';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { ListOperatorsDto } from './dto/list-operators.dto';
 
 @Injectable()
 export class CashRegistersService {
@@ -28,12 +30,6 @@ export class CashRegistersService {
 
     private readonly dataSource: DataSource,
   ) {}
-
-  /*
-  |--------------------------------------------------------------------------
-  | CRUD
-  |--------------------------------------------------------------------------
-  */
 
   async create(data: CreateCashRegisterDto) {
     const cashRegister = this.cashRegisterRepository.create({
@@ -46,40 +42,69 @@ export class CashRegistersService {
   }
 
   async findAll(filters?: ListCashRegistersDto) {
-    const query =
-      this.cashRegisterRepository.createQueryBuilder('cashRegister');
+    const { page = 1, limit = 10 } = filters || {};
+    const offset = (page - 1) * limit;
 
-    query.where('cashRegister.deletedAt IS NULL');
+    const queryBuilder = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'C.CODIGO AS id',
+        'C.NOME AS name',
+        'C.STATUS_ AS status',
+        'C.BLOQUEIO AS blocked',
+        'C.OPERADOR_ID AS operatorId',
+        'UTI.PK_UTILIZADOR AS operatorCode',
+        'UTI.NOME AS operatorName',
+      ])
+      .from('FK2_TB_CAIXAS', 'C')
+      .leftJoin(
+        'FK2_MCA_TB_UTILIZADOR',
+        'UTI',
+        'UTI.PK_UTILIZADOR = C.OPERADOR_ID',
+      )
+      .where('C.DELETED_AT IS NULL');
 
     if (filters?.search?.trim()) {
-      const search = `%${filters.search.trim()}%`;
-
-      query.andWhere(
+      const search = `%${filters.search.trim().toUpperCase()}%`;
+      queryBuilder.andWhere(
         new Brackets((qb) => {
-          qb.where('UPPER(cashRegister.name) LIKE UPPER(:search)', {
-            search,
-          }).orWhere('UPPER(cashRegister.code) LIKE UPPER(:search)', {
-            search,
-          });
+          qb.where('UPPER(C.NOME) LIKE UPPER(:search)', { search }).orWhere(
+            'UPPER(UTI.NOME) LIKE UPPER(:search)',
+            { search },
+          );
         }),
       );
     }
 
     if (filters?.status) {
-      query.andWhere('cashRegister.status = :status', {
-        status: filters.status,
-      });
+      queryBuilder.andWhere('C.STATUS_ = :status', { status: filters.status });
     }
 
     if (filters?.blocked) {
-      query.andWhere('cashRegister.blocked = :blocked', {
+      queryBuilder.andWhere('C.BLOQUEIO = :blocked', {
         blocked: filters.blocked,
       });
     }
 
-    query.orderBy('cashRegister.id', 'DESC');
+    const countQueryBuilder = queryBuilder.clone();
 
-    return query.getMany();
+    queryBuilder.orderBy('C.CODIGO', 'DESC').offset(offset).limit(limit);
+    const [results, totalResult] = await Promise.all([
+      queryBuilder.getRawMany(),
+      countQueryBuilder.select('COUNT(*) AS TOTAL').getRawOne(),
+    ]);
+
+    const total = parseInt(totalResult?.TOTAL || '0', 10);
+
+    return {
+      data: toLowerCaseKeys(results),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findById(id: number) {
@@ -113,12 +138,6 @@ export class CashRegistersService {
 
     return this.cashRegisterRepository.save(cashRegister);
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | OPEN / CLOSE
-  |--------------------------------------------------------------------------
-  */
 
   async open(params: OpenCashRegisterParams) {
     const code = await generateRandomCode();
@@ -244,12 +263,6 @@ export class CashRegistersService {
     });
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | FINDERS
-  |--------------------------------------------------------------------------
-  */
-
   async findOpenByOperatorId(operatorId: number) {
     return this.cashRegisterRepository.findOne({
       where: {
@@ -306,6 +319,67 @@ export class CashRegistersService {
     }
 
     return cashRegister;
+  }
+
+  async listAvailableOperators(query: ListOperatorsDto) {
+    const { page = 1, limit = 10, search = '' } = query;
+
+    const offset = (page - 1) * limit;
+    const searchParam = `%${search}%`;
+
+    const [utilizadores, totalResult] = await Promise.all([
+      this.dataSource.query(
+        `
+      SELECT uti.NOME, uti.PK_UTILIZADOR AS codigo
+      FROM FK2_MCA_TB_UTILIZADOR uti
+      INNER JOIN FK2_MCA_TB_GRUPO_UTILIZADOR grupo_uti
+        ON grupo_uti.FK_UTILIZADOR = uti.PK_UTILIZADOR
+      LEFT JOIN FK2_TB_CAIXAS caixas
+        ON caixas.OPERADOR_ID = uti.PK_UTILIZADOR
+        AND caixas.DELETED_AT IS NULL
+      WHERE grupo_uti.FK_GRUPO IN (14, 9)
+      AND caixas.OPERADOR_ID IS NULL
+      AND (
+        LOWER(uti.NOME) LIKE LOWER(:1)
+        OR TO_CHAR(uti.PK_UTILIZADOR) LIKE :2
+      )
+      ORDER BY uti.NOME
+      OFFSET :3 ROWS FETCH NEXT :4 ROWS ONLY
+      `,
+        [searchParam, searchParam, offset, limit],
+      ),
+
+      this.dataSource.query(
+        `
+      SELECT COUNT(*) AS TOTAL
+      FROM FK2_MCA_TB_UTILIZADOR uti
+      INNER JOIN FK2_MCA_TB_GRUPO_UTILIZADOR grupo_uti
+        ON grupo_uti.FK_UTILIZADOR = uti.PK_UTILIZADOR
+      LEFT JOIN FK2_TB_CAIXAS caixas
+        ON caixas.OPERADOR_ID = uti.PK_UTILIZADOR
+        AND caixas.DELETED_AT IS NULL
+      WHERE grupo_uti.FK_GRUPO IN (14, 9)
+      AND caixas.OPERADOR_ID IS NULL
+      AND (
+        LOWER(uti.NOME) LIKE LOWER(:1)
+        OR TO_CHAR(uti.PK_UTILIZADOR) LIKE :2
+      )
+      `,
+        [searchParam, searchParam],
+      ),
+    ]);
+
+    const total = Number(totalResult[0]?.TOTAL ?? 0);
+
+    return {
+      data: toLowerCaseKeys(utilizadores),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   private validateCashRegisterAvailability(cashRegister: CashRegister) {

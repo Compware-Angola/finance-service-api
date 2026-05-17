@@ -25,9 +25,11 @@ import { HttpService } from '@nestjs/axios';
 import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
 import { OpenCashRegisterDto } from './dto/open-cash-register.dto';
 import { CashRegisterSummaryService } from './cash-register-summary.service';
+import { ListUtilizadorDto } from '../utilizadores/dto/list-utilizador.dto';
+import { ListOperatorsDto } from './dto/list-operators.dto';
 @ApiTags('caixas')
 @Controller('caixas')
-@UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+// @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
 export class CashRegistersController {
   constructor(
     private readonly cashRegistersService: CashRegistersService,
@@ -41,6 +43,12 @@ export class CashRegistersController {
       data: await this.cashRegistersService.findAll(query),
     };
   }
+
+  @Get('operators/available')
+  async listAvailableOperators(@Query() query: ListOperatorsDto) {
+    return await this.cashRegistersService.listAvailableOperators(query);
+  }
+
   @Get('me')
   async findMyOpenCashRegister(@Req() req: any) {
     return {
@@ -54,6 +62,7 @@ export class CashRegistersController {
       data: await this.summaryService.getMySummary(req.user.sub),
     };
   }
+
   @Get('disponiveis')
   async findAvailableForOpening(
     @Query()

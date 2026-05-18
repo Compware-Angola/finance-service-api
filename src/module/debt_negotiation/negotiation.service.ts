@@ -30,12 +30,30 @@ export class NegotiationService {
 
         // ====================== FILTRO DE ANO LECTIVO ======================
         const filtroAnoLectivo = codAnoLectivo
-            ? `AND mt.ano_lectivo = :codAnoLectivo`
+            ? `AND mt.ano_lectivo = :codAnoLectivo
+     AND NOT EXISTS (
+        SELECT 1
+        FROM fk2_tb_confirmacoes cf
+        INNER JOIN fk2_tb_ano_lectivo a
+          ON a.codigo = cf.CODIGO_ANO_LECTIVO
+        WHERE cf.codigo_matricula = :codigo_matricula
+          AND a.codigo = mt.ano_lectivo
+          AND TRIM(UPPER(a.estado)) = 'ACTIVO'
+     )`
             : `AND mt.ano_lectivo IN (
         SELECT DISTINCT cf.CODIGO_ANO_LECTIVO
         FROM fk2_tb_confirmacoes cf
         WHERE cf.codigo_matricula = :codigo_matricula
-      )`;
+     )
+     AND NOT EXISTS (
+        SELECT 1
+        FROM fk2_tb_confirmacoes cf
+        INNER JOIN fk2_tb_ano_lectivo a
+          ON a.codigo = cf.CODIGO_ANO_LECTIVO
+        WHERE cf.codigo_matricula = :codigo_matricula
+          AND a.codigo = mt.ano_lectivo
+          AND TRIM(UPPER(a.estado)) = 'ACTIVO'
+     )`;
 
         const params: any = codAnoLectivo
             ? { codigo_matricula, codAnoLectivo }

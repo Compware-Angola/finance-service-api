@@ -485,25 +485,46 @@ export class MonthlyFeesDiscountUtilService {
       )
   `
       : `
-  SELECT
-  DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
-  SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
+SELECT
+    DATA_LIMITE,
+    DATA_FINAL,
+    DATA_INICIAL,
+    SEMESTRE,
+    ID,
+    DESIGNACAO,
+    PRESTACAO,
+    ANO_LECTIVO
 FROM fk2_mes_temp tp
 WHERE tp.activo = 1
+
+  -- Apenas anos lectivos confirmados
   AND tp.ano_lectivo IN (
-    -- Apenas anos lectivos onde o aluno tem confirmação
-    SELECT DISTINCT cf.CODIGO_ANO_LECTIVO
-    FROM fk2_tb_confirmacoes cf
-    WHERE cf.codigo_matricula = :codigo_matricula
+      SELECT DISTINCT cf.CODIGO_ANO_LECTIVO
+      FROM fk2_tb_confirmacoes cf
+      WHERE cf.codigo_matricula = :codigo_matricula
   )
+
+  -- NÃO trazer se existir ano lectivo activo
+  AND NOT EXISTS (
+      SELECT 1
+      FROM fk2_tb_confirmacoes cf
+      INNER JOIN fk2_tb_ano_lectivo a
+          ON a.codigo = cf.CODIGO_ANO_LECTIVO
+      WHERE cf.codigo_matricula = :codigo_matricula
+        AND TRIM(UPPER(a.estado)) = 'ACTIVO'
+        AND a.codigo = tp.ano_lectivo
+  )
+
   AND tp.id NOT IN (
-    SELECT it.mes_temp_id
-    FROM fk2_factura ft
-    INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
-    INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
-    WHERE ft.codigomatricula = :codigo_matricula
-      AND it.mes_temp_id IS NOT NULL
-      AND ft.estado != 3
+      SELECT it.mes_temp_id
+      FROM fk2_factura ft
+      INNER JOIN fk2_factura_items it
+          ON ft.codigo = it.codigofactura
+      INNER JOIN fk2_mes_temp mt
+          ON mt.id = it.mes_temp_id
+      WHERE ft.codigomatricula = :codigo_matricula
+        AND it.mes_temp_id IS NOT NULL
+        AND ft.estado != 3
   )
   `;
 

@@ -429,7 +429,7 @@ export class MonthlyFeesDiscountUtilService {
       total_preco: mensalidade.preco,
       status_pagamento: statusPagamento,
       data_operacao: null,
-      data_pagamento: null,
+      data_pagamento: null
     };
   }
 

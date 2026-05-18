@@ -57,7 +57,7 @@ export class MonthlyFeesService {
         'mt.prestacao', // usado no order by
 
         'fi.codigo AS "id_item"',
-        'fi.CodigoProduto AS "id_tipo_servico"',
+        'fi.CodigoProduto AS "codigo_servico"',
         'ts.Descricao AS "descricao_servico"',
         'ts.TipoServico AS "tipo_servico"',
 

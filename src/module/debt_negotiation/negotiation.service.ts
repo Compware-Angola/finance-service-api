@@ -45,7 +45,7 @@ export class NegotiationService {
       SELECT 1
       FROM fk2_tb_ano_lectivo a
       WHERE a.codigo = mt.ano_lectivo
-        AND TRIM(UPPER(a.estado)) = 'ACTIVO'
+       AND TRIM(UPPER(a.estado)) = 'ACTIVO'
   )
 `;
 
@@ -112,6 +112,7 @@ export class NegotiationService {
             codigo_matricula,
             status: 'pending',
         });
+        console.log(generated);
 
         const data = [...results, ...generated];
         const recorrencias = await this.mapRecorrenciasAdicionais(

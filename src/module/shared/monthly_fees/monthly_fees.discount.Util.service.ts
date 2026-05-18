@@ -497,22 +497,15 @@ SELECT
 FROM fk2_mes_temp tp
 WHERE tp.activo = 1
 
-  -- Apenas anos lectivos confirmados
-  AND tp.ano_lectivo IN (
-      SELECT DISTINCT cf.CODIGO_ANO_LECTIVO
-      FROM fk2_tb_confirmacoes cf
-      WHERE cf.codigo_matricula = :codigo_matricula
-  )
-
-  -- NÃO trazer se existir ano lectivo activo
-  AND NOT EXISTS (
+  -- Apenas anos lectivos confirmados e não activos
+  AND EXISTS (
       SELECT 1
       FROM fk2_tb_confirmacoes cf
       INNER JOIN fk2_tb_ano_lectivo a
           ON a.codigo = cf.CODIGO_ANO_LECTIVO
       WHERE cf.codigo_matricula = :codigo_matricula
-        AND TRIM(UPPER(a.estado)) = 'ACTIVO'
-        AND a.codigo = tp.ano_lectivo
+        AND cf.CODIGO_ANO_LECTIVO = tp.ano_lectivo
+        AND TRIM(UPPER(a.estado)) != 'ACTIVO'
   )
 
   AND tp.id NOT IN (

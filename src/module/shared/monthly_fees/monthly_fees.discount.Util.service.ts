@@ -149,7 +149,7 @@ export class MonthlyFeesDiscountUtilService {
         ON de.ESTADO = 1
        AND TO_DATE(:dataStr, 'YYYY-MM-DD') BETWEEN de.DATA_INICIO AND de.DATA_FIM
       WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324' AND a.anolectivo = 21)
-         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB')
+         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB' and a.anolectivo >= 23 )
       FETCH FIRST 1 ROW ONLY
     `;
 

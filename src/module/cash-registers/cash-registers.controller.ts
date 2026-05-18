@@ -14,12 +14,16 @@ import { CashRegistersService } from './cash-registers.service';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
 
-import { ListCashRegistersDto } from './dto/list-cash-registers.dto';
+import {
+  ListCashRegistersDto,
+  ListCashRegistersForOpeningDto,
+} from './dto/list-cash-registers.dto';
 import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
 import { PermissionsGuard } from 'src/common/secret/permissions.guard';
 import { ApiTags } from '@nestjs/swagger';
 import { HttpService } from '@nestjs/axios';
 import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
+import { OpenCashRegisterDto } from './dto/open-cash-register.dto';
 @ApiTags('caixas')
 @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
 @Controller('caixas')
@@ -46,6 +50,16 @@ export class CashRegistersController {
   async findAll(@Query() query: ListCashRegistersDto) {
     return { data: await this.service.findAll(query) };
   }
+
+  @Get('disponiveis')
+  async avaliableCashRegistersForOpening(
+    @Query() query: ListCashRegistersForOpeningDto,
+  ) {
+    return {
+      data: await this.service.avaliableCashRegistersForOpening(query.search),
+    };
+  }
+
   @Get('meu-caixa')
   async findByOperatorId(@Req() req: any) {
     console.log(req.user);
@@ -92,20 +106,31 @@ export class CashRegistersController {
     return { data: cashRegister };
   }
 
-  @Patch(':id/open/')
-  async open(@Param('id') id: string, @Req() req: any) {
+  @Patch(':id/open')
+  async open(
+    @Param('id') id: string,
+    @Body() body: OpenCashRegisterDto,
+    @Req() req: any,
+  ) {
     const user = req.user;
+
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.openCashRegister(
-      Number(id),
-      user?.sub,
-    );
+
+    const cashRegister = await this.service.openCashRegister({
+      id: Number(id),
+      operatorId: user?.sub,
+      openingAmount: body?.openingAmount ?? 0,
+    });
+
     AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} abriu o caixa com código ${id}`,
       fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
+      ip,
     });
-    return { data: cashRegister };
+
+    return {
+      data: cashRegister,
+    };
   }
 
   @Patch(':id/close')

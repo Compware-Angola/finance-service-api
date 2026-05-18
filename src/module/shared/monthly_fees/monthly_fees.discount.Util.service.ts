@@ -526,7 +526,6 @@ WHERE tp.activo = 1
     const pagamentos: any[] = [];
 
     for (const mesTemp of mesTemps) {
-      console.log(mesTemp);
 
       const anoLectivoEfetivo = codAnoLectivo ?? mesTemp.ano_lectivo;
 

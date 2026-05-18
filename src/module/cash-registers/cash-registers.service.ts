@@ -21,7 +21,6 @@ import { randomInt } from 'crypto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { ListOperatorsDto } from './dto/list-operators.dto';
 import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
-import { ValidateMovementDto } from './dto/validate-movement.dto';
 
 type ValidateMovementParams = {
   id: number;

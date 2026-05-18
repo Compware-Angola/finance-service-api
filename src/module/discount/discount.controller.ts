@@ -63,7 +63,7 @@ export class DiscountController {
     return this.discountService.update(id, updateDto);
   }
 
-  @Patch(':id')
+  @Patch('add/:id')
   @ApiOperation({
     summary: 'Atualizar um desconto',
   })

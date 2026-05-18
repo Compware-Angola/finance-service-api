@@ -30,6 +30,7 @@ export interface MesTempResponse {
   id: number;
   designacao: string;
   prestacao: number;
+  ano_lectivo: number;
 }
 export interface BolseiroResult {
   bolseiro: boolean;

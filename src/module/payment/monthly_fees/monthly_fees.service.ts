@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PagedResult } from 'src/common/dto/pagination-result.dto';
 import { DataSource, Repository } from 'typeorm';
-import { MonthlyFeesFilterDto } from './dto/monthly-fees-filter.dto';
+import { MonthlyFeesFilterDto } from '../../shared/monthly_fees/dto/monthly-fees-filter.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MesTemp } from '../payment-references/entities/mes-temp.entity';
-import { MonthlyFeesStatisticFilterDto } from './dto/monthly-fees-statistic.dto';
-import { MonthlyFeesDiscountService } from './monthly_fees.discount.service';
+import { MonthlyFeesStatisticFilterDto } from '../../shared/monthly_fees/dto/monthly-fees-statistic.dto';
+import { MonthlyFeesDiscountUtilService } from 'src/module/shared/monthly_fees/monthly_fees.discount.Util.service';
 
 @Injectable()
 export class MonthlyFeesService {
@@ -13,7 +13,7 @@ export class MonthlyFeesService {
     private dataSource: DataSource,
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
 
-    private readonly monthlyFeeDiscount: MonthlyFeesDiscountService,
+    private readonly monthlyFeeDiscount: MonthlyFeesDiscountUtilService,
   ) { }
 
   async findMonthlyFees(
@@ -109,7 +109,7 @@ export class MonthlyFeesService {
       .getRawOne()
       .then((r) => Number(r?.total || 0));
 
-    const totalPages = Math.ceil(total / limit);
+
 
     // ====================== DADOS ======================
     const results = await qb

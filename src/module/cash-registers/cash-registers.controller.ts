@@ -95,12 +95,13 @@ export class CashRegistersController {
   async close(@Param('id') id: string, @Req() req: any) {
     const user = req.user;
 
-    await this.cashRegistersService.close(Number(id), user.sub);
-
+    const response = await this.cashRegistersService.close(
+      Number(id),
+      user.sub,
+    );
     this.log(req, user, `fechou o caixa ${id}`);
-
     return {
-      message: 'Caixa fechado com sucesso',
+      data: response,
     };
   }
   @Post('me/verify-opening-code')

@@ -43,7 +43,7 @@ export class CashRegisterSummaryService {
     ON forma_pagamento.CODIGO = pagamentos.FORMA_PAGAMENTO
   WHERE pagamentos.FK_UTILIZADOR = :1
     AND pagamentos.CAIXA_ID      = :2
-    AND pagamentos.ESTADO        = 2
+    AND pagamentos.STATUS_PAGAMENTO   = 'concluido'
     AND pagamentos.CREATED_AT   >= :3
   GROUP BY
     forma_pagamento.CODIGO,
@@ -58,6 +58,7 @@ export class CashRegisterSummaryService {
     return {
       summary,
       openingAmount: cashRegister.openingAmount ?? 0,
+      movementID: cashRegister.id,
     };
   }
 

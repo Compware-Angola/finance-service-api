@@ -164,11 +164,11 @@ export class CashRegistersService {
         collectedDepositAmount: 0,
         collectedPaymentAmount: 0,
         invoicedPaymentAmount: 0,
-
+        collectedTpaAmount: 0,
+        createdBy: adminId,
         status: CashRegisterStatus.OPEN,
         finalStatus: 'pendente',
         adminStatus: 'pendente',
-
         dateAt: new Date(),
         createdAt: new Date(),
       });
@@ -262,7 +262,7 @@ export class CashRegistersService {
       operatorCashRegister.code = null as any;
       await movementRepository.save(movement);
       await cashRegisterRepository.save(operatorCashRegister);
-      return cashRegister;
+      return movement;
     });
   }
 

@@ -14,7 +14,7 @@ import { formatDisplay } from 'src/module/util/format-date';
 import { TestMonthlyDTO } from './dto/test-monthly.dto';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -387,7 +387,13 @@ export class MonthlyFeesDiscountUtilService {
     // Se for Bolseiro sem Multa nao deve calcular mas a Multa
 
     let percentagemMulta = 0;
-    if (!bolseiroInfo.isentar_multa) {
+    const temMesesSemMulta = await this.obterMesesSemMulta(
+      mesTemp.ano_lectivo,
+      mesTemp.id,
+    );
+
+
+    if (!bolseiroInfo.isentar_multa && !temMesesSemMulta) {
       percentagemMulta = await this.calcularPercentagemMulta(
         codigoMatricula,
         mesTemp,
@@ -396,7 +402,7 @@ export class MonthlyFeesDiscountUtilService {
     }
     const multa = mensalidadeComDesconto * percentagemMulta;
     const valorFinal = mensalidadeComDesconto + multa;
-    const valorPago = isBolseiroIntegral ? mensalidade : 0;
+    const valorPago = isBolseiroIntegral ? mensalidade.preco : 0;
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,
@@ -425,6 +431,24 @@ export class MonthlyFeesDiscountUtilService {
       data_operacao: null,
       data_pagamento: null,
     };
+  }
+
+  private async obterMesesSemMulta(anoLectivo: number, mesTempId: number): Promise<boolean> {
+    const sql = `
+    SELECT COUNT(*) AS TOTAL
+    FROM FK2_TB_MESES_SEM_MULTA TSM
+    WHERE TSM.ANO_LECTIVO = :anoLectivo
+      AND TSM.MES_TEMP_ID = :mesTempId
+      AND TSM.ESTADO = 1
+  `;
+
+    const result = await this.dataSource.query(sql, {
+      anoLectivo,
+      mesTempId,
+    } as any);
+
+    const total = Number(result[0]?.TOTAL ?? 0);
+    return total > 0;
   }
 
   // ====================== MÉTODO PRINCIPAL ======================
@@ -502,7 +526,6 @@ WHERE tp.activo = 1
     const pagamentos: any[] = [];
 
     for (const mesTemp of mesTemps) {
-      console.log(mesTemp);
 
       const anoLectivoEfetivo = codAnoLectivo ?? mesTemp.ano_lectivo;
 

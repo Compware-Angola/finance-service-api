@@ -5,30 +5,37 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-
 import { Brackets, DataSource, IsNull, Repository } from 'typeorm';
-
 import { CashRegister } from './entities/cash-register.entity';
 import { CashRegisterMovement } from './entities/cash-register-movement.entity';
-
 import { ListCashRegistersDto } from './dto/list-cash-registers.dto';
-
 import { OpenCashRegisterParams } from './types';
-
 import {
+  AdminStatus,
   CashRegisterStatus,
+  FinalStatus,
   PaymentMethod,
   YesNo,
 } from './enums/cash-register-status.enum';
 import { randomInt } from 'crypto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { ListOperatorsDto } from './dto/list-operators.dto';
+import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
+import { ValidateMovementDto } from './dto/validate-movement.dto';
+
+type ValidateMovementParams = {
+  id: number;
+  action: 'approved' | 'rejected';
+  reason?: string;
+};
 
 @Injectable()
 export class CashRegistersService {
   constructor(
     @InjectRepository(CashRegister)
     private readonly cashRegisterRepository: Repository<CashRegister>,
+    @InjectRepository(CashRegisterMovement)
+    private readonly cashRegisterMovementRepository: Repository<CashRegisterMovement>,
 
     private readonly dataSource: DataSource,
   ) {}
@@ -424,6 +431,156 @@ export class CashRegistersService {
       totalCash: Number(result[0]?.TOTAL_CASH || 0),
       totalCard: Number(result[0]?.TOTAL_CARD || 0),
     };
+  }
+
+  async findMovements(filters?: ListCashRegisterMovementsDto) {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      cashRegisterId,
+      operatorId,
+      startDate,
+      endDate,
+    } = filters || {};
+
+    const offset = (page - 1) * limit;
+
+    const queryBuilder = this.dataSource
+      .createQueryBuilder()
+      .select([
+        'C.CODIGO AS code',
+        'C.CAIXA_ID AS cash_register_id',
+        'CA.NOME AS cash_register_name',
+        'C.OPERADOR_ID AS operator_id',
+        'C.VALOR_ABERTURA AS opening_amount',
+        'C.VALOR_ARRECADADO_TOTAL AS total_collected_amount',
+        'C.VALOR_ARRECADADO_DEPOSITOS AS collected_deposit_amount',
+        'C.VALOR_ARRECADADO_TPA AS collected_tpa_amount',
+        'C.VALOR_ARRECADADO_PAGAMENTO AS collected_payment_amount',
+        'C.VALOR_FACTURADO_PAGAMENTO AS invoiced_payment_amount',
+        'C.STATUS_ AS status',
+        'C.STATUS_FINAL AS final_status',
+        'C.STATUS_ADMIN AS admin_status',
+        'C.OBSERVACAO AS observation',
+        'C.DATA_AT AS date_at',
+        'C.DATA_FECHO AS closing_date',
+        'C.DATA_VALIDACAO AS validation_date',
+        'UTI.PK_UTILIZADOR AS operator_code',
+        'UTI.NOME AS operator_name',
+        'C.CREATED_AT AS created_at',
+        'C.UPDATED_AT AS updated_at',
+      ])
+      .from('FK2_TB_MOVIMENTOS_CAIXAS', 'C')
+      .leftJoin(
+        'FK2_MCA_TB_UTILIZADOR',
+        'UTI',
+        'UTI.PK_UTILIZADOR = C.OPERADOR_ID',
+      )
+      .leftJoin('FK2_TB_CAIXAS', 'CA', 'CA.CODIGO = C.CAIXA_ID')
+      .where('C.DELETED_AT IS NULL');
+
+    if (filters?.search?.trim()) {
+      const search = `%${filters.search.trim().toUpperCase()}%`;
+      queryBuilder.andWhere(
+        new Brackets((qb) => {
+          qb.where('UPPER(CA.NOME) LIKE UPPER(:search)', { search })
+            .orWhere('UPPER(UTI.NOME) LIKE UPPER(:search)', { search })
+            .orWhere('UPPER(C.STATUS_) LIKE UPPER(:search)', { search });
+        }),
+      );
+    }
+
+    if (status) {
+      queryBuilder.andWhere('C.STATUS_ = :status', { status });
+    }
+
+    if (cashRegisterId) {
+      queryBuilder.andWhere('C.CAIXA_ID = :cashRegisterId', { cashRegisterId });
+    }
+
+    if (operatorId) {
+      queryBuilder.andWhere('C.OPERADOR_ID = :operatorId', { operatorId });
+    }
+
+    if (startDate) {
+      queryBuilder.andWhere('C.DATA_AT >= :startDate', { startDate });
+    }
+
+    if (endDate) {
+      const endDateObj = new Date(endDate);
+      endDateObj.setDate(endDateObj.getDate() + 1);
+      const endDatePlusOne = endDateObj.toISOString().split('T')[0];
+      queryBuilder.andWhere('C.DATA_AT < :endDate', {
+        endDate: endDatePlusOne,
+      });
+    }
+
+    if (filters?.startDate && filters?.endDate) {
+      const startDateTime = new Date(filters.startDate);
+      startDateTime.setHours(0, 0, 0, 0);
+
+      const endDateTime = new Date(filters.endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+
+      queryBuilder.andWhere(
+        'C.DATA_AT BETWEEN :startDateTime AND :endDateTime',
+        {
+          startDateTime: startDateTime.toISOString(),
+          endDateTime: endDateTime.toISOString(),
+        },
+      );
+    }
+
+    const countQueryBuilder = queryBuilder.clone();
+
+    queryBuilder.orderBy('C.CODIGO', 'DESC').offset(offset).limit(limit);
+
+    const [results, totalResult] = await Promise.all([
+      queryBuilder.getRawMany(),
+      countQueryBuilder.select('COUNT(*) AS TOTAL').getRawOne(),
+    ]);
+
+    const total = parseInt(totalResult?.TOTAL || '0', 10);
+
+    return {
+      data: toLowerCaseKeys(results),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async validateMovement(params: ValidateMovementParams) {
+    const { id, action, reason } = params;
+
+    const movement = await this.cashRegisterMovementRepository.findOne({
+      where: { id },
+    });
+
+    if (!movement) {
+      throw new BadRequestException('Movimento não encontrado');
+    }
+
+    if (movement.status !== CashRegisterStatus.CLOSED) {
+      throw new BadRequestException(
+        'Apenas movimentos fechados podem ser validados',
+      );
+    }
+    movement.validationDate = new Date();
+    if (action === 'approved') {
+      movement.adminStatus = AdminStatus.VALIDATED;
+      movement.finalStatus = FinalStatus.COMPLETE;
+    } else {
+      movement.adminStatus = AdminStatus.NOT_VALIDATED;
+      movement.finalStatus = FinalStatus.PENDING;
+      movement.observation = reason || 'Movimento rejeitado';
+    }
+
+    return await this.cashRegisterMovementRepository.save(movement);
   }
 }
 

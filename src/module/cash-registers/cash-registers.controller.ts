@@ -25,6 +25,8 @@ import { OpenCashRegisterDto } from './dto/open-cash-register.dto';
 import { CashRegisterSummaryService } from './cash-register-summary.service';
 import { ListOperatorsDto } from './dto/list-operators.dto';
 import { VerifyMyCashRegisterDto } from './dto/verify-my-cash-register.dto';
+import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
+import { ValidateMovementDto } from './dto/validate-movement.dto';
 @ApiTags('caixas')
 @Controller('cash-registers')
 @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
@@ -38,6 +40,24 @@ export class CashRegistersController {
   @Get()
   async findAll(@Query() query: ListCashRegistersDto) {
     return await this.cashRegistersService.findAll(query);
+  }
+  @Get('movements')
+  async findMovements(@Query() query: ListCashRegisterMovementsDto) {
+    return await this.cashRegistersService.findMovements(query);
+  }
+
+  @Patch('/movements/:id/validate')
+  async validate(
+    @Param('id') id: string,
+    @Body() body: ValidateMovementDto,
+    @Req() req: any,
+  ) {
+    await this.cashRegistersService.validateMovement({
+      id: Number(id),
+      ...body,
+    });
+    this.log(req, req.user, 'validou o fechamento de caixa');
+    return { message: 'fechamento de caixa validado com sucesso' };
   }
 
   @Get('operators/available')

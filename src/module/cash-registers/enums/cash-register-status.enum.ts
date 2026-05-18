@@ -16,3 +16,15 @@ export enum PaymentMethod {
   REFERENCE = 5,
   CASH = 6,
 }
+
+export enum AdminStatus {
+  VALIDATED = 'validado',
+  NOT_VALIDATED = 'nao validado',
+  PENDING = 'pendente',
+}
+
+export enum FinalStatus {
+  CLOSED = 'fechado',
+  PENDING = 'pendente',
+  COMPLETE = 'concluido',
+}

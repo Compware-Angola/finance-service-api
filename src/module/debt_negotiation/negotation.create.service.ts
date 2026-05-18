@@ -85,7 +85,7 @@ export class CreateDebtNegotiationService {
         },
       });
 
-      if (!negociacaoExistente) {
+      if (negociacaoExistente) {
         throw new BadRequestException(
           `Aluno ${aluno.matricula} já possui negociação no ano letivo ${anoLectivo.Designacao}`,
         );

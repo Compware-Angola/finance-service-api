@@ -22,6 +22,8 @@ export class NegotiationService {
             codigo_matricula,
             codAnoLectivo
         } = paginationQuery;
+        console.log(codAnoLectivo);
+
 
         if (!codigo_matricula) return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0 };
         const aluno = await this.obterDadosCompletosAluno(codigo_matricula);
@@ -29,31 +31,23 @@ export class NegotiationService {
 
 
         // ====================== FILTRO DE ANO LECTIVO ======================
-        const filtroAnoLectivo = codAnoLectivo
-            ? `AND mt.ano_lectivo = :codAnoLectivo
-     AND NOT EXISTS (
-        SELECT 1
-        FROM fk2_tb_confirmacoes cf
-        INNER JOIN fk2_tb_ano_lectivo a
-          ON a.codigo = cf.CODIGO_ANO_LECTIVO
-        WHERE cf.codigo_matricula = :codigo_matricula
-          AND a.codigo = mt.ano_lectivo
-          AND TRIM(UPPER(a.estado)) = 'ACTIVO'
-     )`
-            : `AND mt.ano_lectivo IN (
-        SELECT DISTINCT cf.CODIGO_ANO_LECTIVO
-        FROM fk2_tb_confirmacoes cf
-        WHERE cf.codigo_matricula = :codigo_matricula
-     )
-     AND NOT EXISTS (
-        SELECT 1
-        FROM fk2_tb_confirmacoes cf
-        INNER JOIN fk2_tb_ano_lectivo a
-          ON a.codigo = cf.CODIGO_ANO_LECTIVO
-        WHERE cf.codigo_matricula = :codigo_matricula
-          AND a.codigo = mt.ano_lectivo
-          AND TRIM(UPPER(a.estado)) = 'ACTIVO'
-     )`;
+        const filtroAnoLectivo = `
+  ${codAnoLectivo
+                ? `AND mt.ano_lectivo = :codAnoLectivo`
+                : `AND mt.ano_lectivo IN (
+            SELECT DISTINCT cf.CODIGO_ANO_LECTIVO
+            FROM fk2_tb_confirmacoes cf
+            WHERE cf.codigo_matricula = :codigo_matricula
+        )`
+            }
+
+  AND NOT EXISTS (
+      SELECT 1
+      FROM fk2_tb_ano_lectivo a
+      WHERE a.codigo = mt.ano_lectivo
+        AND TRIM(UPPER(a.estado)) = 'ACTIVO'
+  )
+`;
 
         const params: any = codAnoLectivo
             ? { codigo_matricula, codAnoLectivo }

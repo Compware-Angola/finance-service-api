@@ -55,7 +55,7 @@ export class NegotiationService {
       mt.semestre                                   AS semestre,
       mt.data_final_desconto                        AS data_final_desconto,
       fi.codigo                                     AS id_item,
-      fi.CodigoProduto                              AS id_tipo_servico,
+      fi.CodigoProduto                              AS codigo_servico,
       ts.Descricao                                  AS descricao_servico,
       ts.TipoServico                                AS tipo_servico,
       NVL(fi.preco, ts.Preco)                       AS mensalidade,

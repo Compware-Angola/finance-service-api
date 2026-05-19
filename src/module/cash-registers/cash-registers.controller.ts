@@ -11,113 +11,138 @@ import {
   Req,
 } from '@nestjs/common';
 import { CashRegistersService } from './cash-registers.service';
-import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
-import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
 
-import { ListCashRegistersDto } from './dto/list-cash-registers.dto';
+import {
+  ListCashRegistersDto,
+  ListCashRegistersForOpeningDto,
+} from './dto/list-cash-registers.dto';
 import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
 import { PermissionsGuard } from 'src/common/secret/permissions.guard';
 import { ApiTags } from '@nestjs/swagger';
 import { HttpService } from '@nestjs/axios';
 import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
+import { OpenCashRegisterDto } from './dto/open-cash-register.dto';
+import { CashRegisterSummaryService } from './cash-register-summary.service';
+import { ListOperatorsDto } from './dto/list-operators.dto';
+import { VerifyMyCashRegisterDto } from './dto/verify-my-cash-register.dto';
+import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
+import { ValidateMovementDto } from './dto/validate-movement.dto';
 @ApiTags('caixas')
+@Controller('cash-registers')
 @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
-@Controller('caixas')
 export class CashRegistersController {
   constructor(
-    private readonly service: CashRegistersService,
-    private httpService: HttpService,
+    private readonly cashRegistersService: CashRegistersService,
+    private readonly summaryService: CashRegisterSummaryService,
+    private readonly httpService: HttpService,
   ) {}
-
-  @Post()
-  async create(@Body() body: CreateCashRegisterDto, @Req() req: any) {
-    const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.create(body);
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} criou um caixa`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
-    });
-    return { data: cashRegister };
-  }
 
   @Get()
   async findAll(@Query() query: ListCashRegistersDto) {
-    return { data: await this.service.findAll(query) };
+    return await this.cashRegistersService.findAll(query);
   }
-  @Get('meu-caixa')
-  async findByOperatorId(@Req() req: any) {
-    console.log(req.user);
-    const user = req.user;
-    const cashRegister = await this.service.findCashRegisterOpenByOperatorId(
-      user?.sub,
-    );
-    return { data: cashRegister };
+  @Get('movements')
+  async findMovements(@Query() query: ListCashRegisterMovementsDto) {
+    return await this.cashRegistersService.findMovements(query);
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const cashRegister = await this.service.findOne(Number(id));
-    return { data: cashRegister };
-  }
-
-  @Patch(':id')
-  async update(
+  @Patch('/movements/:id/validate')
+  async validate(
     @Param('id') id: string,
-    @Body() body: UpdateCashRegisterDto,
+    @Body() body: ValidateMovementDto,
+    @Req() req: any,
+  ) {
+    await this.cashRegistersService.validateMovement({
+      id: Number(id),
+      ...body,
+    });
+    this.log(req, req.user, 'validou o fechamento de caixa');
+    return { message: 'fechamento de caixa validado com sucesso' };
+  }
+
+  @Get('operators/available')
+  async listAvailableOperators(@Query() query: ListOperatorsDto) {
+    return await this.cashRegistersService.listAvailableOperators(query);
+  }
+
+  @Get('me')
+  async findMyOpenCashRegister(@Req() req: any) {
+    return {
+      data: await this.cashRegistersService.findOpenByOperatorId(req.user.sub),
+    };
+  }
+  @Get('me/summary')
+  async getMySummary(@Req() req: any) {
+    console.log(req.user);
+    return {
+      data: await this.summaryService.getMySummary(req.user.sub),
+    };
+  }
+
+  @Get('available')
+  async findAvailableForOpening(
+    @Query()
+    query: ListCashRegistersForOpeningDto,
+  ) {
+    return {
+      data: await this.cashRegistersService.findAvailableForOpening(
+        query.search,
+      ),
+    };
+  }
+
+  @Patch(':id/open')
+  async open(
+    @Param('id') id: string,
+    @Body() body: OpenCashRegisterDto,
     @Req() req: any,
   ) {
     const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.update(Number(id), body);
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} atualizou o caixa com código ${id}`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
-    });
-    return { data: cashRegister };
-  }
 
-  @Delete(':id')
-  async remove(@Param('id') id: string, @Req() req: any) {
-    const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.remove(Number(id));
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} removeu o caixa com código ${id}`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
+    const cashRegister = await this.cashRegistersService.open({
+      id: Number(id),
+      operatorId: body.operatorId,
+      openingAmount: body.openingAmount ?? 0,
+      adminId: user.sub,
     });
-    return { data: cashRegister };
-  }
 
-  @Patch(':id/open/')
-  async open(@Param('id') id: string, @Req() req: any) {
-    const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    const cashRegister = await this.service.openCashRegister(
-      Number(id),
-      user?.sub,
-    );
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} abriu o caixa com código ${id}`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
-    });
-    return { data: cashRegister };
+    return {
+      data: cashRegister,
+    };
   }
 
   @Patch(':id/close')
   async close(@Param('id') id: string, @Req() req: any) {
     const user = req.user;
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    await this.service.closeCashRegister(Number(id), user?.sub);
-    AccessLogHelper.logAccess(this.httpService, {
-      descricao: `Utilizador ${user?.nome} fechou o caixa com código ${id}`,
-      fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
+
+    const response = await this.cashRegistersService.close(
+      Number(id),
+      user.sub,
+    );
+    this.log(req, user, `fechou o caixa ${id}`);
+    return {
+      data: response,
+    };
+  }
+  @Post('me/verify-opening-code')
+  async verifyMyCashRegister(
+    @Req() req: any,
+    @Body() body: VerifyMyCashRegisterDto,
+  ) {
+    const user = req.user;
+    return await this.cashRegistersService.verifyMyCashRegister({
+      openingCode: body.openingCode,
+      operatorId: user.sub,
     });
-    return { message: 'Caixa fechado com sucesso' };
+  }
+
+  private log(req: any, user: any, descricao: string) {
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+
+    AccessLogHelper.logAccess(this.httpService, {
+      descricao: `Utilizador ${user?.nome} ${descricao}`,
+      fkUtilizadorResponsavel: user?.sub,
+      ip,
+    });
   }
 }

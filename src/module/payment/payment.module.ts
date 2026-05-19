@@ -12,6 +12,9 @@ import { AnoLectivoUtil } from '../util/current-academic-year';
 import { HttpModule } from '@nestjs/axios/dist/http.module';
 import { Payment2 } from './entities/payment2.entity';
 import { EstatisticasService } from './estatisticas.service';
+import { CashRegister } from '../cash-registers/entities/cash-register.entity';
+import { CashRegisterMovement } from '../cash-registers/entities/cash-register-movement.entity';
+import { CashRegistersService } from '../cash-registers/cash-registers.service';
 
 @Module({
   imports: [
@@ -25,12 +28,19 @@ import { EstatisticasService } from './estatisticas.service';
       InvoiceItem,
       MesTemp,
       AcademicYear,
+      CashRegister,
+      CashRegisterMovement,
     ]),
     MonthlyFeesModule,
     InvoiceModule,
   ],
   controllers: [PaymentController],
-  providers: [PaymentService, AnoLectivoUtil, EstatisticasService],
+  providers: [
+    PaymentService,
+    AnoLectivoUtil,
+    EstatisticasService,
+    CashRegistersService,
+  ],
   exports: [PaymentService],
 })
 export class PaymentModule {}

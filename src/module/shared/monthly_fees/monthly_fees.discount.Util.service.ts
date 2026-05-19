@@ -149,7 +149,7 @@ export class MonthlyFeesDiscountUtilService {
         ON de.ESTADO = 1
        AND TO_DATE(:dataStr, 'YYYY-MM-DD') BETWEEN de.DATA_INICIO AND de.DATA_FIM
       WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324' AND a.anolectivo = 21)
-         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB')
+         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB' and a.anolectivo >= 23 )
       FETCH FIRST 1 ROW ONLY
     `;
 
@@ -334,11 +334,11 @@ export class MonthlyFeesDiscountUtilService {
   }
 
   private async obterStatusPagamento(
-    isBolseiroIntegral: boolean,
+    isPago: boolean,
     codigoMatricula: number,
     mesTempId: number,
   ): Promise<number> {
-    if (isBolseiroIntegral) return 1;
+    if (isPago) return 1;
 
     const temIsencao = await this.existIsencaoMensalidade(
       codigoMatricula,
@@ -375,8 +375,13 @@ export class MonthlyFeesDiscountUtilService {
     });
 
     const isBolseiroIntegral = bolseiroInfo.desconto === 1;
+    const isDescontoTotal = percentagemDesconto === 1;
+    const isPago = isBolseiroIntegral || isDescontoTotal;
+
+
+
     const statusPagamento = await this.obterStatusPagamento(
-      isBolseiroIntegral,
+      isPago,
       codigoMatricula,
       mesTemp.id,
     );
@@ -384,21 +389,24 @@ export class MonthlyFeesDiscountUtilService {
     const descontoValor = mensalidade.preco * percentagemDesconto;
     const mensalidadeComDesconto = mensalidade.preco - descontoValor;
 
-    // Se for Bolseiro sem Multa nao deve calcular mas a Multa
-
     let percentagemMulta = 0;
-    /*
-    if (!bolseiroInfo.isentar_multa) {
+    const temMesesSemMulta = await this.obterMesesSemMulta(
+      mesTemp.ano_lectivo,
+      mesTemp.id,
+    );
+
+    if (!bolseiroInfo.isentar_multa && !temMesesSemMulta && !isDescontoTotal) {
       percentagemMulta = await this.calcularPercentagemMulta(
         codigoMatricula,
         mesTemp,
         periodosIsentos,
       );
     }
-    */
+
     const multa = mensalidadeComDesconto * percentagemMulta;
     const valorFinal = mensalidadeComDesconto + multa;
-    const valorPago = isBolseiroIntegral ? mensalidade.preco : 0;
+    const valorPago = isPago ? mensalidade.preco : 0;
+
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,
@@ -427,6 +435,24 @@ export class MonthlyFeesDiscountUtilService {
       data_operacao: null,
       data_pagamento: null,
     };
+  }
+
+  private async obterMesesSemMulta(anoLectivo: number, mesTempId: number): Promise<boolean> {
+    const sql = `
+    SELECT COUNT(*) AS TOTAL
+    FROM FK2_TB_MESES_SEM_MULTA TSM
+    WHERE TSM.ANO_LECTIVO = :anoLectivo
+      AND TSM.MES_TEMP_ID = :mesTempId
+      AND TSM.ESTADO = 1
+  `;
+
+    const result = await this.dataSource.query(sql, {
+      anoLectivo,
+      mesTempId,
+    } as any);
+
+    const total = Number(result[0]?.TOTAL ?? 0);
+    return total > 0;
   }
 
   // ====================== MÉTODO PRINCIPAL ======================
@@ -463,25 +489,39 @@ export class MonthlyFeesDiscountUtilService {
       )
   `
       : `
-  SELECT
-  DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
-  SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
+SELECT
+    DATA_LIMITE,
+    DATA_FINAL,
+    DATA_INICIAL,
+    SEMESTRE,
+    ID,
+    DESIGNACAO,
+    PRESTACAO,
+    ANO_LECTIVO
 FROM fk2_mes_temp tp
 WHERE tp.activo = 1
-  AND tp.ano_lectivo IN (
-    -- Apenas anos lectivos onde o aluno tem confirmação
-    SELECT DISTINCT cf.CODIGO_ANO_LECTIVO
-    FROM fk2_tb_confirmacoes cf
-    WHERE cf.codigo_matricula = :codigo_matricula
+
+  -- Apenas anos lectivos confirmados e não activos
+  AND EXISTS (
+      SELECT 1
+      FROM fk2_tb_confirmacoes cf
+      INNER JOIN fk2_tb_ano_lectivo a
+          ON a.codigo = cf.CODIGO_ANO_LECTIVO
+      WHERE cf.codigo_matricula = :codigo_matricula
+        AND cf.CODIGO_ANO_LECTIVO = tp.ano_lectivo
+        AND TRIM(UPPER(a.estado)) != 'ACTIVO'
   )
+
   AND tp.id NOT IN (
-    SELECT it.mes_temp_id
-    FROM fk2_factura ft
-    INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
-    INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
-    WHERE ft.codigomatricula = :codigo_matricula
-      AND it.mes_temp_id IS NOT NULL
-      AND ft.estado != 3
+      SELECT it.mes_temp_id
+      FROM fk2_factura ft
+      INNER JOIN fk2_factura_items it
+          ON ft.codigo = it.codigofactura
+      INNER JOIN fk2_mes_temp mt
+          ON mt.id = it.mes_temp_id
+      WHERE ft.codigomatricula = :codigo_matricula
+        AND it.mes_temp_id IS NOT NULL
+        AND ft.estado != 3
   )
   `;
 
@@ -504,7 +544,6 @@ WHERE tp.activo = 1
     const pagamentos: any[] = [];
 
     for (const mesTemp of mesTemps) {
-      console.log(mesTemp);
 
       const anoLectivoEfetivo = codAnoLectivo ?? mesTemp.ano_lectivo;
 

@@ -1,8 +1,27 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 import { IsIn, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class ListCashRegistersDto {
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Página',
+    default: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  page?: number;
+
+  @ApiPropertyOptional({
+    example: 10,
+    description: 'Itens por página',
+    default: 10,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  limit?: number;
+
   @ApiPropertyOptional({
     example: 'Caixa 1',
     description: 'Nome ou código do caixa',
@@ -44,4 +63,14 @@ export class ListCashRegistersDto {
   @IsOptional()
   @IsIn(['S', 'N'])
   blocked?: string;
+}
+
+export class ListCashRegistersForOpeningDto {
+  @ApiPropertyOptional({
+    example: 'Caixa 1',
+    description: 'Nome ou código do caixa',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

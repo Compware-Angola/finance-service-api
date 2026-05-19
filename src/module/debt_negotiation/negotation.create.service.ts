@@ -85,7 +85,7 @@ export class CreateDebtNegotiationService {
         },
       });
 
-      if (negociacaoExistente) {
+      if (!negociacaoExistente) {
         throw new BadRequestException(
           `Aluno ${aluno.matricula} já possui negociação no ano letivo ${anoLectivo.Designacao}`,
         );
@@ -97,14 +97,13 @@ export class CreateDebtNegotiationService {
       const todosItensDto = [...itensMensalidades, ...itensServicos];
 
       // 5. Determinar tipo e calcular valores
-      // 6 . Se valor pago na 
       const isTotal = dto.tipoPagamento === 'TOTAL';
       const tipo_negociacao_id = isTotal ? 2 : 1;
       const valorOriginal = parseFloat((dto.totalDivida ?? 0).toFixed(2));
 
       const { primeiroValorApagar, valorRestante } = this.calcularValoresPagamento(
         isTotal,
-        valorOriginal
+        valorOriginal,
       );
 
       // 6. Montar base da fatura
@@ -128,11 +127,31 @@ export class CreateDebtNegotiationService {
         codigo_preinscricao: aluno.codigo_inscricao,
       };
 
-      // 7. Mapear todos os itens para InvoiceItemDto
-      const todosItens: InvoiceItemDto[] = [
-        ...this.mapMensalidadesParaItens(itensMensalidades),
-        ...this.mapServicosParaItens(itensServicos),
-      ];
+      // 7. Mapear itens por tipo e distribuir entre as faturas
+      //
+      //    TOTAL    → todos os itens numa única fatura
+      //    PARCELADO → divisão independente por tipo:
+      //                ceil(n/2) → fatura de entrada
+      //                floor(n/2) → fatura de saldo
+      //
+      //    Exemplo com 5 mensalidades + 3 serviços:
+      //      fatura 1: 3 mensalidades + 2 serviços
+      //      fatura 2: 2 mensalidades + 1 serviço
+      const itensMapeadosMensalidades = this.mapMensalidadesParaItens(itensMensalidades);
+      const itensMapeadosServicos = this.mapServicosParaItens(itensServicos);
+
+      let itensFatura1: InvoiceItemDto[];
+      let itensFatura2: InvoiceItemDto[];
+
+      if (isTotal) {
+        itensFatura1 = [...itensMapeadosMensalidades, ...itensMapeadosServicos];
+        itensFatura2 = [];
+      } else {
+        const [mens1, mens2] = this.splitItens(itensMapeadosMensalidades);
+        const [serv1, serv2] = this.splitItens(itensMapeadosServicos);
+        itensFatura1 = [...mens1, ...serv1];
+        itensFatura2 = [...mens2, ...serv2];
+      }
 
       // 8. Criar fatura de entrada
       const faturaEntrada = await this.invoiceService.create({
@@ -142,7 +161,7 @@ export class CreateDebtNegotiationService {
           : 'Negociação de Dívida - Entrada 50%',
         TotalPreco: dto.totalDivida ?? dto.precoTotal ?? 0,
         ValorAPagar: primeiroValorApagar,
-        itens: todosItens,
+        itens: itensFatura1,
       } as CreateInvoiceDto);
 
       // 9. Criar fatura de saldo restante (apenas parcelado)
@@ -154,27 +173,23 @@ export class CreateDebtNegotiationService {
           Descricao: 'Negociação de Dívida - Saldo Restante (Parcelado)',
           TotalPreco: valorRestante,
           ValorAPagar: valorRestante,
-          itens: todosItens,
+          itens: itensFatura2,
         } as CreateInvoiceDto);
       }
 
       // 10. Anular faturas antigas e redirecionar avaliações
       const codigosAntigos: number[] = [
-        // Códigos das Mensalidades
         ...itensMensalidades
           .map(item => item.codigo_factura)
           .filter((id): id is number => id !== undefined && id !== null),
-
-        // Códigos dos Outros Serviços
         ...itensServicos
           .map(item => item.codfacturaoutrosservicos)
           .filter((id): id is number => id !== undefined && id !== null),
       ];
 
-      // Remover duplicados (opcional, mas recomendado)
       const codigosAntigosUnicos = [...new Set(codigosAntigos)];
 
-      if (codigosAntigos.length > 0) {
+      if (codigosAntigosUnicos.length > 0) {
         await queryRunner.manager.update(
           Invoice,
           { Codigo: TypeOrmIn(codigosAntigosUnicos) },
@@ -188,24 +203,19 @@ export class CreateDebtNegotiationService {
         );
       }
 
-
-      // 11. Calcular prestações + meses inicial e final (VERSÃO ROBUSTA)
-
-
+      // 11. Calcular prestações + meses inicial e final
       const qtd_meses = itensMensalidades?.length ?? 0;
 
       let id_mes_inicial: number = 0;
       let id_mes_final: number | null = null;
 
-
       if (qtd_meses > 0) {
         const ordenadas = [...itensMensalidades].sort(
-          (a, b) => Number(a.mes_temp_id) - Number(b.mes_temp_id)
+          (a, b) => Number(a.mes_temp_id) - Number(b.mes_temp_id),
         );
 
         id_mes_inicial = Number(ordenadas[0].mes_temp_id);
         id_mes_final = Number(ordenadas[ordenadas.length - 1].mes_temp_id);
-
       }
 
       // Cálculo seguro de valorPrestacaoMensal
@@ -220,9 +230,7 @@ export class CreateDebtNegotiationService {
         valorPrestacaoMensal = parseFloat((totalMensal / qtd_meses).toFixed(2));
       }
 
-      // Evita NaN
       if (isNaN(valorPrestacaoMensal)) valorPrestacaoMensal = 0;
-
 
       // 12. Criar registo de negociação
       const negociacao = queryRunner.manager.create(DebtNegotiation, {
@@ -235,8 +243,8 @@ export class CreateDebtNegotiationService {
         qtd_prestacoes: qtd_meses,
         tipo_negociacao_id,
         valorPrestacoes: valorPrestacaoMensal,
-        id_mes_inicial: id_mes_inicial,
-        id_mes_final: id_mes_final,
+        id_mes_inicial,
+        id_mes_final,
         mesesQuitar: qtd_meses,
         mesesParImpar: '',
         estado: 1,
@@ -279,9 +287,25 @@ export class CreateDebtNegotiationService {
   // MÉTODOS PRIVADOS
   // ============================================================
 
+  /**
+   * Divide um array em duas metades.
+   * A primeira recebe ceil(n/2) — o item extra em caso de número ímpar.
+   * A segunda recebe floor(n/2).
+   *
+   * Exemplos:
+   *   5 → [3, 2]
+   *   4 → [2, 2]
+   *   1 → [1, 0]
+   *   0 → [0, 0]
+   */
+  private splitItens<T>(itens: T[]): [T[], T[]] {
+    const metade = Math.ceil(itens.length / 2);
+    return [itens.slice(0, metade), itens.slice(metade)];
+  }
+
   private calcularValoresPagamento(
     isTotal: boolean,
-    valorOriginal: number
+    valorOriginal: number,
   ): { primeiroValorApagar: number; valorRestante: number } {
     if (isTotal) {
       return {
@@ -372,5 +396,4 @@ export class CreateDebtNegotiationService {
 
     return toLowerCaseKeys(result);
   }
-
 }

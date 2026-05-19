@@ -119,6 +119,14 @@ export class CashRegisterMovement {
   dateAt?: Date;
 
   @Column({
+    name: 'HORA_INICIO',
+    type: 'varchar2',
+    length: 8,
+    nullable: true,
+  })
+  startTime?: string;
+
+  @Column({
     name: 'DATA_FECHO',
     type: 'date',
     nullable: true,
@@ -126,11 +134,27 @@ export class CashRegisterMovement {
   closingDate?: Date;
 
   @Column({
+    name: 'HORA_FECHO',
+    type: 'varchar2',
+    length: 8,
+    nullable: true,
+  })
+  closingTime?: string;
+
+  @Column({
     name: 'DATA_VALIDACAO',
     type: 'date',
     nullable: true,
   })
   validationDate?: Date;
+
+  @Column({
+    name: 'HORA_VALIDACAO',
+    type: 'varchar2',
+    length: 8,
+    nullable: true,
+  })
+  validationTime?: string;
 
   @Column({
     name: 'CREATED_BY',

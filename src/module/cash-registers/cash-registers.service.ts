@@ -21,6 +21,7 @@ import { randomInt } from 'crypto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { ListOperatorsDto } from './dto/list-operators.dto';
 import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
+import { formatTime } from '../util/formatTime';
 
 type ValidateMovementParams = {
   id: number;
@@ -177,6 +178,7 @@ export class CashRegistersService {
         adminStatus: 'pendente',
         dateAt: new Date(),
         createdAt: new Date(),
+        startTime: formatTime(new Date()),
       });
 
       await movementRepository.save(movement);
@@ -258,6 +260,7 @@ export class CashRegistersService {
       movement.finalStatus = 'fechado';
       movement.adminStatus = 'pendente';
       movement.closingDate = closingDate;
+      movement.closingTime = formatTime(new Date());
       movement.collectedPaymentAmount = totalCash;
       movement.collectedTpaAmount = totalCard;
       movement.totalCollectedAmount =
@@ -464,6 +467,9 @@ export class CashRegistersService {
         'UTI.NOME AS operator_name',
         'C.CREATED_AT AS created_at',
         'C.UPDATED_AT AS updated_at',
+        'C.HORA_INICIO AS opening_time',
+        'C.HORA_FECHO AS closing_time',
+        'C.HORA_VALIDACAO AS validation_time',
       ])
       .from('FK2_TB_MOVIMENTOS_CAIXAS', 'C')
       .leftJoin(
@@ -541,8 +547,6 @@ export class CashRegistersService {
   async validateMovement(params: ValidateMovementParams) {
     const { id, action, rejectionReason } = params;
 
-    console.log({ params });
-
     const movement = await this.cashRegisterMovementRepository.findOne({
       where: { id },
     });
@@ -557,6 +561,7 @@ export class CashRegistersService {
       );
     }
     movement.validationDate = new Date();
+    movement.validationTime = formatTime(new Date());
     if (action === 'approved') {
       movement.adminStatus = AdminStatus.VALIDATED;
       movement.finalStatus = FinalStatus.COMPLETE;

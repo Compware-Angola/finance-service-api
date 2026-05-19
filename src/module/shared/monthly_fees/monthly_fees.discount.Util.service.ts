@@ -334,11 +334,11 @@ export class MonthlyFeesDiscountUtilService {
   }
 
   private async obterStatusPagamento(
-    isBolseiroIntegral: boolean,
+    isPago: boolean,
     codigoMatricula: number,
     mesTempId: number,
   ): Promise<number> {
-    if (isBolseiroIntegral) return 1;
+    if (isPago) return 1;
 
     const temIsencao = await this.existIsencaoMensalidade(
       codigoMatricula,
@@ -375,8 +375,13 @@ export class MonthlyFeesDiscountUtilService {
     });
 
     const isBolseiroIntegral = bolseiroInfo.desconto === 1;
+    const isDescontoTotal = percentagemDesconto === 1;
+    const isPago = isBolseiroIntegral || isDescontoTotal;
+
+
+
     const statusPagamento = await this.obterStatusPagamento(
-      isBolseiroIntegral,
+      isPago,
       codigoMatricula,
       mesTemp.id,
     );
@@ -384,25 +389,24 @@ export class MonthlyFeesDiscountUtilService {
     const descontoValor = mensalidade.preco * percentagemDesconto;
     const mensalidadeComDesconto = mensalidade.preco - descontoValor;
 
-    // Se for Bolseiro sem Multa nao deve calcular mas a Multa
-
     let percentagemMulta = 0;
     const temMesesSemMulta = await this.obterMesesSemMulta(
       mesTemp.ano_lectivo,
       mesTemp.id,
     );
 
-
-    if (!bolseiroInfo.isentar_multa && !temMesesSemMulta) {
+    if (!bolseiroInfo.isentar_multa && !temMesesSemMulta && !isDescontoTotal) {
       percentagemMulta = await this.calcularPercentagemMulta(
         codigoMatricula,
         mesTemp,
         periodosIsentos,
       );
     }
+
     const multa = mensalidadeComDesconto * percentagemMulta;
     const valorFinal = mensalidadeComDesconto + multa;
-    const valorPago = isBolseiroIntegral ? mensalidade.preco : 0;
+    const valorPago = isPago ? mensalidade.preco : 0;
+
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,
@@ -429,7 +433,7 @@ export class MonthlyFeesDiscountUtilService {
       total_preco: mensalidade.preco,
       status_pagamento: statusPagamento,
       data_operacao: null,
-      data_pagamento: null
+      data_pagamento: null,
     };
   }
 

@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class ListOperatorsDto {
   @ApiPropertyOptional({
@@ -31,4 +31,14 @@ export class ListOperatorsDto {
   @IsNumber()
   @Type(() => Number)
   limit?: number;
+
+  @ApiPropertyOptional({
+    description: 'Availability of the operator',
+    example: 'free',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['all', 'free', 'occupied'])
+  availability?: 'all' | 'free' | 'occupied';
 }

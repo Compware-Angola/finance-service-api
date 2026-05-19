@@ -25,7 +25,7 @@ import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
 type ValidateMovementParams = {
   id: number;
   action: 'approved' | 'rejected';
-  reason?: string;
+  rejectionReason?: string;
 };
 
 @Injectable()
@@ -319,7 +319,7 @@ export class CashRegistersService {
   }
 
   async listAvailableOperators(query: ListOperatorsDto) {
-    const { page = 1, limit = 10, search = '' } = query;
+    const { page = 1, limit = 10, search = '', availability = 'free' } = query;
 
     const offset = (page - 1) * limit;
     const searchParam = `%${search}%`;
@@ -335,7 +335,8 @@ export class CashRegistersService {
         ON caixas.OPERADOR_ID = uti.PK_UTILIZADOR
         AND caixas.DELETED_AT IS NULL
       WHERE grupo_uti.FK_GRUPO IN (14, 9)
-      AND caixas.OPERADOR_ID IS NULL
+      ${availability === 'free' ? 'AND caixas.OPERADOR_ID IS NULL' : ''}
+      ${availability === 'occupied' ? 'AND caixas.OPERADOR_ID IS NOT NULL' : ''}
       AND (
         LOWER(uti.NOME) LIKE LOWER(:1)
         OR TO_CHAR(uti.PK_UTILIZADOR) LIKE :2
@@ -497,31 +498,21 @@ export class CashRegistersService {
     }
 
     if (startDate) {
-      queryBuilder.andWhere('C.DATA_AT >= :startDate', { startDate });
-    }
-
-    if (endDate) {
-      const endDateObj = new Date(endDate);
-      endDateObj.setDate(endDateObj.getDate() + 1);
-      const endDatePlusOne = endDateObj.toISOString().split('T')[0];
-      queryBuilder.andWhere('C.DATA_AT < :endDate', {
-        endDate: endDatePlusOne,
+      queryBuilder.andWhere("C.DATA_AT >= TO_DATE(:startDate, 'YYYY-MM-DD')", {
+        startDate,
       });
     }
 
-    if (filters?.startDate && filters?.endDate) {
-      const startDateTime = new Date(filters.startDate);
-      startDateTime.setHours(0, 0, 0, 0);
+    if (endDate) {
+      queryBuilder.andWhere("C.DATA_AT < TO_DATE(:endDate, 'YYYY-MM-DD') + 1", {
+        endDate,
+      });
+    }
 
-      const endDateTime = new Date(filters.endDate);
-      endDateTime.setHours(23, 59, 59, 999);
-
+    if (startDate && endDate) {
       queryBuilder.andWhere(
-        'C.DATA_AT BETWEEN :startDateTime AND :endDateTime',
-        {
-          startDateTime: startDateTime.toISOString(),
-          endDateTime: endDateTime.toISOString(),
-        },
+        "C.DATA_AT BETWEEN TO_DATE(:startDate, 'YYYY-MM-DD') AND TO_DATE(:endDate, 'YYYY-MM-DD') + 1 - (1/86400)",
+        { startDate, endDate },
       );
     }
 
@@ -548,7 +539,9 @@ export class CashRegistersService {
   }
 
   async validateMovement(params: ValidateMovementParams) {
-    const { id, action, reason } = params;
+    const { id, action, rejectionReason } = params;
+
+    console.log({ params });
 
     const movement = await this.cashRegisterMovementRepository.findOne({
       where: { id },
@@ -570,7 +563,7 @@ export class CashRegistersService {
     } else {
       movement.adminStatus = AdminStatus.NOT_VALIDATED;
       movement.finalStatus = FinalStatus.PENDING;
-      movement.observation = reason || 'Movimento rejeitado';
+      movement.observation = rejectionReason || 'Movimento rejeitado';
     }
 
     return await this.cashRegisterMovementRepository.save(movement);

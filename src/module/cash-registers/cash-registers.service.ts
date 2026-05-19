@@ -315,13 +315,7 @@ export class CashRegistersService {
   }
 
   async validateOperatorOpenCashRegister(operatorId: number) {
-    const cashRegister = await this.findOpenByOperatorId(operatorId);
-
-    if (!cashRegister) {
-      throw new BadRequestException('Operador não possui caixa aberto');
-    }
-
-    return cashRegister;
+    return await this.findOpenByOperatorId(operatorId);
   }
 
   async listAvailableOperators(query: ListOperatorsDto) {

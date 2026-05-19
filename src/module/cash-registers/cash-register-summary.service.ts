@@ -69,7 +69,7 @@ export class CashRegisterSummaryService {
       );
 
     if (!cashRegister) {
-      throw new BadRequestException('Operador não possui caixa aberto');
+      return null;
     }
 
     return this.getPaymentMethodSummary({

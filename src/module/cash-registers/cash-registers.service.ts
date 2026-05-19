@@ -22,6 +22,8 @@ import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { ListOperatorsDto } from './dto/list-operators.dto';
 import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
 import { formatTime } from '../util/formatTime';
+import { HttpService } from '@nestjs/axios';
+import { HashHelper } from 'src/common/helpers/hash-helper';
 
 type ValidateMovementParams = {
   id: number;
@@ -36,7 +38,7 @@ export class CashRegistersService {
     private readonly cashRegisterRepository: Repository<CashRegister>,
     @InjectRepository(CashRegisterMovement)
     private readonly cashRegisterMovementRepository: Repository<CashRegisterMovement>,
-
+    private readonly httpService: HttpService,
     private readonly dataSource: DataSource,
   ) {}
 

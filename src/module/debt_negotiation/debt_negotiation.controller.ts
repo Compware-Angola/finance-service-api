@@ -22,7 +22,9 @@ import {
 } from '@nestjs/swagger';
 import { DebtNegotiationService } from './debt_negotiation.service';
 import { CreateDebtNegotiationDto } from './dto/create-debt_negotiation.dto';
-import { CreateDebtNegotiationService } from './debt.create.service';
+import { CreateDebtNegotiationService } from './negotation.create.service';
+import { NegotiationService } from './negotiation.service';
+import { GetDebtDtoNew } from './dto/find-debit.dto';
 
 @ApiTags('Negociação de Dívidas')
 @ApiBearerAuth()
@@ -31,6 +33,7 @@ export class DebtNegotiationController {
   constructor(
     private readonly debtNegotiationService: DebtNegotiationService,
     private readonly createDebtNegotiationService: CreateDebtNegotiationService,
+    private readonly negotiationService: NegotiationService,
   ) { }
 
   @Post(':codigo_matricula')
@@ -58,7 +61,9 @@ export class DebtNegotiationController {
   }
 
 
-  @Get()
+
+
+  @Get("get-debts-information")
   @ApiOperation({ summary: 'Obter dívidas pendentes do aluno' })
   @ApiResponse({
     status: 200,
@@ -67,18 +72,7 @@ export class DebtNegotiationController {
   })
   @ApiResponse({ status: 400, "description": 'Parâmetros inválidos' })
   @ApiResponse({ status: 404, "description": 'Aluno não encontrado' })
-  async getDebt(@Query(ValidationPipe) query: GetDebtDto) {
-    const { matricula, preinscricaoId, tipoCandidatura } = query;
-
-    // Validação extra (opcional)
-    if (!matricula || !preinscricaoId) {
-      throw new BadRequestException('matricula e preinscricaoId são obrigatórios');
-    }
-
-    return this.debtNegotiationService.getDebt(
-      matricula,
-      preinscricaoId,
-      tipoCandidatura
-    );
+  async getDebtsInformation(@Query(ValidationPipe) query: GetDebtDtoNew) {
+    return this.negotiationService.getAllDebtNegotiations(query)
   }
 }

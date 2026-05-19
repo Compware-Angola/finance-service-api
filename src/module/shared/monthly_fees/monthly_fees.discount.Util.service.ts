@@ -1,8 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
-import { InjectRepository } from '@nestjs/typeorm';
-import { MesTemp } from '../payment-references/entities/mes-temp.entity';
-import { TestMonthlyDTO } from './dto/test-monthly.dto';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { obterMulta } from 'src/module/util/obter-multa';
 import {
   BolseiroResult,
@@ -14,16 +11,15 @@ import {
 import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
 import { formatDisplay } from 'src/module/util/format-date';
 
-export class MonthlyFeesDiscountService {
-  constructor(
-    private dataSource: DataSource,
-    @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
-  ) { }
+import { TestMonthlyDTO } from './dto/test-monthly.dto';
+@Injectable()
+export class MonthlyFeesDiscountUtilService {
+  constructor(private dataSource: DataSource) { }
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
     const sql = `
-      SELECT 
+      SELECT
         c.designacao           as curso,
         c.codigo               as codigo_curso,
         c.sigla                as sigla,
@@ -49,14 +45,13 @@ export class MonthlyFeesDiscountService {
 
   // ====================== DESCONTOS ======================
 
-
   private async obterBolseiro({
     anoLectivo,
     codigoMatricula,
     semestre,
   }: ObterBolseiroParams): Promise<BolseiroResult> {
     const sql = `
-    SELECT desconto, isentar_multa 
+    SELECT desconto, isentar_multa
     FROM fk2_tb_bolseiros
     WHERE codigo_matricula = :codigoMatricula
       AND codigo_anolectivo = :anoLectivo
@@ -85,7 +80,7 @@ export class MonthlyFeesDiscountService {
       };
     } catch (err) {
       throw new Error(
-        `Erro ao obter bolseiro [matricula=${codigoMatricula}]: ${err.message}`
+        `Erro ao obter bolseiro [matricula=${codigoMatricula}]: ${err.message}`,
       );
     }
   }
@@ -94,16 +89,26 @@ export class MonthlyFeesDiscountService {
     anoLectivo,
     codigoMatricula,
     semestre,
-  }: { anoLectivo: number; codigoMatricula: number; semestre: number }) {
+    dataLimite,
+  }: {
+    anoLectivo: number;
+    codigoMatricula: number;
+    semestre: number;
+    dataLimite: Date;
+  }) {
+    const dataStr = formatDisplay(dataLimite);
     const sql = `
       SELECT de.TAXA as VALOR_DESCONTO
       FROM FK2_TB_DESCONTOS_ALUNOO da
-      INNER JOIN FK2_DESCONTOS_ESPECIAIS de ON da.CODIGO_TIPO_DESCONTO = de.id
+      INNER JOIN FK2_DESCONTOS_ESPECIAIS de ON da.TIPO_TAXA_DESCONTO_ESPECIAL	 = de.id
       WHERE da.codigo_matricula = :codigoMatricula
         AND da.codigo_anolectivo = :anoLectivo
         AND da.afectacao = 'Pagamento de Propina'
         AND (da.semestre = :semestre OR da.semestre = 3)
         AND da.deleted_at IS NULL
+        AND da.ESTATUS_DESCONTO_ID = 1
+        AND de.ESTADO = 1
+        AND TO_DATE(:dataStr, 'YYYY-MM-DD') BETWEEN de.DATA_INICIO AND de.DATA_FIM
       FETCH FIRST 1 ROW ONLY
     `;
 
@@ -111,6 +116,7 @@ export class MonthlyFeesDiscountService {
       anoLectivo,
       codigoMatricula,
       semestre,
+      dataStr,
     } as any);
 
     if (row?.VALOR_DESCONTO != null) {
@@ -130,7 +136,7 @@ export class MonthlyFeesDiscountService {
 
     const sql = `
       WITH aluno AS (
-        SELECT c.sigla, p.codigo_turno as turno
+        SELECT c.sigla, p.codigo_turno as turno, p.anolectivo as anolectivo
         FROM fk2_tb_matriculas m
         JOIN fk2_tb_cursos c ON c.codigo = m.codigo_curso
         JOIN fk2_tb_admissao a ON a.codigo = m.codigo_aluno
@@ -139,11 +145,11 @@ export class MonthlyFeesDiscountService {
       )
       SELECT de.TAXA
       FROM aluno a
-      JOIN FK2_DESCONTOS_ESPECIAIS de 
+      JOIN FK2_DESCONTOS_ESPECIAIS de
         ON de.ESTADO = 1
        AND TO_DATE(:dataStr, 'YYYY-MM-DD') BETWEEN de.DATA_INICIO AND de.DATA_FIM
-      WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324')
-         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB')
+      WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324' AND a.anolectivo = 21)
+         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB' and a.anolectivo >= 23 )
       FETCH FIRST 1 ROW ONLY
     `;
 
@@ -168,7 +174,7 @@ export class MonthlyFeesDiscountService {
     duracaoCurso: number,
   ) {
     const sql = `
-      SELECT 
+      SELECT
         COUNT(*) AS total_cadeiras,
         MAX(cl.codigo) AS ano_inscrito
       FROM FK2_TB_GRADE_CURRICULAR_ALUNO ftgca
@@ -202,9 +208,9 @@ export class MonthlyFeesDiscountService {
     codigoMatricula: number,
     anoLectivo: number,
     dadosAluno: any,
-  ): Promise<number> {
+  ): Promise<{ codigo_servico: number; preco: number; descricao: string }> {
     const sql = `
-      SELECT PRECO
+      SELECT PRECO,CODIGO,DESCRICAO
       FROM FK2_TB_TIPO_SERVICOS
       WHERE DESCRICAO LIKE 'Propina ' || :curso || '%'
         AND CODIGO_ANO_LECTIVO = :anoLectivo
@@ -224,7 +230,11 @@ export class MonthlyFeesDiscountService {
       throw new BadRequestException('Nenhuma mensalidade encontrada');
     }
 
-    return Number(row.PRECO);
+    return {
+      preco: Number(row.PRECO),
+      codigo_servico: Number(row.CODIGO),
+      descricao: row.DESCRICAO,
+    };
   }
 
   // ====================== CÁLCULO DE DESCONTO ======================
@@ -254,6 +264,7 @@ export class MonthlyFeesDiscountService {
       anoLectivo,
       codigoMatricula,
       semestre: mesTemp.semestre,
+      dataLimite: mesTemp.data_limite,
     });
     if (descontoNormal.temDesconto) return descontoNormal.desconto;
 
@@ -270,7 +281,10 @@ export class MonthlyFeesDiscountService {
   }
 
   // ====================== ISENÇÕES ======================
-  private async existIsencaoMulta(codigoMatricula: number, mesTempId: number): Promise<boolean> {
+  private async existIsencaoMulta(
+    codigoMatricula: number,
+    mesTempId: number,
+  ): Promise<boolean> {
     const sql = `
       SELECT COUNT(*) AS TOTAL
       FROM FK2_TB_ISENCOE_MULTA
@@ -279,11 +293,17 @@ export class MonthlyFeesDiscountService {
         AND UPPER(ESTADO_ISENSAO) = 'ACTIVO'
     `;
 
-    const [row] = await this.dataSource.query(sql, { codigoMatricula, mesTempId } as any);
+    const [row] = await this.dataSource.query(sql, {
+      codigoMatricula,
+      mesTempId,
+    } as any);
     return Number(row?.TOTAL || 0) > 0;
   }
 
-  private async existIsencaoMensalidade(codigoMatricula: number, mesTempId: number): Promise<boolean> {
+  private async existIsencaoMensalidade(
+    codigoMatricula: number,
+    mesTempId: number,
+  ): Promise<boolean> {
     const sql = `
       SELECT COUNT(*) AS TOTAL
       FROM FK2_TB_ISENCOES
@@ -292,7 +312,10 @@ export class MonthlyFeesDiscountService {
         AND UPPER(ESTADO_ISENSAO) = 'ACTIVO'
     `;
 
-    const [row] = await this.dataSource.query(sql, { codigoMatricula, mesTempId } as any);
+    const [row] = await this.dataSource.query(sql, {
+      codigoMatricula,
+      mesTempId,
+    } as any);
     return Number(row?.TOTAL || 0) > 0;
   }
 
@@ -301,21 +324,26 @@ export class MonthlyFeesDiscountService {
     mesTemp: MesTempResponse,
     periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[],
   ): Promise<number> {
-    const temIsencao = await this.existIsencaoMulta(codigoMatricula, mesTemp.id);
+    const temIsencao = await this.existIsencaoMulta(
+      codigoMatricula,
+      mesTemp.id,
+    );
     if (temIsencao) return 0;
-
 
     return obterMulta(mesTemp.data_limite, periodosIsentos);
   }
 
   private async obterStatusPagamento(
-    isBolseiroIntegral: boolean,
+    isPago: boolean,
     codigoMatricula: number,
     mesTempId: number,
   ): Promise<number> {
-    if (isBolseiroIntegral) return 1;
+    if (isPago) return 1;
 
-    const temIsencao = await this.existIsencaoMensalidade(codigoMatricula, mesTempId);
+    const temIsencao = await this.existIsencaoMensalidade(
+      codigoMatricula,
+      mesTempId,
+    );
     return temIsencao ? 4 : 0;
   }
 
@@ -327,7 +355,11 @@ export class MonthlyFeesDiscountService {
     periodosIsentos,
     dadosAluno,
   }: CalcularValorMensalidadeParams & { dadosAluno: any }) {
-    const mensalidade = await this.obterMensalidade(codigoMatricula, anoLectivo, dadosAluno);
+    const mensalidade = await this.obterMensalidade(
+      codigoMatricula,
+      anoLectivo,
+      dadosAluno,
+    );
 
     const percentagemDesconto = await this.calcularDesconto({
       anoLectivo,
@@ -343,29 +375,38 @@ export class MonthlyFeesDiscountService {
     });
 
     const isBolseiroIntegral = bolseiroInfo.desconto === 1;
+    const isDescontoTotal = percentagemDesconto === 1;
+    const isPago = isBolseiroIntegral || isDescontoTotal;
+
+
+
     const statusPagamento = await this.obterStatusPagamento(
-      isBolseiroIntegral,
+      isPago,
       codigoMatricula,
       mesTemp.id,
     );
 
-    const descontoValor = mensalidade * percentagemDesconto;
-    const mensalidadeComDesconto = mensalidade - descontoValor;
-
-
-    // Se for Bolseiro sem Multa nao deve calcular mas a Multa
+    const descontoValor = mensalidade.preco * percentagemDesconto;
+    const mensalidadeComDesconto = mensalidade.preco - descontoValor;
 
     let percentagemMulta = 0;
-    if (!bolseiroInfo.isentar_multa) {
+    const temMesesSemMulta = await this.obterMesesSemMulta(
+      mesTemp.ano_lectivo,
+      mesTemp.id,
+    );
+
+    if (!bolseiroInfo.isentar_multa && !temMesesSemMulta && !isDescontoTotal) {
       percentagemMulta = await this.calcularPercentagemMulta(
         codigoMatricula,
         mesTemp,
         periodosIsentos,
       );
     }
+
     const multa = mensalidadeComDesconto * percentagemMulta;
     const valorFinal = mensalidadeComDesconto + multa;
-    const valorPago = isBolseiroIntegral ? mensalidade : 0;
+    const valorPago = isPago ? mensalidade.preco : 0;
+
     return {
       mes_temp_id: mesTemp.id,
       mes: mesTemp.designacao,
@@ -380,17 +421,38 @@ export class MonthlyFeesDiscountService {
       valorEntregue: 0,
       data_vencimento: mesTemp.data_limite,
       desconto: descontoValor,
+      codigo_factura: null,
       semestre: mesTemp.semestre,
       multa: multa,
       total_item: valorFinal,
       valor_pago: valorPago,
-      mensalidade: mensalidade,
+      mensalidade: mensalidade.preco,
+      codigo_servico: mensalidade.codigo_servico,
+      descricao_servico: mensalidade.descricao,
       total: valorFinal,
-      total_preco: mensalidade,
+      total_preco: mensalidade.preco,
       status_pagamento: statusPagamento,
       data_operacao: null,
-      data_pagamento: null
+      data_pagamento: null,
     };
+  }
+
+  private async obterMesesSemMulta(anoLectivo: number, mesTempId: number): Promise<boolean> {
+    const sql = `
+    SELECT COUNT(*) AS TOTAL
+    FROM FK2_TB_MESES_SEM_MULTA TSM
+    WHERE TSM.ANO_LECTIVO = :anoLectivo
+      AND TSM.MES_TEMP_ID = :mesTempId
+      AND TSM.ESTADO = 1
+  `;
+
+    const result = await this.dataSource.query(sql, {
+      anoLectivo,
+      mesTempId,
+    } as any);
+
+    const total = Number(result[0]?.TOTAL ?? 0);
+    return total > 0;
   }
 
   // ====================== MÉTODO PRINCIPAL ======================
@@ -401,50 +463,92 @@ export class MonthlyFeesDiscountService {
   }: TestMonthlyDTO) {
     const dadosAluno = await this.obterDadosCompletosAluno(codigo_matricula);
 
-    const sqlMesTemp = `
-      SELECT 
-        DATA_LIMITE,
-        DATA_FINAL,
-        DATA_INICIAL,
-        SEMESTRE,
-        ID,
-        DESIGNACAO,
-        PRESTACAO
-      FROM fk2_mes_temp tp
-      WHERE tp.ano_lectivo = :codAnoLectivo
-        AND tp.activo = 1
-        AND tp.id NOT IN (
-          SELECT it.mes_temp_id
-          FROM fk2_factura ft
-          INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
-          INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
-          WHERE ft.codigomatricula = :codigo_matricula
-            AND it.mes_temp_id IS NOT NULL
-            AND mt.ano_lectivo = :codAnoLectivo
-            AND ft.estado != 3
-        )
-    `;
+    // ====================== QUERY DINÂMICA ======================
+    const isAnoLectivoNumero =
+      codAnoLectivo !== undefined &&
+      codAnoLectivo !== null &&
+      !isNaN(Number(codAnoLectivo));
 
-    const resultado = await this.dataSource.query(sqlMesTemp, {
-      codAnoLectivo,
-      codigo_matricula,
-    } as any);
+    const sqlMesTemp = isAnoLectivoNumero
+      ? `
+    SELECT
+      DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
+      SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
+    FROM fk2_mes_temp tp
+    WHERE tp.ano_lectivo = :codAnoLectivo
+      AND tp.activo = 1
+      AND tp.id NOT IN (
+        SELECT it.mes_temp_id
+        FROM fk2_factura ft
+        INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
+        INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
+        WHERE ft.codigomatricula = :codigo_matricula
+          AND it.mes_temp_id IS NOT NULL
+          AND mt.ano_lectivo = :codAnoLectivo
+          AND ft.estado != 3
+      )
+  `
+      : `
+SELECT
+    DATA_LIMITE,
+    DATA_FINAL,
+    DATA_INICIAL,
+    SEMESTRE,
+    ID,
+    DESIGNACAO,
+    PRESTACAO,
+    ANO_LECTIVO
+FROM fk2_mes_temp tp
+WHERE tp.activo = 1
 
+  -- Apenas anos lectivos confirmados e não activos
+  AND EXISTS (
+      SELECT 1
+      FROM fk2_tb_confirmacoes cf
+      INNER JOIN fk2_tb_ano_lectivo a
+          ON a.codigo = cf.CODIGO_ANO_LECTIVO
+      WHERE cf.codigo_matricula = :codigo_matricula
+        AND cf.CODIGO_ANO_LECTIVO = tp.ano_lectivo
+        AND TRIM(UPPER(a.estado)) != 'ACTIVO'
+  )
+
+  AND tp.id NOT IN (
+      SELECT it.mes_temp_id
+      FROM fk2_factura ft
+      INNER JOIN fk2_factura_items it
+          ON ft.codigo = it.codigofactura
+      INNER JOIN fk2_mes_temp mt
+          ON mt.id = it.mes_temp_id
+      WHERE ft.codigomatricula = :codigo_matricula
+        AND it.mes_temp_id IS NOT NULL
+        AND ft.estado != 3
+  )
+  `;
+
+    const queryParams = codAnoLectivo
+      ? { codAnoLectivo, codigo_matricula }
+      : { codigo_matricula };
+
+    const resultado = await this.dataSource.query(
+      sqlMesTemp,
+      queryParams as any,
+    );
     const mesTemps: MesTempResponse[] = toLowerCaseKeys(resultado);
 
-    const [periodosIsentos] = await Promise.all([
-      this.dataSource.query(`
-        SELECT DATA_INICIO, DATA_FIM 
-        FROM FK2_TB_DIAS_ISENTOS 
-        WHERE ESTADO = 1
-      `),
-    ]);
+    const periodosIsentos = await this.dataSource.query(`
+    SELECT DATA_INICIO, DATA_FIM
+    FROM FK2_TB_DIAS_ISENTOS
+    WHERE ESTADO = 1
+  `);
 
     const pagamentos: any[] = [];
 
     for (const mesTemp of mesTemps) {
+
+      const anoLectivoEfetivo = codAnoLectivo ?? mesTemp.ano_lectivo;
+
       const pagamento = await this.calcularValorMensalidade({
-        anoLectivo: codAnoLectivo,
+        anoLectivo: anoLectivoEfetivo,
         codigoMatricula: codigo_matricula,
         mesTemp,
         periodosIsentos,
@@ -459,7 +563,6 @@ export class MonthlyFeesDiscountService {
         pagamentos.push(pagamento);
       }
     }
-
     return pagamentos;
   }
 }

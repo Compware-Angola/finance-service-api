@@ -9,7 +9,6 @@ export class GetDebtDto {
   @Min(1)
   @Type(() => Number)
   matricula: number;
-
   @ApiProperty({ description: 'ID da pré-inscrição', "example": 456 })
   @IsNumber()
   @Min(1)

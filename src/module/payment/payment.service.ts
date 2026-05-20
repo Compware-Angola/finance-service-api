@@ -20,6 +20,7 @@ import { AtribuirProvaHelper } from 'src/common/helpers/atribuir-prova.helper';
 import { HttpService } from '@nestjs/axios';
 import { AxiosError } from 'axios';
 import { TipoPagamento } from './dto/listar-servico-pagos.dto';
+import { CashRegistersService } from '../cash-registers/cash-registers.service';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
@@ -41,6 +42,7 @@ export class PaymentService {
     private readonly invoiceService: InvoiceService,
     private dataSource: DataSource,
     private httpService: HttpService,
+    private readonly cashRegistersService: CashRegistersService,
   ) {
     this.initAnoAtual();
   }
@@ -292,10 +294,17 @@ export class PaymentService {
   }
 
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
+    const cashRegister =
+      await this.cashRegistersService.validateOperatorOpenCashRegister(
+        user.sub,
+      );
+    if (!cashRegister) {
+      throw new BadRequestException('Você não tem uma caixa aberta');
+    }
+
     const anoCorrente = this.anoAtualPrincipal;
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
-    const cleanText = (value?: string) =>
-      value?.replace(/\s+/g, '').trim();
+    const cleanText = (value?: string) => value?.replace(/\s+/g, '').trim();
 
     if (!dto.caixaId) {
       throw new BadRequestException(
@@ -306,9 +315,9 @@ export class PaymentService {
     const cleanNOperacaoBancaria = cleanText(nOperacaoBancaria);
 
     if (cleanNOperacaoBancaria) {
-
-
-      const n_op = await this.findPaymentByN_Operacao_Bancaria(cleanNOperacaoBancaria);
+      const n_op = await this.findPaymentByN_Operacao_Bancaria(
+        cleanNOperacaoBancaria,
+      );
       if (n_op) {
         throw new BadRequestException(
           `Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`,
@@ -395,11 +404,15 @@ export class PaymentService {
       // 1. Atualizar estado dos itens da fatura
       if (estados === 1) {
         for (const item of itens) {
-          const item_formated = toLowerCaseKeys(item)
+          const item_formated = toLowerCaseKeys(item);
 
           await queryRunner.query(
             `UPDATE FK2_FACTURA_ITEMS SET estado = :estado , VALOR_PAGO = :valor  WHERE CODIGO = :codigo`,
-            { estado: estados, codigo: item_formated.codigo_fi, valor: item_formated.precoproduto } as any,
+            {
+              estado: estados,
+              codigo: item_formated.codigo_fi,
+              valor: item_formated.precoproduto,
+            } as any,
           );
         }
       }
@@ -486,12 +499,12 @@ export class PaymentService {
         tda:
           tdaResult && !tdaResult.success
             ? {
-              error: true,
-              message: tdaResult.message,
-            }
+                error: true,
+                message: tdaResult.message,
+              }
             : {
-              error: false,
-            },
+                error: false,
+              },
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -535,7 +548,13 @@ export class PaymentService {
            SALDO_RESET = :saldo_reset_final, 
            SALDO_RESET_ANTER = :saldo_reset_atual 
        WHERE CODIGO = :codigo`,
-        { saldo_final, saldo_atual, saldo_reset_final, saldo_reset_atual, codigo: preinscricao } as any,
+        {
+          saldo_final,
+          saldo_atual,
+          saldo_reset_final,
+          saldo_reset_atual,
+          codigo: preinscricao,
+        } as any,
       );
 
       await queryRunner.commitTransaction();
@@ -549,7 +568,6 @@ export class PaymentService {
   async findPaymentByN_Operacao_Bancaria(
     nOperacaoBancaria: string,
   ): Promise<Payment2 | null> {
-
     return this.paymentRepository
       .createQueryBuilder('payment')
       .where('TRIM(UPPER(payment.nOperacaoBancaria)) = TRIM(UPPER(:value))', {
@@ -577,11 +595,7 @@ export class PaymentService {
     codigoMatricula?: number;
     tipo?: TipoPagamento;
   }) {
-    const {
-      anoLectivo,
-      codigoMatricula,
-      tipo = 'TODOS',
-    } = filter;
+    const { anoLectivo, codigoMatricula, tipo = 'TODOS' } = filter;
 
     const preinscricaoResult = await this.dataSource.query(
       `
@@ -802,7 +816,6 @@ WHERE c.codigo = :preInscricao
     `;
     const [result] = await this.dataSource.query(sql, [preInscricao]);
     return result;
-
   }
   public async findPayments(filters: ListPaymentDTO) {
     const {
@@ -822,8 +835,6 @@ WHERE c.codigo = :preInscricao
     const offset = (page - 1) * limit;
     const conditions: string[] = [];
     const params: any = {};
-
-
 
     conditions.push(`1 = 1`);
 
@@ -860,12 +871,16 @@ WHERE c.codigo = :preInscricao
     const dateFormat = 'YYYY-MM-DD';
 
     if (dataInicio) {
-      conditions.push(`pg.dataregisto >= TO_DATE(:dataInicio, '${dateFormat}')`);
+      conditions.push(
+        `pg.dataregisto >= TO_DATE(:dataInicio, '${dateFormat}')`,
+      );
       params.dataInicio = dataInicio;
     }
 
     if (dataFim) {
-      conditions.push(`pg.dataregisto <= TO_DATE(:dataFim, '${dateFormat}') + INTERVAL '1' DAY - INTERVAL '1' SECOND`);
+      conditions.push(
+        `pg.dataregisto <= TO_DATE(:dataFim, '${dateFormat}') + INTERVAL '1' DAY - INTERVAL '1' SECOND`,
+      );
       params.dataFim = dataFim;
     }
 

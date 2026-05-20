@@ -15,9 +15,26 @@ export class DiscountService {
   constructor(private readonly dataSource: DataSource) {}
 
   async create(createDto: CreateDiscountDto) {
+    const sigla = createDto.sigla.trim();
+
+    const existingSigla = await this.dataSource.query(
+      `
+        SELECT 1
+        FROM FK2_DESCONTOS_ESPECIAIS
+        WHERE UPPER(SIGLA) = UPPER(:sigla)
+        FETCH FIRST 1 ROWS ONLY
+      `,
+      [sigla],
+    );
+
+    if (existingSigla.length > 0) {
+      throw new BadRequestException(`Já existe um desconto com a sigla '${sigla}'.`);
+    }
+
     const sql = `
       INSERT INTO FK2_DESCONTOS_ESPECIAIS (
         DESCRICAO,
+        SIGLA,
         TAXA,
         DATA_INICIO,
         DATA_FIM,
@@ -25,6 +42,7 @@ export class DiscountService {
         ESTADO
       ) VALUES (
         :descricao,
+        :sigla,
         :taxa,
         TO_DATE(:data_inicio, 'YYYY-MM-DD'),
         TO_DATE(:data_fim, 'YYYY-MM-DD'),
@@ -35,6 +53,7 @@ export class DiscountService {
 
     const params = [
       createDto.descricao,
+      sigla,
       createDto.taxa,
       new Date(createDto.data_inicio).toISOString().split('T')[0],
       new Date(createDto.data_fim).toISOString().split('T')[0],
@@ -191,6 +210,7 @@ export class DiscountService {
         SELECT b.*, ROWNUM rnum FROM (
           SELECT
             a.DESCRICAO,
+            a.SIGLA,
             a.TAXA,
             a.DATA_INICIO,
             a.DATA_FIM,

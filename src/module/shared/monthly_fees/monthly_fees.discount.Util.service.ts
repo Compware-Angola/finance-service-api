@@ -14,7 +14,7 @@ import { formatDisplay } from 'src/module/util/format-date';
 import { TestMonthlyDTO } from './dto/test-monthly.dto';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
-  constructor(private dataSource: DataSource) { }
+  constructor(private dataSource: DataSource) {}
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -148,8 +148,9 @@ export class MonthlyFeesDiscountUtilService {
       JOIN FK2_DESCONTOS_ESPECIAIS de
         ON de.ESTADO = 1
        AND TO_DATE(:dataStr, 'YYYY-MM-DD') BETWEEN de.DATA_INICIO AND de.DATA_FIM
-      WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324' AND a.anolectivo = 21)
-         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB' and a.anolectivo >= 23 )
+      WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324')
+         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB'  and  a.sigla = 'LPC')
+         OR (a.turno = 6 AND de.SIGLA = 'DEN50_POSLAB_DGE_2526'  and  a.sigla in ('GAE','ECO','DIR') and a.anolectivo = 23 )
       FETCH FIRST 1 ROW ONLY
     `;
 
@@ -392,7 +393,6 @@ export class MonthlyFeesDiscountUtilService {
       mesTemp.id,
     );
 
-
     if (!bolseiroInfo.isentar_multa && !temMesesSemMulta) {
       percentagemMulta = await this.calcularPercentagemMulta(
         codigoMatricula,
@@ -429,11 +429,14 @@ export class MonthlyFeesDiscountUtilService {
       total_preco: mensalidade.preco,
       status_pagamento: statusPagamento,
       data_operacao: null,
-      data_pagamento: null
+      data_pagamento: null,
     };
   }
 
-  private async obterMesesSemMulta(anoLectivo: number, mesTempId: number): Promise<boolean> {
+  private async obterMesesSemMulta(
+    anoLectivo: number,
+    mesTempId: number,
+  ): Promise<boolean> {
     const sql = `
     SELECT COUNT(*) AS TOTAL
     FROM FK2_TB_MESES_SEM_MULTA TSM
@@ -526,7 +529,6 @@ WHERE tp.activo = 1
     const pagamentos: any[] = [];
 
     for (const mesTemp of mesTemps) {
-
       const anoLectivoEfetivo = codAnoLectivo ?? mesTemp.ano_lectivo;
 
       const pagamento = await this.calcularValorMensalidade({

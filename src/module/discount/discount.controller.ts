@@ -17,6 +17,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { FilterAddDiscountDto } from './dto/filter-add-discount.dto';
 import { CreateAddDiscountDto } from './dto/create-add-discount.dto';
 import { UpdateAddDiscountDto } from './dto/update-add-discount.dto';
+import { FilterDiscountSiglaDto } from './dto/filters-discount-sigla';
 
 @ApiTags('discount')
 @Controller('discount')
@@ -80,5 +81,12 @@ export class DiscountController {
   })
   removeAddDiscount(@Param('id', ParseIntPipe) id: number) {
     return this.discountService.removeAddDiscount(id);
+  }
+  @Get('/sigla/:sigla')
+  @ApiOperation({
+    summary: 'Listar descontos por sigla',
+  })
+  findBySigla(@Param('sigla') sigla: string) {
+    return this.discountService.buscarDescontoEspecialPorSigla(sigla);
   }
 }

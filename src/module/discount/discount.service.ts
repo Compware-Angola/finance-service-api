@@ -9,10 +9,39 @@ import { FilterAddDiscountDto } from './dto/filter-add-discount.dto';
 import { CreateAddDiscountDto } from './dto/create-add-discount.dto';
 import { UpdateAddDiscountDto } from './dto/update-add-discount.dto';
 import { PaymentType } from 'src/common/enums/type-payment.enum';
+import { FilterDiscountSiglaDto } from './dto/filters-discount-sigla';
 
 @Injectable()
 export class DiscountService {
   constructor(private readonly dataSource: DataSource) {}
+
+  public async buscarDescontoEspecialPorSigla(sigla: string) {
+    const sql = `
+    select
+      taxa,
+      data_inicio,
+      data_fim,
+      estado,
+      id,
+      sigla
+    from fk2_descontos_especiais
+    where sigla = : sigla
+    `;
+    try {
+      const result = await this.dataSource.query(sql, {
+        sigla,
+      } as any);
+
+      if (!result || result.length == 0) {
+        return [];
+      }
+      return toLowerCaseKeys(result);
+    } catch (err) {
+      throw new Error(
+        `Erro ao obter desconto especial por essa sigla:  ${sigla}`,
+      );
+    }
+  }
 
   async create(createDto: CreateDiscountDto) {
     const sql = `

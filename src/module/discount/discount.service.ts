@@ -9,15 +9,61 @@ import { FilterAddDiscountDto } from './dto/filter-add-discount.dto';
 import { CreateAddDiscountDto } from './dto/create-add-discount.dto';
 import { UpdateAddDiscountDto } from './dto/update-add-discount.dto';
 import { PaymentType } from 'src/common/enums/type-payment.enum';
+import { FilterDiscountSiglaDto } from './dto/filters-discount-sigla';
 
 @Injectable()
 export class DiscountService {
   constructor(private readonly dataSource: DataSource) {}
 
+  public async buscarDescontoEspecialPorSigla(sigla: string) {
+    const sql = `
+    select
+      taxa,
+      data_inicio,
+      data_fim,
+      estado,
+      id,
+      sigla
+    from fk2_descontos_especiais
+    where sigla = : sigla
+    `;
+    try {
+      const result = await this.dataSource.query(sql, {
+        sigla,
+      } as any);
+
+      if (!result || result.length == 0) {
+        return [];
+      }
+      return toLowerCaseKeys(result);
+    } catch (err) {
+      throw new Error(
+        `Erro ao obter desconto especial por essa sigla:  ${sigla}`,
+      );
+    }
+  }
+
   async create(createDto: CreateDiscountDto) {
+    const sigla = createDto.sigla.trim();
+
+    const existingSigla = await this.dataSource.query(
+      `
+        SELECT 1
+        FROM FK2_DESCONTOS_ESPECIAIS
+        WHERE UPPER(SIGLA) = UPPER(:sigla)
+        FETCH FIRST 1 ROWS ONLY
+      `,
+      [sigla],
+    );
+
+    if (existingSigla.length > 0) {
+      throw new BadRequestException(`Já existe um desconto com a sigla '${sigla}'.`);
+    }
+
     const sql = `
       INSERT INTO FK2_DESCONTOS_ESPECIAIS (
         DESCRICAO,
+        SIGLA,
         TAXA,
         DATA_INICIO,
         DATA_FIM,
@@ -25,6 +71,7 @@ export class DiscountService {
         ESTADO
       ) VALUES (
         :descricao,
+        :sigla,
         :taxa,
         TO_DATE(:data_inicio, 'YYYY-MM-DD'),
         TO_DATE(:data_fim, 'YYYY-MM-DD'),
@@ -35,6 +82,7 @@ export class DiscountService {
 
     const params = [
       createDto.descricao,
+      sigla,
       createDto.taxa,
       new Date(createDto.data_inicio).toISOString().split('T')[0],
       new Date(createDto.data_fim).toISOString().split('T')[0],
@@ -191,6 +239,7 @@ export class DiscountService {
         SELECT b.*, ROWNUM rnum FROM (
           SELECT
             a.DESCRICAO,
+            a.SIGLA,
             a.TAXA,
             a.DATA_INICIO,
             a.DATA_FIM,

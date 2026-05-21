@@ -14,6 +14,11 @@ export class CreateDiscountDto {
   @IsString()
   descricao: string;
 
+  @ApiProperty({ description: 'Sigla do desconto' })
+  @IsNotEmpty()
+  @IsString()
+  sigla: string;
+
   @ApiProperty({ description: 'Taxa do desconto' })
   @IsNotEmpty()
   @IsNumber()

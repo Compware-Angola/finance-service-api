@@ -121,27 +121,93 @@ export class InvoiceService {
       await queryRunner.release();
     }
   }
-  async annulInvoice(Codigo: number): Promise<Invoice> {
+  async annulInvoice(
+    Codigo: number,
+    CodigoUtilizador: number,
+    motivo?: string,
+  ): Promise<{ sucesso: boolean; mensagem: string }> {
     const invoice = await this.findOne(Codigo);
+
     if (!invoice) {
       throw new NotFoundException(
         `Fatura com Código ${Codigo} não encontrada.`,
       );
     }
-    // ANULAR TBM OS ITENS 
-    const items = await this.invoiceItemRepository.find({
-      where: { CodigoFactura: Codigo },
-    });
-    for (const item of items) {
-
-      item.estado = 3;
 
 
+    // Evita anular novamente
+    if (invoice.estado === 3) {
+      throw new BadRequestException(
+        `A fatura ${Codigo} já se encontra anulada.`,
+      );
     }
-    await this.invoiceItemRepository.save(items);
 
+    // Atualiza os itens da fatura
+    await this.invoiceItemRepository.update(
+      { CodigoFactura: Codigo },
+      { estado: 3 },
+    );
+
+    // Atualiza estado da fatura
     invoice.estado = 3;
-    return this.invoiceRepository.save(invoice);
+
+    // Salva alteração da fatura
+    const updatedInvoice = await this.invoiceRepository.save(invoice);
+
+    // Cria histórico
+    await this.createHistoricoAnulacaoFactura(
+      Codigo,
+      CodigoUtilizador,
+      motivo ?? 'Anulação da fatura',
+    );
+
+    return {
+      sucesso: true,
+      mensagem: `Fatura ${Codigo} anulada com sucesso.`,
+
+    };
+  }
+
+  private async createHistoricoAnulacaoFactura(
+    CodigoFactura: number,
+    CodigoUtilizador: number,
+    motivo: string,
+  ): Promise<void> {
+    const invoice = await this.findOne(CodigoFactura);
+
+    if (!invoice) {
+      throw new NotFoundException(
+        `Fatura com Código ${CodigoFactura} não encontrada.`,
+      );
+    }
+
+    await this.dataSource.query(
+      `
+      INSERT INTO fk2_tb_historico_anulacao_factura (
+        FACTURA_ID,
+        NUMERO_MATRICULA,
+        USER_ID,
+        MOTIVO_ANULACAO,
+        ACAO,
+        CREATED_AT
+      )
+      VALUES (
+        :1,
+        :2,
+        :3,
+        :4,
+        :5,
+        SYSDATE
+      )
+    `,
+      [
+        invoice.Codigo,
+        invoice.CodigoMatricula,
+        CodigoUtilizador,
+        motivo,
+        'anulacao',
+      ],
+    );
   }
   async reactivateInvoice(Codigo: number): Promise<Invoice> {
     const invoice = await this.findOne(Codigo);

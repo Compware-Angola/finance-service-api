@@ -85,7 +85,7 @@ export class CreateDebtNegotiationService {
         },
       });
 
-      if (!negociacaoExistente) {
+      if (negociacaoExistente) {
         throw new BadRequestException(
           `Aluno ${aluno.matricula} já possui negociação no ano letivo ${anoLectivo.Designacao}`,
         );
@@ -193,6 +193,12 @@ export class CreateDebtNegotiationService {
         await queryRunner.manager.update(
           Invoice,
           { Codigo: TypeOrmIn(codigosAntigosUnicos) },
+          { estado: 3 },
+        );
+        //ANULAR OS ITENS DA FACTURA TBMM
+        await queryRunner.manager.update(
+          InvoiceItem,
+          { CodigoFactura: TypeOrmIn(codigosAntigosUnicos) },
           { estado: 3 },
         );
 

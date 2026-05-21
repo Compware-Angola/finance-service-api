@@ -619,6 +619,9 @@ FROM (
         f.desconto                        AS desconto,
         f.totaliva                        AS total_iva,
         f.TOTAL_INCIDENCIA                AS total_incidencia,
+           -- MOTIVO ANULAÇÃO
+        haf.MOTIVO_ANULACAO               AS motivo_anulacao,
+        haf.CREATED_AT                    AS data_anulacao,
 
         -- Nome do aluno (melhor forma)
         COALESCE(p1.Nome_Completo, p2.Nome_Completo) AS nome_aluno,
@@ -634,6 +637,8 @@ FROM (
 
         ROW_NUMBER() OVER (ORDER BY f.Codigo DESC) AS rn
     FROM FK2_FACTURA f
+    LEFT JOIN fk2_tb_historico_anulacao_factura haf
+           ON haf.FACTURA_ID = f.Codigo
     LEFT JOIN FK2_TB_MATRICULAS       m   ON m.Codigo = f.CodigoMatricula
     LEFT JOIN FK2_TB_ADMISSAO         a   ON a.codigo = m.Codigo_Aluno
     LEFT JOIN FK2_TB_PREINSCRICAO     p1  ON p1.Codigo = a.pre_incricao
@@ -656,7 +661,8 @@ FROM (
         f.totaliva, f.TOTAL_INCIDENCIA, f.CodigoMatricula, f.Referencia,
         f.Descricao, f.estado, f.desconto,
         p1.Nome_Completo, p2.Nome_Completo,   -- <<<< importante
-        c.designacao, po.designacao, ano.Designacao, ano.codigo
+        c.designacao, po.designacao, ano.Designacao, ano.codigo,
+        haf.MOTIVO_ANULACAO, haf.CREATED_AT
 ) t
 WHERE rn BETWEEN :startRow AND :endRow
   `;

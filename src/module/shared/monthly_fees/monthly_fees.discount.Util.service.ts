@@ -15,7 +15,7 @@ import { TestMonthlyDTO } from './dto/test-monthly.dto';
 import { resolverDescontobolseiro } from 'src/module/util/calcular-desconto-bolseiro';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -412,6 +412,7 @@ export class MonthlyFeesDiscountUtilService {
       mesTemp.ano_lectivo,
       mesTemp.id,
     );
+    console.log(temMesesSemMulta);
 
     if (!bolseiroInfo.isentar_multa && !temMesesSemMulta && !isDescontoTotal) {
       percentagemMulta = await this.calcularPercentagemMulta(

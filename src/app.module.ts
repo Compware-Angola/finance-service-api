@@ -19,11 +19,13 @@ import { SharedModule } from './module/shared/shared.module';
 import { DiscountModule } from './module/discount/discount.module';
 import { IsencaoModule } from './module/isencao/isencao.module';
 
-import { TipoCreditoModule } from './module/tipo_credito/tipo_credito.module';
+
 import { PaymentTfcModule } from './module/payment-tfc/payment-tfc.module';
 import { FormaPagamentoModule } from './module/forma-pagamento/forma-pagamento.module';
 import { CashRegistersModule } from './module/cash-registers/cash-registers.module';
 import { UtilizadorModule } from './module/utilizadores/utilizador.module';
+import { CreditoEducacionalModule } from './module/credito_educacional/credito_educacional.module';
+import { TipoCreditoModule } from './module/credito_educacional/tipo_credito/tipo_credito.module';
 
 @Module({
   imports: [
@@ -103,7 +105,8 @@ import { UtilizadorModule } from './module/utilizadores/utilizador.module';
     FormaPagamentoModule,
     CashRegistersModule,
     UtilizadorModule,
+    CreditoEducacionalModule,
   ],
   providers: [BullMQWorkerService],
 })
-export class AppModule {}
+export class AppModule { }

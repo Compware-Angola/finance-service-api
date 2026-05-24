@@ -3,8 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm'
 import { Repository, IsNull, Like, FindOptionsWhere } from 'typeorm'
 import { CreateTipoCreditoDto, FilterTipoCreditoDto } from './dto/create-tipo_credito.dto'
 import { TipoCredito } from './entities/tipo_credito.entity'
-import { toLowerCaseKeys } from '../util/toLowerCaseKeys'
+
 import { UpdateTipoCreditoDto } from './dto/update-tipo_credito.dto'
+import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys'
 
 @Injectable()
 export class TipoCreditoService {
@@ -63,7 +64,7 @@ export class TipoCreditoService {
     })
 
     if (!tipo) throw new NotFoundException('Tipo de crédito não encontrado')
-    const data = toLowerCaseKeys(tipo) as TipoCredito
+    const data = toLowerCaseKeys(tipo)
     return { data }
   }
 

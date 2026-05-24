@@ -43,7 +43,7 @@ interface BuscarPagamento {
 }
 @Injectable()
 export class PaymentService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
   private queryRunner!: QueryRunner;
 
   private async initQueryRunner() {

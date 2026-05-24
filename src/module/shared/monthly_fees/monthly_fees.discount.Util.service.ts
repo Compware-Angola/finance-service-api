@@ -12,6 +12,7 @@ import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
 import { formatDisplay } from 'src/module/util/format-date';
 
 import { TestMonthlyDTO } from './dto/test-monthly.dto';
+import { resolverDescontobolseiro } from 'src/module/util/calcular-desconto-bolseiro';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
   constructor(private dataSource: DataSource) {}
@@ -48,14 +49,24 @@ export class MonthlyFeesDiscountUtilService {
   private async obterBolseiro({
     anoLectivo,
     codigoMatricula,
+    mensalidade,
     semestre,
   }: ObterBolseiroParams): Promise<BolseiroResult> {
     const sql = `
-    SELECT desconto, isentar_multa
-    FROM fk2_tb_bolseiros
-    WHERE codigo_matricula = :codigoMatricula
-      AND codigo_anolectivo = :anoLectivo
-      AND semestre = :semestre
+    SELECT
+      b.desconto        AS DESCONTO,
+      bo.valor_desconto AS VALOR_DESCONTO ,
+      db.sigla,
+      b.codigo_bolsa,
+      b.isentar_multa
+    FROM fk2_tb_bolseiros b
+    left join fk2_tb_bolsas bo
+      ON bo.codigo = b.codigo_bolsa
+    left join fk2_tb_tipo_desconto_bolsas db
+      ON db.codigo = bo.codigo_tipo_desconto
+    WHERE b.codigo_matricula = :codigoMatricula
+      AND b.codigo_anolectivo = :anoLectivo
+      AND b.semestre = :semestre
   `;
 
     try {
@@ -69,7 +80,11 @@ export class MonthlyFeesDiscountUtilService {
         return { bolseiro: false, desconto: 0, isentar_multa: false };
       }
 
-      const desconto = Number(row.DESCONTO ?? row.desconto ?? 0);
+      const desconto = resolverDescontobolseiro(row, mensalidade);
+      if (desconto == null) {
+        return { bolseiro: false, desconto: 0, isentar_multa: false };
+      }
+
       const isentar_multa =
         (row.ISENTAR_MULTA ?? row.isentar_multa)?.toUpperCase() === 'SIM';
 
@@ -148,8 +163,9 @@ export class MonthlyFeesDiscountUtilService {
       JOIN FK2_DESCONTOS_ESPECIAIS de
         ON de.ESTADO = 1
        AND TO_DATE(:dataStr, 'YYYY-MM-DD') BETWEEN de.DATA_INICIO AND de.DATA_FIM
-      WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324' AND a.anolectivo = 21)
-         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB' and a.anolectivo >= 23 )
+      WHERE (a.sigla = 'EAP' AND de.SIGLA = 'DAP50_AGRO_2324')
+         OR (a.turno = 6 AND de.SIGLA = 'DEN20_POSLAB'  and  a.sigla = 'LPC')
+         OR (a.turno = 6 AND de.SIGLA = 'DEN50_POSLAB_DGE_2526'  and  a.sigla in ('GAE','ECO','DIR') and a.anolectivo = 23 )
       FETCH FIRST 1 ROW ONLY
     `;
 
@@ -241,6 +257,7 @@ export class MonthlyFeesDiscountUtilService {
   private async calcularDesconto({
     anoLectivo,
     codigoMatricula,
+    mensalidade,
     mesTemp,
     dadosAluno,
   }: CalcularDescontoParams & { dadosAluno: any }): Promise<number> {
@@ -249,6 +266,7 @@ export class MonthlyFeesDiscountUtilService {
       anoLectivo,
       codigoMatricula,
       semestre: mesTemp.semestre,
+      mensalidade,
     });
     if (bolseiro.bolseiro) return bolseiro.desconto;
 
@@ -365,6 +383,7 @@ export class MonthlyFeesDiscountUtilService {
       anoLectivo,
       codigoMatricula,
       mesTemp,
+      mensalidade: mensalidade.preco,
       dadosAluno,
     });
 
@@ -372,6 +391,7 @@ export class MonthlyFeesDiscountUtilService {
       anoLectivo,
       codigoMatricula,
       semestre: mesTemp.semestre,
+      mensalidade: mensalidade.preco,
     });
 
     const isBolseiroIntegral = bolseiroInfo.desconto === 1;
@@ -392,6 +412,7 @@ export class MonthlyFeesDiscountUtilService {
       mesTemp.ano_lectivo,
       mesTemp.id,
     );
+    console.log(temMesesSemMulta);
 
     if (!bolseiroInfo.isentar_multa && !temMesesSemMulta && !isDescontoTotal) {
       percentagemMulta = await this.calcularPercentagemMulta(

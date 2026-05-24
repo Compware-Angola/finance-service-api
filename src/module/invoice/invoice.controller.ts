@@ -83,7 +83,7 @@ export class InvoiceController {
   @ApiResponse({ status: 200, "description": 'Fatura anulada com sucesso.', "type": Invoice })
   @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' })
   @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
-  async annulInvoice(@Param('id', ParseIntPipe) Codigo: number, @Req() req: any): Promise<Invoice> {
+  async annulInvoice(@Param('id', ParseIntPipe) Codigo: number, @Body() body: { motivo: string }, @Req() req: any): Promise<{ sucesso: boolean; mensagem: string }> {
     const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     console.log('Usuário autenticado:', user);
@@ -93,7 +93,7 @@ export class InvoiceController {
       fkOperacaoLog: 7,
       ip: ip,
     });
-    return this.invoiceService.annulInvoice(Codigo);
+    return this.invoiceService.annulInvoice(Codigo, user.sub, body.motivo);
   }
   @Patch('reactivate/:id')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)

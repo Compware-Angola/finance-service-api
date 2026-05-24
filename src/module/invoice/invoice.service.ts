@@ -121,27 +121,93 @@ export class InvoiceService {
       await queryRunner.release();
     }
   }
-  async annulInvoice(Codigo: number): Promise<Invoice> {
+  async annulInvoice(
+    Codigo: number,
+    CodigoUtilizador: number,
+    motivo?: string,
+  ): Promise<{ sucesso: boolean; mensagem: string }> {
     const invoice = await this.findOne(Codigo);
+
     if (!invoice) {
       throw new NotFoundException(
         `Fatura com Código ${Codigo} não encontrada.`,
       );
     }
-    // ANULAR TBM OS ITENS 
-    const items = await this.invoiceItemRepository.find({
-      where: { CodigoFactura: Codigo },
-    });
-    for (const item of items) {
-
-      item.estado = 3;
 
 
+    // Evita anular novamente
+    if (invoice.estado === 3) {
+      throw new BadRequestException(
+        `A fatura ${Codigo} já se encontra anulada.`,
+      );
     }
-    await this.invoiceItemRepository.save(items);
 
+    // Atualiza os itens da fatura
+    await this.invoiceItemRepository.update(
+      { CodigoFactura: Codigo },
+      { estado: 3 },
+    );
+
+    // Atualiza estado da fatura
     invoice.estado = 3;
-    return this.invoiceRepository.save(invoice);
+
+    // Salva alteração da fatura
+    const updatedInvoice = await this.invoiceRepository.save(invoice);
+
+    // Cria histórico
+    await this.createHistoricoAnulacaoFactura(
+      Codigo,
+      CodigoUtilizador,
+      motivo ?? 'Anulação da fatura',
+    );
+
+    return {
+      sucesso: true,
+      mensagem: `Fatura ${Codigo} anulada com sucesso.`,
+
+    };
+  }
+
+  private async createHistoricoAnulacaoFactura(
+    CodigoFactura: number,
+    CodigoUtilizador: number,
+    motivo: string,
+  ): Promise<void> {
+    const invoice = await this.findOne(CodigoFactura);
+
+    if (!invoice) {
+      throw new NotFoundException(
+        `Fatura com Código ${CodigoFactura} não encontrada.`,
+      );
+    }
+
+    await this.dataSource.query(
+      `
+      INSERT INTO fk2_tb_historico_anulacao_factura (
+        FACTURA_ID,
+        NUMERO_MATRICULA,
+        USER_ID,
+        MOTIVO_ANULACAO,
+        ACAO,
+        CREATED_AT
+      )
+      VALUES (
+        :1,
+        :2,
+        :3,
+        :4,
+        :5,
+        SYSDATE
+      )
+    `,
+      [
+        invoice.Codigo,
+        invoice.CodigoMatricula,
+        CodigoUtilizador,
+        motivo,
+        'anulacao',
+      ],
+    );
   }
   async reactivateInvoice(Codigo: number): Promise<Invoice> {
     const invoice = await this.findOne(Codigo);
@@ -554,7 +620,12 @@ FROM (
         f.totaliva                        AS total_iva,
         f.TOTAL_INCIDENCIA                AS total_incidencia,
 
-        -- Nome do aluno (melhor forma)
+        -- MOTIVO ANULAÇÃO
+        haf.MOTIVO_ANULACAO               AS motivo_anulacao,
+        haf.CREATED_AT                    AS data_anulacao,
+        usr.nome                          AS utilizador_anulacao,
+
+        -- Nome do aluno
         COALESCE(p1.Nome_Completo, p2.Nome_Completo) AS nome_aluno,
 
         c.designacao                      AS curso,
@@ -562,38 +633,79 @@ FROM (
         ano.Designacao                    AS ano_lectivo,
         ano.codigo                        AS codigo_ano_lectivo,
 
-        LISTAGG(ts.Descricao, ' • ') WITHIN GROUP (ORDER BY ts.Descricao) AS servicos,
-        LISTAGG(TO_CHAR(ts.Codigo), ', ') WITHIN GROUP (ORDER BY ts.Codigo) AS codigos_servicos,
-        COUNT(fi.Codigo)                  AS qtd_itens,
+        LISTAGG(ts.Descricao, ' • ')
+            WITHIN GROUP (ORDER BY ts.Descricao) AS servicos,
+
+        LISTAGG(TO_CHAR(ts.Codigo), ', ')
+            WITHIN GROUP (ORDER BY ts.Codigo) AS codigos_servicos,
+
+        COUNT(fi.Codigo) AS qtd_itens,
 
         ROW_NUMBER() OVER (ORDER BY f.Codigo DESC) AS rn
+
     FROM FK2_FACTURA f
-    LEFT JOIN FK2_TB_MATRICULAS       m   ON m.Codigo = f.CodigoMatricula
-    LEFT JOIN FK2_TB_ADMISSAO         a   ON a.codigo = m.Codigo_Aluno
-    LEFT JOIN FK2_TB_PREINSCRICAO     p1  ON p1.Codigo = a.pre_incricao
 
-    -- Join direto com pré-inscrição
-    LEFT JOIN FK2_TB_PREINSCRICAO     p2  ON p2.Codigo = f.codigo_preinscricao   -- <<<< muda o nome da coluna se for diferente
+    LEFT JOIN fk2_tb_historico_anulacao_factura haf
+           ON haf.FACTURA_ID = f.Codigo
 
-    LEFT JOIN FK2_TB_CURSOS           c   ON c.codigo = m.Codigo_Curso
-    LEFT JOIN FK2_POLOS               po  ON po.id = f.polo_id
-    LEFT JOIN FK2_TB_ANO_LECTIVO      ano ON ano.Codigo = f.ano_lectivo
+    LEFT JOIN fk2_mca_tb_utilizador usr
+           ON usr.pk_utilizador = haf.user_id
 
-    LEFT JOIN FK2_FACTURA_ITEMS       fi  ON fi.CodigoFactura = f.Codigo
-    LEFT JOIN FK2_TB_TIPO_SERVICOS    ts  ON ts.Codigo = fi.CodigoProduto
+    LEFT JOIN FK2_TB_MATRICULAS m
+           ON m.Codigo = f.CodigoMatricula
+
+    LEFT JOIN FK2_TB_ADMISSAO a
+           ON a.codigo = m.Codigo_Aluno
+
+    LEFT JOIN FK2_TB_PREINSCRICAO p1
+           ON p1.Codigo = a.pre_incricao
+
+    LEFT JOIN FK2_TB_PREINSCRICAO p2
+           ON p2.Codigo = f.codigo_preinscricao
+
+    LEFT JOIN FK2_TB_CURSOS c
+           ON c.codigo = m.Codigo_Curso
+
+    LEFT JOIN FK2_POLOS po
+           ON po.id = f.polo_id
+
+    LEFT JOIN FK2_TB_ANO_LECTIVO ano
+           ON ano.Codigo = f.ano_lectivo
+
+    LEFT JOIN FK2_FACTURA_ITEMS fi
+           ON fi.CodigoFactura = f.Codigo
+
+    LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+           ON ts.Codigo = fi.CodigoProduto
 
     WHERE 1=1
     ${whereClause}
 
     GROUP BY
-        f.Codigo, f.DataFactura, f.TotalPreco, f.valorapagar, f.totalmulta,
-        f.totaliva, f.TOTAL_INCIDENCIA, f.CodigoMatricula, f.Referencia,
-        f.Descricao, f.estado, f.desconto,
-        p1.Nome_Completo, p2.Nome_Completo,   -- <<<< importante
-        c.designacao, po.designacao, ano.Designacao, ano.codigo
+        f.Codigo,
+        f.DataFactura,
+        f.TotalPreco,
+        f.valorapagar,
+        f.totalmulta,
+        f.totaliva,
+        f.TOTAL_INCIDENCIA,
+        f.CodigoMatricula,
+        f.Referencia,
+        f.Descricao,
+        f.estado,
+        f.desconto,
+        p1.Nome_Completo,
+        p2.Nome_Completo,
+        c.designacao,
+        po.designacao,
+        ano.Designacao,
+        ano.codigo,
+        haf.MOTIVO_ANULACAO,
+        haf.CREATED_AT,
+        usr.nome
 ) t
 WHERE rn BETWEEN :startRow AND :endRow
-  `;
+`;
 
     const rawResults = await this.dataSource.query(dataSql, dataQueryParams);
 

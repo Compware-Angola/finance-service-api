@@ -12,6 +12,7 @@ import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
 import { formatDisplay } from 'src/module/util/format-date';
 
 import { TestMonthlyDTO } from './dto/test-monthly.dto';
+import { resolverDescontobolseiro } from 'src/module/util/calcular-desconto-bolseiro';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
   constructor(private dataSource: DataSource) {}
@@ -48,14 +49,24 @@ export class MonthlyFeesDiscountUtilService {
   private async obterBolseiro({
     anoLectivo,
     codigoMatricula,
+    mensalidade,
     semestre,
   }: ObterBolseiroParams): Promise<BolseiroResult> {
     const sql = `
-    SELECT desconto, isentar_multa
-    FROM fk2_tb_bolseiros
-    WHERE codigo_matricula = :codigoMatricula
-      AND codigo_anolectivo = :anoLectivo
-      AND semestre = :semestre
+    SELECT
+      b.desconto        AS DESCONTO,
+      bo.valor_desconto AS VALOR_DESCONTO ,
+      db.sigla,
+      b.codigo_bolsa,
+      b.isentar_multa
+    FROM fk2_tb_bolseiros b
+    left join fk2_tb_bolsas bo
+      ON bo.codigo = b.codigo_bolsa
+    left join fk2_tb_tipo_desconto_bolsas db
+      ON db.codigo = bo.codigo_tipo_desconto
+    WHERE b.codigo_matricula = :codigoMatricula
+      AND b.codigo_anolectivo = :anoLectivo
+      AND b.semestre = :semestre
   `;
 
     try {
@@ -69,7 +80,11 @@ export class MonthlyFeesDiscountUtilService {
         return { bolseiro: false, desconto: 0, isentar_multa: false };
       }
 
-      const desconto = Number(row.DESCONTO ?? row.desconto ?? 0);
+      const desconto = resolverDescontobolseiro(row, mensalidade);
+      if (desconto == null) {
+        return { bolseiro: false, desconto: 0, isentar_multa: false };
+      }
+
       const isentar_multa =
         (row.ISENTAR_MULTA ?? row.isentar_multa)?.toUpperCase() === 'SIM';
 
@@ -242,6 +257,7 @@ export class MonthlyFeesDiscountUtilService {
   private async calcularDesconto({
     anoLectivo,
     codigoMatricula,
+    mensalidade,
     mesTemp,
     dadosAluno,
   }: CalcularDescontoParams & { dadosAluno: any }): Promise<number> {
@@ -250,6 +266,7 @@ export class MonthlyFeesDiscountUtilService {
       anoLectivo,
       codigoMatricula,
       semestre: mesTemp.semestre,
+      mensalidade,
     });
     if (bolseiro.bolseiro) return bolseiro.desconto;
 
@@ -366,6 +383,7 @@ export class MonthlyFeesDiscountUtilService {
       anoLectivo,
       codigoMatricula,
       mesTemp,
+      mensalidade: mensalidade.preco,
       dadosAluno,
     });
 
@@ -373,6 +391,7 @@ export class MonthlyFeesDiscountUtilService {
       anoLectivo,
       codigoMatricula,
       semestre: mesTemp.semestre,
+      mensalidade: mensalidade.preco,
     });
 
     const isBolseiroIntegral = bolseiroInfo.desconto === 1;

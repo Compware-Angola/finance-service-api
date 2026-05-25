@@ -21,6 +21,7 @@ import { HttpService } from '@nestjs/axios';
 import { AxiosError } from 'axios';
 import { TipoPagamento } from './dto/listar-servico-pagos.dto';
 import { CashRegistersService } from '../cash-registers/cash-registers.service';
+import { YesNo } from '../cash-registers/enums/cash-register-status.enum';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
@@ -300,6 +301,9 @@ export class PaymentService {
       );
     if (!cashRegister) {
       throw new BadRequestException('Você não tem uma caixa aberta');
+    }
+    if(cashRegister.blocked === YesNo.YES){
+      throw new BadRequestException("Caixa bloqueado, desative para prosseguir")
     }
 
     const anoCorrente = this.anoAtualPrincipal;

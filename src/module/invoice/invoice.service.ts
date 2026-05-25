@@ -33,7 +33,7 @@ import { InvoiceSearchDto } from './dto/get-invoice.dto';
 import { normalizeParam } from '../util/normalize-util';
 import { InvoiceItemEnum } from 'src/common/enums/invoice-item.enum';
 import { InvoiceEnum } from 'src/common/enums/invoice.enum';
-import { roundToInt } from '../util/round';
+import { fixToInt } from '../util/round';
 
 type ExemptionType = { CODIGO: number; SIGLA: string };
 
@@ -134,7 +134,6 @@ export class InvoiceService {
       );
     }
 
-
     // Evita anular novamente
     if (invoice.estado === 3) {
       throw new BadRequestException(
@@ -164,7 +163,6 @@ export class InvoiceService {
     return {
       sucesso: true,
       mensagem: `Fatura ${Codigo} anulada com sucesso.`,
-
     };
   }
 
@@ -272,7 +270,7 @@ export class InvoiceService {
 
     // 4. Gerar dados do hash/numeração da fatura
     const hashData = await this.hashService.generateInvoiceHashData(
-      roundToInt(invoiceData.TotalPreco ?? 0),
+      fixToInt(invoiceData.TotalPreco ?? 0),
       tipoDocId,
       anoLetivo.Codigo,
       invoiceData.polo_id ?? 1,
@@ -417,15 +415,15 @@ export class InvoiceService {
      RETURNING CODIGO INTO :outId
   `,
       {
-        totalPreco: roundToInt(invoiceData.TotalPreco ?? 0),
+        totalPreco: fixToInt(invoiceData.TotalPreco ?? 0),
         codigoMatricula: invoiceData.CodigoMatricula ?? null,
         referencia,
-        desconto: roundToInt(invoiceData.Desconto ?? 0),
-        totalIva: roundToInt(invoiceData.totalIVA ?? 0),
-        totalMulta: roundToInt(invoiceData.TotalMulta ?? 0),
-        totalIncidencia: roundToInt(invoiceData.total_incidencia ?? 0),
-        totalRetencao: roundToInt(invoiceData.total_retencao ?? 0),
-        valorAPagar: roundToInt(invoiceAmount ?? 0),
+        desconto: fixToInt(invoiceData.Desconto ?? 0),
+        totalIva: fixToInt(invoiceData.totalIVA ?? 0),
+        totalMulta: fixToInt(invoiceData.TotalMulta ?? 0),
+        totalIncidencia: fixToInt(invoiceData.total_incidencia ?? 0),
+        totalRetencao: fixToInt(invoiceData.total_retencao ?? 0),
+        valorAPagar: fixToInt(invoiceAmount ?? 0),
         valorAPagarExtenso: '',
         descricao: invoiceData.Descricao ?? '',
         codigoDescricao: invoiceData.codigo_descricao ?? 101,
@@ -516,20 +514,20 @@ export class InvoiceService {
             codigoProduto: itemDto.CodigoProduto,
             codigoFactura: codigoGerado,
             quantidade: itemDto.Quantidade ?? 1,
-            total: roundToInt(itemDto.Total ?? 0),
+            total: fixToInt(itemDto.Total ?? 0),
             obs: (itemDto.obs ?? `Item da fatura ${codigoGerado}`).substring(
               0,
               45,
             ),
-            taxaIva: roundToInt(itemDto.taxaIva ?? 0),
-            valorIva: roundToInt(itemDto.valorIva ?? 0),
-            preco: roundToInt(itemDto.preco ?? 0),
-            retencao: roundToInt(itemDto.retencao ?? 0),
-            incidencia: roundToInt(itemDto.incidencia ?? 0),
-            valorDesconto: roundToInt(itemDto.valorDesconto ?? 0),
-            descontoProduto: roundToInt(itemDto.descontoProduto ?? 0),
+            taxaIva: fixToInt(itemDto.taxaIva ?? 0),
+            valorIva: fixToInt(itemDto.valorIva ?? 0),
+            preco: fixToInt(itemDto.preco ?? 0),
+            retencao: fixToInt(itemDto.retencao ?? 0),
+            incidencia: fixToInt(itemDto.incidencia ?? 0),
+            valorDesconto: fixToInt(itemDto.valorDesconto ?? 0),
+            descontoProduto: fixToInt(itemDto.descontoProduto ?? 0),
             mes: itemDto.mes ?? null,
-            multa: roundToInt(itemDto.multa ?? 0),
+            multa: fixToInt(itemDto.multa ?? 0),
             mesTempId: itemDto.mesTempId ?? null,
             codigoAnoLectivo:
               itemDto.codigo_anoLectivo ?? savedInvoice.anoLectivo,

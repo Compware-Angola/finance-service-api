@@ -20,10 +20,7 @@ export class EmailHelper {
   private static readonly logger = new Logger(EmailHelper.name);
 
   private static getEmailUrl(): string {
-    return (
-      process.env.MAIL_API_URL ||
-      'https://api.mailify.service.compware.net/api/send-email'
-    );
+    return process.env.MAIL_API_URL!;
   }
 
   static sendEmail(httpService: HttpService, payload: SendEmailPayload): void {

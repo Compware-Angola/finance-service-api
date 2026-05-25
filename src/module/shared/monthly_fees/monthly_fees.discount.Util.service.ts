@@ -412,7 +412,7 @@ export class MonthlyFeesDiscountUtilService {
       mesTemp.ano_lectivo,
       mesTemp.id,
     );
-    console.log(bolseiroInfo.isentar_multa, temMesesSemMulta, isDescontoTotal);
+
 
     if (!bolseiroInfo.isentar_multa && !temMesesSemMulta && !isDescontoTotal) {
       percentagemMulta = await this.calcularPercentagemMulta(
@@ -422,7 +422,7 @@ export class MonthlyFeesDiscountUtilService {
       );
 
     }
-    console.log(percentagemMulta, mesTemp);
+
 
     const multa = mensalidadeComDesconto * percentagemMulta;
     const valorFinal = mensalidadeComDesconto + multa;

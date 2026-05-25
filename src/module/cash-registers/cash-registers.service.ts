@@ -24,6 +24,7 @@ import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
 import { formatTime } from '../util/formatTime';
 import { HttpService } from '@nestjs/axios';
 import { HashHelper } from 'src/common/helpers/hash-helper';
+import { EmailHelper } from 'src/common/helpers/email.helper';
 
 type ValidateMovementParams = {
   id: number;
@@ -52,7 +53,6 @@ export class CashRegistersService {
         'C.CODIGO AS code',
         'C.NOME AS name',
         'C.STATUS_ AS status',
-        'C.CODE AS opening_code',
         'C.BLOQUEIO AS blocked',
         'UTI.PK_UTILIZADOR AS operator_code',
         'UTI.NOME AS operator_name',
@@ -124,15 +124,13 @@ export class CashRegistersService {
   }
 
   async open(params: OpenCashRegisterParams) {
-    const code = generateRandomCode();
+    
 
     const { id, openingAmount, operatorId, adminId } = params;
 
     return this.dataSource.transaction(async (manager) => {
       const cashRegisterRepository = manager.getRepository(CashRegister);
-
       const movementRepository = manager.getRepository(CashRegisterMovement);
-
       const operatorCashRegister = await cashRegisterRepository.findOne({
         where: {
           operatorId,
@@ -140,11 +138,9 @@ export class CashRegistersService {
           deletedAt: IsNull(),
         },
       });
-
       if (operatorCashRegister) {
         throw new BadRequestException('Operador já possui um caixa aberto');
       }
-
       const cashRegister = await cashRegisterRepository.findOne({
         where: {
           id,
@@ -157,14 +153,14 @@ export class CashRegistersService {
       }
 
       this.validateCashRegisterAvailability(cashRegister);
-
+      const openingCode = generateRandomCode();
+      const hashOpeningCode = await HashHelper.generateHash(this.httpService,openingCode.toString());
       cashRegister.status = CashRegisterStatus.OPEN;
       cashRegister.operatorId = operatorId;
-      cashRegister.code = code.toString();
+      cashRegister.blocked = YesNo.YES;
+      cashRegister.code = hashOpeningCode;
       cashRegister.createdBy = adminId;
-
       await cashRegisterRepository.save(cashRegister);
-
       const movement = movementRepository.create({
         cashRegisterId: cashRegister.id,
         operatorId,
@@ -184,8 +180,22 @@ export class CashRegistersService {
       });
 
       await movementRepository.save(movement);
+      const { code, ...rest } = cashRegister;
+      const email = await this.findOperatorEmail(operatorId);
 
-      return cashRegister;
+      EmailHelper.sendEmail(this.httpService,{
+        to: email,
+        subject: "Caixa aberto",
+       html: `<h1>Caixa aberto com sucesso</h1>
+       <p>Código de abertura: ${openingCode}</p>
+       <p>Operador: ${operatorId}</p>
+       <p>Valor de abertura: ${openingAmount}</p>
+       <p>Data de abertura: ${new Date().toLocaleDateString()}</p>
+       <p>Hora de abertura: ${formatTime(new Date())}</p>
+       `
+      })
+
+      return rest;
     });
   }
   async verifyMyCashRegister({
@@ -201,16 +211,23 @@ export class CashRegistersService {
         deletedAt: IsNull(),
       },
     });
-
+    
     if (!cashRegister) {
       throw new NotFoundException('Caixa não encontrado');
     }
-
-    if (cashRegister.code !== openingCode) {
+    if(!cashRegister.code){
       throw new BadRequestException('Código de abertura inválido');
     }
-
-    return cashRegister;
+    const isValidCode = await HashHelper.verifyHash(this.httpService,openingCode.toString(),cashRegister.code);
+    console.log(isValidCode);
+  
+    if (!isValidCode) {
+      throw new BadRequestException('Código de abertura inválido');
+    }
+    cashRegister.blocked = YesNo.NO;
+    await this.cashRegisterRepository.save(cashRegister);
+    const { code, ...rest } = cashRegister;
+    return rest;
   }
 
   async close(cashRegisterId: number, operatorId: number) {
@@ -574,6 +591,68 @@ export class CashRegistersService {
     }
 
     return await this.cashRegisterMovementRepository.save(movement);
+  }
+
+  async recoveryOpeningCode(operatorId: number) {
+    const cashRegister = await this.cashRegisterRepository.findOne({
+      where: {
+        operatorId,
+        deletedAt: IsNull(),
+      },
+    });
+
+    if (!cashRegister) {
+      throw new NotFoundException('Caixa não encontrado');
+    }
+    
+    const openingCode = generateRandomCode();
+    const hashOpeningCode = await HashHelper.generateHash(this.httpService,openingCode.toString());
+    cashRegister.code = hashOpeningCode;
+
+     await this.cashRegisterRepository.save(cashRegister);
+
+     const operatorEmail = await this.findOperatorEmail(operatorId);
+     
+     EmailHelper.sendEmail(this.httpService,{subject:'Recuperação de código de abertura de caixa', to:operatorEmail, 
+      html:`Seu codigo de abertura de caixa é: ${openingCode}`});
+
+    
+  }
+
+  async blockMyCashRegister(operatorId: number){
+    const cashRegister = await this.cashRegisterRepository.findOne({
+      where: {
+        operatorId,
+        deletedAt: IsNull(),
+      },
+    });
+
+    if (!cashRegister) {
+      throw new NotFoundException('Caixa não encontrado');
+    }
+
+    cashRegister.blocked = YesNo.YES;
+    await this.cashRegisterRepository.save(cashRegister);
+    const { code, ...rest } = cashRegister;
+    return rest;
+  }
+
+  private async findOperatorEmail(id: number) {
+    const [data] = await this.dataSource.query<{
+      EMAIL: string;
+    }[]>(
+    `
+    SELECT 
+    uti.EMAIL
+    FROM FK2_MCA_TB_UTILIZADOR uti
+    WHERE uti.PK_UTILIZADOR = :1
+    `,
+      [id],
+    );
+    if(!data){
+     throw new BadRequestException('Operador nao tem email cadastrado, por favor cadastre o email');
+    }
+    return data.EMAIL;
   }
 }
 

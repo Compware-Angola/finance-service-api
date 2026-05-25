@@ -79,6 +79,18 @@ export class CashRegistersController {
     };
   }
 
+  @Patch('me/recovery-code')
+  async recoveryOpeningCode(@Req() req: any) {
+    const user = req.user;
+    return await this.cashRegistersService.recoveryOpeningCode(user.sub);
+  }
+
+  @Patch('me/block')
+  async blockMyCashRegister(@Req() req: any) {
+    const user = req.user;
+    return await this.cashRegistersService.blockMyCashRegister(user.sub);
+  }
+
   @Get('available')
   async findAvailableForOpening(
     @Query()

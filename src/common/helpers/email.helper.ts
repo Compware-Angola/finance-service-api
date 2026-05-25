@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
 import { HttpService } from '@nestjs/axios';
 import { Logger } from '@nestjs/common';
 import { lastValueFrom } from 'rxjs';
@@ -9,10 +6,17 @@ import * as FormData from 'form-data';
 export interface SendEmailPayload {
   to: string;
   subject: string;
+  company: string;
+  type: string;
+
+  // agora o foco é template
+  template?: string;
+  context?: Record<string, any>;
+
+  // fallback opcional
   html?: string;
   text?: string;
-  template?: string;
-  context?: string;
+
   attachments?: Buffer | string;
 }
 
@@ -23,32 +27,7 @@ export class EmailHelper {
     return process.env.MAIL_API_URL!;
   }
 
-  static sendEmail(httpService: HttpService, payload: SendEmailPayload): void {
-    const formData = this.buildFormData(payload);
-
-    httpService
-      .post(this.getEmailUrl(), formData, {
-        headers: {
-          ...formData.getHeaders(),
-          accept: '*/*',
-        },
-        timeout: 10000,
-      })
-      .subscribe({
-        next: () => {
-          this.logger.log(`Email enviado para ${payload.to}`);
-        },
-        error: (err) => {
-          this.logger.error('Erro ao enviar email', {
-            message: err.message,
-            status: err.response?.status,
-            data: err.response?.data,
-          });
-        },
-      });
-  }
-
-  static async sendEmailSync(
+  static async sendEmail(
     httpService: HttpService,
     payload: SendEmailPayload,
   ): Promise<void> {
@@ -56,7 +35,7 @@ export class EmailHelper {
       const formData = this.buildFormData(payload);
 
       await lastValueFrom(
-        httpService.post(this.getEmailUrl(), formData, {
+        httpService.post(`${this.getEmailUrl()}/send-email`, formData, {
           headers: {
             ...formData.getHeaders(),
             accept: '*/*',
@@ -66,8 +45,8 @@ export class EmailHelper {
       );
 
       this.logger.log(`Email enviado para ${payload.to}`);
-    } catch (err) {
-      this.logger.error('Erro ao enviar email sync', {
+    } catch (err: any) {
+      this.logger.error('Erro ao enviar email', {
         message: err.message,
         status: err.response?.status,
         data: err.response?.data,
@@ -80,21 +59,26 @@ export class EmailHelper {
 
     formData.append('to', payload.to);
     formData.append('subject', payload.subject);
+    formData.append('company', payload.company);
+    formData.append('type', payload.type);
 
+    // prioridade: template
+    if (payload.template) {
+      formData.append('template', payload.template);
+    }
+
+    // contexto sempre em JSON string
+    if (payload.context) {
+      formData.append('context', JSON.stringify(payload.context));
+    }
+
+    // fallback manual
     if (payload.html) {
       formData.append('html', payload.html);
     }
 
     if (payload.text) {
       formData.append('text', payload.text);
-    }
-
-    if (payload.template) {
-      formData.append('template', payload.template);
-    }
-
-    if (payload.context) {
-      formData.append('context', payload.context);
     }
 
     if (payload.attachments) {

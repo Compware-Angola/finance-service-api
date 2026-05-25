@@ -124,8 +124,6 @@ export class CashRegistersService {
   }
 
   async open(params: OpenCashRegisterParams) {
-    
-
     const { id, openingAmount, operatorId, adminId } = params;
 
     return this.dataSource.transaction(async (manager) => {
@@ -154,7 +152,10 @@ export class CashRegistersService {
 
       this.validateCashRegisterAvailability(cashRegister);
       const openingCode = generateRandomCode();
-      const hashOpeningCode = await HashHelper.generateHash(this.httpService,openingCode.toString());
+      const hashOpeningCode = await HashHelper.generateHash(
+        this.httpService,
+        openingCode.toString(),
+      );
       cashRegister.status = CashRegisterStatus.OPEN;
       cashRegister.operatorId = operatorId;
       cashRegister.blocked = YesNo.YES;
@@ -182,19 +183,19 @@ export class CashRegistersService {
       await movementRepository.save(movement);
       const { code, ...rest } = cashRegister;
       const email = await this.findOperatorEmail(operatorId);
-
-      EmailHelper.sendEmail(this.httpService,{
+      EmailHelper.sendEmail(this.httpService, {
         to: email,
-        subject: "Caixa aberto",
-       html: `<h1>Caixa aberto com sucesso</h1>
-       <p>Código de abertura: ${openingCode}</p>
-       <p>Operador: ${operatorId}</p>
-       <p>Valor de abertura: ${openingAmount}</p>
-       <p>Data de abertura: ${new Date().toLocaleDateString()}</p>
-       <p>Hora de abertura: ${formatTime(new Date())}</p>
-       `
-      })
-
+        subject: 'Caixa aberto',
+        company: 'universidade_metodista_angola',
+        type: 'codigo_validacao_abertura_caixa',
+        context: {
+          codigo_abertura: openingCode,
+          operador: operatorId,
+          valor_abertura: openingAmount,
+          data_abertura: new Date().toLocaleDateString(),
+          hora_abertura: formatTime(new Date()),
+        },
+      });
       return rest;
     });
   }
@@ -211,16 +212,20 @@ export class CashRegistersService {
         deletedAt: IsNull(),
       },
     });
-    
+
     if (!cashRegister) {
       throw new NotFoundException('Caixa não encontrado');
     }
-    if(!cashRegister.code){
+    if (!cashRegister.code) {
       throw new BadRequestException('Código de abertura inválido');
     }
-    const isValidCode = await HashHelper.verifyHash(this.httpService,openingCode.toString(),cashRegister.code);
+    const isValidCode = await HashHelper.verifyHash(
+      this.httpService,
+      openingCode.toString(),
+      cashRegister.code,
+    );
     console.log(isValidCode);
-  
+
     if (!isValidCode) {
       throw new BadRequestException('Código de abertura inválido');
     }
@@ -604,22 +609,35 @@ export class CashRegistersService {
     if (!cashRegister) {
       throw new NotFoundException('Caixa não encontrado');
     }
-    
+
     const openingCode = generateRandomCode();
-    const hashOpeningCode = await HashHelper.generateHash(this.httpService,openingCode.toString());
+
+    const hashOpeningCode = await HashHelper.generateHash(
+      this.httpService,
+      openingCode.toString(),
+    );
+
     cashRegister.code = hashOpeningCode;
 
-     await this.cashRegisterRepository.save(cashRegister);
+    await this.cashRegisterRepository.save(cashRegister);
 
-     const operatorEmail = await this.findOperatorEmail(operatorId);
-     
-     EmailHelper.sendEmail(this.httpService,{subject:'Recuperação de código de abertura de caixa', to:operatorEmail, 
-      html:`Seu codigo de abertura de caixa é: ${openingCode}`});
+    const operatorEmail = await this.findOperatorEmail(operatorId);
 
-    
+    EmailHelper.sendEmail(this.httpService, {
+      to: operatorEmail,
+      subject: 'Recuperação de código de abertura de caixa',
+      company: 'universidade_metodista_angola',
+      type: 'recuperacao_codigo_abertura_caixa',
+      template:
+        'universidade_metodista_angola:recuperacao_codigo_abertura_caixa',
+      context: {
+        nome: 'Operador',
+        codigo_abertura: openingCode,
+      },
+    });
   }
 
-  async blockMyCashRegister(operatorId: number){
+  async blockMyCashRegister(operatorId: number) {
     const cashRegister = await this.cashRegisterRepository.findOne({
       where: {
         operatorId,
@@ -638,10 +656,12 @@ export class CashRegistersService {
   }
 
   private async findOperatorEmail(id: number) {
-    const [data] = await this.dataSource.query<{
-      EMAIL: string;
-    }[]>(
-    `
+    const [data] = await this.dataSource.query<
+      {
+        EMAIL: string;
+      }[]
+    >(
+      `
     SELECT 
     uti.EMAIL
     FROM FK2_MCA_TB_UTILIZADOR uti
@@ -649,8 +669,10 @@ export class CashRegistersService {
     `,
       [id],
     );
-    if(!data){
-     throw new BadRequestException('Operador nao tem email cadastrado, por favor cadastre o email');
+    if (!data) {
+      throw new BadRequestException(
+        'Operador nao tem email cadastrado, por favor cadastre o email',
+      );
     }
     return data.EMAIL;
   }

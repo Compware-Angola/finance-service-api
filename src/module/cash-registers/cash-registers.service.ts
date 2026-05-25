@@ -646,7 +646,7 @@ export class CashRegistersService {
     });
 
     if (!cashRegister) {
-      throw new NotFoundException('Caixa não encontrado');
+      return null;
     }
 
     cashRegister.blocked = YesNo.YES;

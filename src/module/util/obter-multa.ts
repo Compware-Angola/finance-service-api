@@ -6,14 +6,18 @@ const isDiaIsento = (
   periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[]
 ): boolean => {
   return periodosIsentos.some((periodo) => {
-    const inicio = new Date(periodo.DATA_INICIO);
-    const fim = new Date(periodo.DATA_FIM);
-    inicio.setHours(0, 0, 0, 0);
-    fim.setHours(0, 0, 0, 0);
+    const inicio = new Date(Date.UTC(
+      new Date(periodo.DATA_INICIO).getUTCFullYear(),
+      new Date(periodo.DATA_INICIO).getUTCMonth(),
+      new Date(periodo.DATA_INICIO).getUTCDate()
+    ));
+    const fim = new Date(Date.UTC(
+      new Date(periodo.DATA_FIM).getUTCFullYear(),
+      new Date(periodo.DATA_FIM).getUTCMonth(),
+      new Date(periodo.DATA_FIM).getUTCDate()
+    ));
 
-    // Garante que inicio <= fim independente da ordem enviada
     const [de, ate] = inicio <= fim ? [inicio, fim] : [fim, inicio];
-
     return data >= de && data <= ate;
   });
 };
@@ -27,46 +31,51 @@ const isDomingo = (data: Date): boolean => data.getDay() === 0;
  * Retorna a multa aplicável com base na data de hoje e na data limite.
  *
  * Regras:
- * - Hoje < dataLimite → sem multa (0%)
- * - Hoje === dataLimite E (domingo OU dia isento) → sem multa (0%), prazo prorrogado
- * - Hoje > dataLimite → multa fixa de 10%
- * - Hoje === dataLimite (dia normal) → sem multa (0%), ainda dentro do prazo
+ * - Hoje <= dataLimite            → 0%  (dentro do prazo)
+ * - Limite era domingo ou isento  → 0%  (prazo prorrogado)
+ * - Hoje > dataLimite (dia normal)→ 10%
  */
 const obterMulta = (
   dataLimite: Date,
   periodosIsentos: { DATA_INICIO: Date; DATA_FIM: Date }[] = []
 ): number => {
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
+  const toUTCMidnight = (data: Date): Date => {
+    const d = new Date(data);
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  };
 
-  const limite = new Date(dataLimite);
-  limite.setHours(0, 0, 0, 0);
+  const hoje = toUTCMidnight(new Date());
+  const limite = toUTCMidnight(dataLimite);
 
-  // Dentro do prazo (inclui hoje === dataLimite)
-  if (hoje <= limite) {
-    return 0;
+  // Dentro do prazo normal
+  if (hoje <= limite) return 0;
+
+  // ✅ Começa a verificar a partir do dia SEGUINTE ao limite
+  const limiteEfectivo = new Date(limite);
+  limiteEfectivo.setUTCDate(limiteEfectivo.getUTCDate() + 1);
+
+  // Avança enquanto encontrar domingos ou feriados consecutivos
+  while (
+    isDomingo(limiteEfectivo) ||
+    isDiaIsento(limiteEfectivo, periodosIsentos)
+  ) {
+    limiteEfectivo.setUTCDate(limiteEfectivo.getUTCDate() + 1);
   }
 
-  // Hoje > dataLimite: verifica se o vencimento caiu em domingo ou dia isento.
-  // Nesse caso, o prazo é considerado prorrogado e não há multa enquanto
-  // o pagamento ocorre no primeiro dia útil seguinte.
-  // Se quiser aplicar essa tolerância apenas NO DIA SEGUINTE ao vencimento,
-  // troque `isDomingo(limite)` por `isDomingo(hoje)` e similar para isento.
-  const vencimentoEraIsento =
-    isDomingo(limite) || isDiaIsento(limite, periodosIsentos);
+  // hoje ainda está dentro da prorrogação → sem multa
+  if (hoje <= limiteEfectivo) return 0;
 
-  if (vencimentoEraIsento) {
-    // Prorrogação: sem multa no primeiro dia útil após o vencimento isento.
-    // Para uma tolerância de exatamente 1 dia, adicione:
-    // const umDiaDepois = new Date(limite);
-    // umDiaDepois.setDate(umDiaDepois.getDate() + 1);
-    // if (hoje <= umDiaDepois) return 0;
-    return 0;
-  }
-
-  // Fora do prazo → multa de 10%
   return 0.1;
 };
+/**
+ * Retorna a multa com base numa data de verificação específica.
+ *
+ * Regras:
+ * - dataVerificacao <= dataLimite              → 0%
+ * - dataVerificacao <= dataFinal               → 5%
+ * - dataVerificacao <= dataFinal + 1 mês       → 7%
+ * - dataVerificacao >  dataFinal + 1 mês       → 10%
+ */
 const obterMultaPorData = (
   dataVerificacao: Date,
   dataLimite: Date,
@@ -85,6 +94,7 @@ const obterMultaPorData = (
     const diaOriginal = novaData.getDate();
     novaData.setMonth(novaData.getMonth() + 1);
 
+    // Corrige overflow de mês (ex: 31 Jan → 28/29 Fev)
     if (novaData.getDate() < diaOriginal) {
       novaData.setDate(0);
     }
@@ -95,11 +105,10 @@ const obterMultaPorData = (
   const dataFinalMaisUmMes = adicionarUmMesSeguro(dataFinal);
 
   if (dataVerificacao <= dataLimite) return 0;
-  if (dataVerificacao <= dataFinal) return 0.05;       // 5%
+  if (dataVerificacao <= dataFinal) return 0.05; // 5%
   if (dataVerificacao <= dataFinalMaisUmMes) return 0.07; // 7%
 
   return 0.1; // 10%
 };
-
 
 export { obterMulta, obterMultaPorData };

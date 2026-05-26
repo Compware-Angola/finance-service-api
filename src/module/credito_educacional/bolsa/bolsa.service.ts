@@ -202,6 +202,33 @@ export class BolsaService {
       valorDesconto,
       codigoTipoCredito
     } = updateBolsaDto;
+    let checkTipoDesconto: any = null;
+    if (codigoTipoDesconto !== null || codigoTipoDesconto !== undefined) {
+      checkTipoDesconto = await this.dataSource.query(
+        `
+    SELECT 
+      CODIGO,
+      SIGLA
+    FROM FK2_TB_TIPO_DESCONTO_BOLSAS
+    WHERE CODIGO = :codigoTipoDesconto
+    `,
+        {
+          codigoTipoDesconto,
+        } as any,
+      );
+    }
+
+    if (valorDesconto && codigoTipoDesconto && checkTipoDesconto) {
+      if (checkTipoDesconto[0].SIGLA === "DESC_PERC") {
+        if (valorDesconto > 100) {
+          throw new BadRequestException('O valor do desconto não pode exceder 100%');
+        }
+      } else if (checkTipoDesconto[0].SIGLA === "DESC_FIX") {
+        if (valorDesconto < 1000) {
+          throw new BadRequestException('O valor do desconto deve ser maior ou igual a 1000');
+        }
+      }
+    }
 
     await this.dataSource.query(
       `

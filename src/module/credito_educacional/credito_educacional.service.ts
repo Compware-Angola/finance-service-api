@@ -4,22 +4,29 @@ import { CreateCreditoEducacionalDto } from './dto/create-credito_educacional.dt
 import { UpdateCreditoEducacionalDto } from './dto/update-credito_educacional.dto';
 import { FindCreditoEducacionalDto } from './dto/find-credito-educacional.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { PaymentService } from '../payment/payment.service';
 
 @Injectable()
 export class CreditoEducacionalService {
-  constructor(private readonly dataSource: DataSource) { }
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly paymentService: PaymentService,
+  ) { }
 
   async create(dto: CreateCreditoEducacionalDto, codigoUtilizador: number) {
-
+    const dadosAluno = await this.obterDadosCompletosAluno(dto.codigoMatricula);
     // 1. Validação da Bolsa
     const [bolsa] = await this.dataSource.query(
-      `SELECT CODIGO FROM FK2_TB_BOLSAS WHERE CODIGO = :codigoBolsa`,
+      `SELECT b.CODIGO,b.VALOR_DESCONTO, tb.SIGLA FROM FK2_TB_BOLSAS b 
+      INNER JOIN FK2_TB_TIPO_DESCONTO_BOLSAS tb ON b.CODIGO_TIPO_DESCONTO = tb.CODIGO
+      WHERE b.CODIGO = :codigoBolsa`,
       { codigoBolsa: dto.codigoBolsa } as any,
     );
 
     if (!bolsa) {
       throw new NotFoundException(`Bolsa com código ${dto.codigoBolsa} não encontrada`);
     }
+    console.log(bolsa);
 
     // 2. Validação da Matrícula
     const [matricula] = await this.dataSource.query(
@@ -49,6 +56,42 @@ export class CreditoEducacionalService {
         `Já existe um bolseiro activo para a matrícula ${dto.codigoMatricula}`,
       );
     }
+    //   Ser fixo  deve ver pesquisar a mensalidade do aluno  e 
+    //  saber quando ele paga por mes e calcular quanto sera os  
+    //  10 meses  se  depois vou subtrair se sobrar  vou devolver 
+    //  no saldo  do aluno 
+    if (bolsa.SIGLA === "DESC_FIX") {
+      const mensalidade = await this.obterMensalidade(
+        dto.codigoAnoLectivo,
+        dadosAluno,
+      );
+
+      const valorMensalidade = mensalidade.preco;
+
+      // Se semestre 1 ou 2 => 5 mensalidades
+      // Se semestre 3 => 10 mensalidades
+      const totalMeses = [1, 2].includes(dto.semestre!) ? 5 : 10;
+
+      const totalMensalidades = valorMensalidade * totalMeses;
+
+      const saldoBolsa = bolsa.VALOR_DESCONTO - totalMensalidades;
+
+      // Se sobrar dinheiro, vira crédito
+      if (saldoBolsa > 0) {
+        await this.paymentService.updateCreditAccount(
+          dadosAluno.codigo_preinscricao,
+          saldoBolsa,
+        );
+      }
+
+      console.log({
+        valorMensalidade,
+        totalMeses,
+        totalMensalidades,
+        valorBolsa: bolsa.VALOR_DESCONTO,
+        saldoBolsa,
+      });
+    }
 
     // 4. INSERT
     await this.dataSource.query(
@@ -71,8 +114,8 @@ export class CreditoEducacionalService {
           OBSERVACAO,
           STATUS_,
           SEMESTRE,
-          ESTADOBOLSA,
-          TIPO_ALUNO_ID,
+        
+        
           CODIGO_TIPO_DESCONTO,
           CODIGO_TIPO_CREDITO,
           CODIGO_CREDITO,
@@ -96,8 +139,7 @@ export class CreditoEducacionalService {
           :observacao,
           :status,
           :semestre,
-          :estadoBolsa,
-          :tipoAlunoId,
+       
           :codigoTipoDesconto,
           :codigoTipoCredito,
           :codigoCredito,
@@ -120,8 +162,8 @@ export class CreditoEducacionalService {
         observacao: dto.observacao ?? null,
         status: 1,
         semestre: dto.semestre ?? null,
-        estadoBolsa: dto.estadoBolsa ?? null,
-        tipoAlunoId: dto.tipoAlunoId ?? null,
+
+
         codigoTipoDesconto: dto.codigoTipoDesconto ?? null,
         codigoTipoCredito: dto.codigoTipoCredito ?? null,
         codigoCredito: dto.codigoCredito ?? null,
@@ -177,8 +219,6 @@ export class CreditoEducacionalService {
       AFECTACAO             = :afectacao,
       OBSERVACAO            = :observacao,
       SEMESTRE              = :semestre,
-      ESTADOBOLSA           = :estadoBolsa,
-      TIPO_ALUNO_ID         = :tipoAlunoId,
       CODIGO_TIPO_DESCONTO  = :codigoTipoDesconto,
       CODIGO_TIPO_CREDITO   = :codigoTipoCredito,
       CODIGO_CREDITO        = :codigoCredito,
@@ -200,8 +240,8 @@ export class CreditoEducacionalService {
         afectacao: dto.afectacao ?? null,
         observacao: dto.observacao ?? null,
         semestre: dto.semestre ?? null,
-        estadoBolsa: dto.estadoBolsa ?? null,
-        tipoAlunoId: dto.tipoAlunoId ?? null,
+
+
         codigoTipoDesconto: dto.codigoTipoDesconto ?? null,
         codigoTipoCredito: dto.codigoTipoCredito ?? null,
         codigoCredito: dto.codigoCredito ?? null,
@@ -390,5 +430,65 @@ export class CreditoEducacionalService {
       statusCode: 200,
       message: 'Bolseiro ativado com sucesso',
     };
+  }
+
+  private async obterMensalidade(
+    anoLectivo: number,
+    dadosAluno: any,
+  ): Promise<{ codigo_servico: number; preco: number; descricao: string }> {
+    console.log(dadosAluno);
+
+    const sql = `
+      SELECT PRECO,CODIGO,DESCRICAO
+      FROM FK2_TB_TIPO_SERVICOS
+      WHERE DESCRICAO LIKE 'Propina ' || :curso || '%'
+        AND CODIGO_ANO_LECTIVO = :anoLectivo
+        AND POLO_ID = :polo
+        AND ESTADO = 'Ativo'
+      ORDER BY DATA DESC
+      FETCH FIRST 1 ROW ONLY
+    `;
+
+    const [row] = await this.dataSource.query(sql, {
+      curso: dadosAluno.curso,
+      polo: dadosAluno.polo,
+      anoLectivo,
+    } as any);
+
+    if (!row?.PRECO) {
+      throw new BadRequestException('Nenhuma mensalidade encontrada');
+    }
+
+    return {
+      preco: Number(row.PRECO),
+      codigo_servico: Number(row.CODIGO),
+      descricao: row.DESCRICAO,
+    };
+  }
+  private async obterDadosCompletosAluno(codigoMatricula: number) {
+    const sql = `
+      SELECT
+        c.designacao           as curso,
+        c.codigo               as codigo_curso,
+        c.sigla                as sigla,
+        c.duracao              as duracao_curso,
+        p.codigo_turno         as turno,
+        p.codigo               as codigo_preinscricao,    
+        nvl(p.polo_id, 1)      as polo
+      FROM fk2_tb_matriculas m
+      INNER JOIN fk2_tb_cursos        c ON c.codigo = m.codigo_curso
+      INNER JOIN fk2_tb_admissao      a ON a.codigo = m.codigo_aluno
+      INNER JOIN fk2_tb_preinscricao  p ON p.codigo = a.pre_incricao
+      WHERE m.codigo = :codigoMatricula
+    `;
+
+    const result = await this.dataSource.query(sql, { codigoMatricula } as any);
+    const row = result?.[0];
+
+    if (!row) {
+      throw new BadRequestException('Informações do aluno não encontradas');
+    }
+
+    return toLowerCaseKeys(row);
   }
 }

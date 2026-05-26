@@ -302,7 +302,7 @@ export class PaymentService {
     if (!cashRegister) {
       throw new BadRequestException('Você não tem uma caixa aberta');
     }
-    if(cashRegister.blocked === YesNo.YES){
+    if (cashRegister.blocked === YesNo.YES) {
       throw new BadRequestException("Caixa bloqueado, desative para prosseguir")
     }
 
@@ -385,7 +385,7 @@ export class PaymentService {
       anoLectivo: anoLectivo ?? anoCorrente,
       codigoFactura: dto.codigoFactura,
       codigoPreInscricao:
-        student?.codigo ??
+        student?.codigo_preinscricao ??
         dto.codigoPreInscricao ??
         invoice.codigoPreinscricao ??
         undefined,
@@ -488,10 +488,10 @@ export class PaymentService {
       3. Transferência/criação de crédito na conta do próximo ano letivo
 
      
-      if (valor_restante > 0 && student?.codigo) {
+      if (valor_restante > 0 && student?.codigo_preinscricao) {
         console.log("ENTREI");
 
-        await this.updateCreditAccount(student.codigo, valor_restante);
+        await this.updateCreditAccount(student.codigo_preinscricao, valor_restante);
       }
  */
       await queryRunner.commitTransaction();
@@ -503,12 +503,12 @@ export class PaymentService {
         tda:
           tdaResult && !tdaResult.success
             ? {
-                error: true,
-                message: tdaResult.message,
-              }
+              error: true,
+              message: tdaResult.message,
+            }
             : {
-                error: false,
-              },
+              error: false,
+            },
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -786,15 +786,15 @@ export class PaymentService {
 
   private async findAluno(codigo: number | string, by: FindAlunoBy) {
     const whereClause =
-      by === 'matricula' ? `m.codigo = ${codigo}` : `p.codigo = ${codigo}`;
-
-    const selectClause = by === 'matricula' ? `p.codigo` : `m.codigo`;
+      by === 'matricula'
+        ? `m.codigo = ${codigo}`
+        : `p.codigo = ${codigo}`;
 
     const sql = `
-    SELECT ${selectClause}
-    FROM FK2_TB_PREINSCRICAO  p
-    LEFT JOIN FK2_TB_ADMISSAO     a ON a.PRE_INCRICAO = p.codigo
-    LEFT JOIN FK2_TB_MATRICULAS   m ON m.CODIGO_ALUNO = a.codigo
+    SELECT p.codigo AS codigo_preinscricao, m.codigo AS codigo_matricula
+    FROM FK2_TB_PREINSCRICAO p
+    LEFT JOIN FK2_TB_ADMISSAO a ON a.PRE_INCRICAO = p.codigo
+    LEFT JOIN FK2_TB_MATRICULAS m ON m.CODIGO_ALUNO = a.codigo
     WHERE ${whereClause}
   `;
 

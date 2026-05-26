@@ -110,6 +110,7 @@ export class BolsaService {
           , E.DESIGNACAO                  AS DESCRICAO_TIPO_DESCONTO
           , A.CODIGO_TIPO_CREDITO
           , F.DESIGNACAO                  AS DESCRICAO_TIPO_CREDITO
+          , A.STATUS                      AS ESTADO
         FROM FK2_TB_BOLSAS A
         LEFT JOIN FK2_TB_INSTITUICAO D
                ON D.CODIGO = A.CODIGO_INSTITUICAO

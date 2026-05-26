@@ -106,7 +106,7 @@ export class CreditoEducacionalService {
           STATUS_,
           SEMESTRE,
         
-          TIPO_ALUNO_ID,
+        
           CODIGO_TIPO_DESCONTO,
           CODIGO_TIPO_CREDITO,
           CODIGO_CREDITO,
@@ -427,7 +427,7 @@ export class CreditoEducacionalService {
     anoLectivo: number,
     dadosAluno: any,
   ): Promise<{ codigo_servico: number; preco: number; descricao: string }> {
-
+    console.log(dadosAluno);
 
     const sql = `
       SELECT PRECO,CODIGO,DESCRICAO

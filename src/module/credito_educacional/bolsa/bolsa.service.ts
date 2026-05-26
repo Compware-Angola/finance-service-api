@@ -159,7 +159,7 @@ export class BolsaService {
         LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS E
                ON E.CODIGO = A.CODIGO_TIPO_DESCONTO
         ${whereClause}
-        ORDER BY A.CODIGO
+        ORDER BY A.CODIGO DESC
         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
         `,
         { ...params, offset, limit } as any,

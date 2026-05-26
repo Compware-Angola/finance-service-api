@@ -152,15 +152,88 @@ export class BolsaService {
     };
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} bolsa`;
+  async update(id: number, updateBolsaDto: UpdateBolsaDto, codigoUtilizador: number) {
+    const {
+      designacao,
+      codigoInstituicao,
+      codigoTipoDesconto,
+      valorDesconto,
+      codigoTipoCredito
+    } = updateBolsaDto;
+
+    await this.dataSource.query(
+      `
+    UPDATE FK2_TB_BOLSAS
+    SET 
+      DESIGNACAO = COALESCE(:designacao, DESIGNACAO),
+      CODIGO_INSTITUICAO = COALESCE(:codigoInstituicao, CODIGO_INSTITUICAO),
+      CODIGO_TIPO_DESCONTO = COALESCE(:codigoTipoDesconto, CODIGO_TIPO_DESCONTO),
+      VALOR_DESCONTO = COALESCE(:valorDesconto, VALOR_DESCONTO),
+      CODIGO_TIPO_CREDITO = COALESCE(:codigoTipoCredito, CODIGO_TIPO_CREDITO),
+      UPDATEBY = :updateBy,
+       UPDATED_AT = SYSDATE
+    WHERE CODIGO = :codigo
+    `,
+      {
+        codigo: id,
+        designacao: designacao ?? null,
+        codigoInstituicao: codigoInstituicao ?? null,
+        codigoTipoDesconto: codigoTipoDesconto ?? null,
+        valorDesconto: valorDesconto ?? null,
+        codigoTipoCredito: codigoTipoCredito ?? null,
+        updateBy: codigoUtilizador,
+      } as any,
+    );
+
+    return {
+      message: 'Bolsa atualizada com sucesso',
+      statusCode: 200,
+    };
   }
 
-  update(id: number, updateBolsaDto: UpdateBolsaDto) {
-    return `This action updates a #${id} bolsa`;
+
+  async inativarBolsa(id: number, utilizadorId: number) {
+    await this.dataSource.query(
+      `
+    UPDATE FK2_TB_BOLSAS
+    SET 
+      STATUS = 0,
+      UPDATEBY = :updateBy,
+      UPDATED_AT = SYSDATE
+    WHERE CODIGO = :codigo
+    `,
+      {
+        codigo: id,
+        updateBy: utilizadorId,
+      } as any,
+    );
+
+    return {
+      message: 'Bolsa inativada com sucesso',
+      statusCode: 200,
+    };
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} bolsa`;
+  async activeBolsa(id: number, utilizadorId: number) {
+    await this.dataSource.query(
+      `
+    UPDATE FK2_TB_BOLSAS
+    SET 
+      STATUS = 1,
+      UPDATEBY = :updateBy,
+      UPDATED_AT = SYSDATE
+    WHERE CODIGO = :codigo
+    `,
+      {
+        codigo: id,
+        updateBy: utilizadorId,
+      } as any,
+    );
+
+    return {
+      message: 'Bolsa restaurada com sucesso',
+      statusCode: 200,
+    };
   }
+
 }

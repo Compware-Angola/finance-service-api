@@ -130,8 +130,7 @@ export class CreditoEducacionalService {
           :observacao,
           :status,
           :semestre,
-          :estadoBolsa,
-          :tipoAlunoId,
+       
           :codigoTipoDesconto,
           :codigoTipoCredito,
           :codigoCredito,
@@ -211,8 +210,6 @@ export class CreditoEducacionalService {
       AFECTACAO             = :afectacao,
       OBSERVACAO            = :observacao,
       SEMESTRE              = :semestre,
-      ESTADOBOLSA           = :estadoBolsa,
-      TIPO_ALUNO_ID         = :tipoAlunoId,
       CODIGO_TIPO_DESCONTO  = :codigoTipoDesconto,
       CODIGO_TIPO_CREDITO   = :codigoTipoCredito,
       CODIGO_CREDITO        = :codigoCredito,

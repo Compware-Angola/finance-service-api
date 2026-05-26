@@ -19,7 +19,10 @@ export class BolsaController {
   findAll(@Query() dto: FindBolsaDto) {
     return this.bolsaService.findAll(dto);
   }
-
+  @Get('dropdown')
+  findDropdown(@Query() dto: FindBolsaDropdownDto) {
+    return this.bolsaService.findDropdown(dto);
+  }
   @Put(':id')
   update(
     @Param('id') id: number,
@@ -43,8 +46,5 @@ export class BolsaController {
     return this.bolsaService.activeBolsa(id, codigoUtilizador);
   }
 
-  @Get('dropdown')
-  findDropdown(@Query() dto: FindBolsaDropdownDto) {
-    return this.bolsaService.findDropdown(dto);
-  }
+
 }

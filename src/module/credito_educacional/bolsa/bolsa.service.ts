@@ -280,7 +280,7 @@ export class BolsaService {
       } as any,
     );
 
-    return result;
+    return toLowerCaseKeys(result);
   }
 
   async switchStatus(id: number, utilizadorId: number) {

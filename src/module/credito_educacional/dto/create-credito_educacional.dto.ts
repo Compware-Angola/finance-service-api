@@ -79,11 +79,6 @@ export class CreateCreditoEducacionalDto {
     @IsString()
     observacao?: string;
 
-    @ApiProperty({ example: 1 })
-    @IsNumber()
-    @IsNotEmpty()
-    @Type(() => Number)
-    status: number;
 
     @ApiPropertyOptional({ example: 1 })
     @IsOptional()

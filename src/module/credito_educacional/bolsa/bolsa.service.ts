@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateBolsaDto } from './dto/create-bolsa.dto';
 import { UpdateBolsaDto } from './dto/update-bolsa.dto';
 
@@ -21,6 +21,46 @@ export class BolsaService {
       valorDesconto,
       codigoTipoCredito,
     } = createBolsaDto;
+    const checkBolsa = await this.dataSource.query(
+      `
+    SELECT 
+      CODIGO
+    FROM FK2_TB_BOLSAS
+    WHERE UPPER(DESIGNACAO) = UPPER(:designacao)
+    AND CODIGO_INSTITUICAO = :codigoInstituicao
+    AND CODIGO_TIPO_CREDITO = :codigoTipoCredito
+    AND CODIGO_TIPO_DESCONTO = :codigoTipoDesconto
+    `, {
+      designacao,
+      codigoInstituicao,
+      codigoTipoCredito,
+      codigoTipoDesconto,
+    } as any);
+    if (checkBolsa.length > 0) {
+      throw new BadRequestException('Bolsa ja existe');
+    }
+    // VERIFICAR SE O TIPO DE DESCONTO ÉPERCENTAGEM OU VALOR
+    const checkTipoDesconto = await this.dataSource.query(
+      `
+    SELECT 
+      CODIGO,
+      SIGLA
+    FROM FK2_TB_TIPO_DESCONTO_BOLSAS
+    WHERE CODIGO = :codigoTipoDesconto
+    `,
+      {
+        codigoTipoDesconto,
+      } as any,
+    );
+    if (checkTipoDesconto[0].SIGLA === "DESC_PERC") {
+      if (valorDesconto > 100) {
+        throw new BadRequestException('O valor do desconto não pode exceder 100%');
+      }
+    } else if (checkTipoDesconto[0].SIGLA === "DESC_FIX") {
+      if (valorDesconto < 1000) {
+        throw new BadRequestException('O valor do desconto deve ser maior ou igual a 1000');
+      }
+    }
 
     await this.dataSource.query(
       `
@@ -193,50 +233,6 @@ export class BolsaService {
     };
   }
 
-
-  async inativarBolsa(id: number, utilizadorId: number) {
-    await this.dataSource.query(
-      `
-    UPDATE FK2_TB_BOLSAS
-    SET 
-      STATUS = 0,
-      UPDATEBY = :updateBy,
-      UPDATED_AT = SYSDATE
-    WHERE CODIGO = :codigo
-    `,
-      {
-        codigo: id,
-        updateBy: utilizadorId,
-      } as any,
-    );
-
-    return {
-      message: 'Bolsa inativada com sucesso',
-      statusCode: 200,
-    };
-  }
-
-  async activeBolsa(id: number, utilizadorId: number) {
-    await this.dataSource.query(
-      `
-    UPDATE FK2_TB_BOLSAS
-    SET 
-      STATUS = 1,
-      UPDATEBY = :updateBy,
-      UPDATED_AT = SYSDATE
-    WHERE CODIGO = :codigo
-    `,
-      {
-        codigo: id,
-        updateBy: utilizadorId,
-      } as any,
-    );
-
-    return {
-      message: 'Bolsa restaurada com sucesso',
-      statusCode: 200,
-    };
-  }
   async findDropdown(query: FindBolsaDropdownDto) {
     const { designacao } = query;
 
@@ -260,4 +256,90 @@ export class BolsaService {
     return result;
   }
 
+  async switchStatus(id: number, utilizadorId: number) {
+    const bolsa = await this.findOne(id);
+
+    if (bolsa?.ESTADO === 1) {
+      return await this.inativarBolsa(id, utilizadorId);
+    } else {
+      return await this.activeBolsa(id, utilizadorId);
+    }
+  }
+  private async findOne(id: number) {
+    const bolsa = await this.dataSource.query(
+      `
+    SELECT 
+        A.CODIGO
+      , A.DESIGNACAO
+      , A.CODIGO_INSTITUICAO
+      , D.INSTITUICAO                 AS INSTITUICAO
+      , A.VALOR_DESCONTO
+      , A.CODIGO_TIPO_DESCONTO
+      , E.DESIGNACAO                  AS DESCRICAO_TIPO_DESCONTO
+      , A.CODIGO_TIPO_CREDITO
+      , F.DESIGNACAO                  AS DESCRICAO_TIPO_CREDITO
+      , A.STATUS                      AS ESTADO
+    FROM FK2_TB_BOLSAS A
+    LEFT JOIN FK2_TB_INSTITUICAO D
+           ON D.CODIGO = A.CODIGO_INSTITUICAO
+    LEFT JOIN FK2_TB_TIPO_CREDITO F
+           ON F.CODIGO = A.CODIGO_TIPO_CREDITO
+    LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS E
+           ON E.CODIGO = A.CODIGO_TIPO_DESCONTO
+    WHERE A.CODIGO = :codigo
+    `,
+      {
+        codigo: id,
+      } as any,
+    );
+
+    if (!bolsa[0]) {
+      throw new NotFoundException(`Bolsa com código ${id} não encontrada`);
+    }
+
+    return bolsa[0];
+  }
+  private async inativarBolsa(id: number, utilizadorId: number) {
+    await this.dataSource.query(
+      `
+    UPDATE FK2_TB_BOLSAS
+    SET 
+      STATUS = 0,
+      UPDATEBY = :updateBy,
+      UPDATED_AT = SYSDATE
+    WHERE CODIGO = :codigo
+    `,
+      {
+        codigo: id,
+        updateBy: utilizadorId,
+      } as any,
+    );
+
+    return {
+      message: 'Bolsa inativada com sucesso',
+      statusCode: 200,
+    };
+  }
+
+  private async activeBolsa(id: number, utilizadorId: number) {
+    await this.dataSource.query(
+      `
+    UPDATE FK2_TB_BOLSAS
+    SET 
+      STATUS = 1,
+      UPDATEBY = :updateBy,
+      UPDATED_AT = SYSDATE
+    WHERE CODIGO = :codigo
+    `,
+      {
+        codigo: id,
+        updateBy: utilizadorId,
+      } as any,
+    );
+
+    return {
+      message: 'Bolsa restaurada com sucesso',
+      statusCode: 200,
+    };
+  }
 }

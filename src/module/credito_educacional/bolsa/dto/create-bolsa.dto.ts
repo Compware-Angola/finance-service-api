@@ -21,10 +21,10 @@ export class CreateBolsaDto {
     codigoTipoDesconto?: number;
 
     @ApiPropertyOptional({ example: 50.00, description: 'Valor do desconto' })
-    @IsOptional()
+
     @IsNumber()
     @Type(() => Number)
-    valorDesconto?: number;
+    valorDesconto: number;
 
     @ApiPropertyOptional({ example: 3, description: 'Código do tipo de crédito' })
     @IsOptional()

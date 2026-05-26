@@ -32,19 +32,9 @@ export class BolsaController {
     return this.bolsaService.update(id, updateBolsaDto, codigoUtilizador);
   }
 
-  @Patch(':id/inactive')
-  inativarBolsa(@Param('id') id: number) {
+  @Patch(':id/switch')
+  switchStatus(@Param('id') id: number) {
     const codigoUtilizador = 1
-    return this.bolsaService.inativarBolsa(id, codigoUtilizador);
+    return this.bolsaService.switchStatus(id, codigoUtilizador);
   }
-
-
-
-  @Patch(':id/active')
-  activeBolsa(@Param('id') id: number) {
-    const codigoUtilizador = 1
-    return this.bolsaService.activeBolsa(id, codigoUtilizador);
-  }
-
-
 }

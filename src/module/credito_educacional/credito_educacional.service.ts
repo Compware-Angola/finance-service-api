@@ -1,30 +1,63 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CreateCreditoEducacionalDto } from './dto/create-credito_educacional.dto';
+import { UpdateCreditoEducacionalDto } from './dto/update-credito_educacional.dto';
+import { FindCreditoEducacionalDto } from './dto/find-credito-educacional.dto';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 
 @Injectable()
 export class CreditoEducacionalService {
   constructor(private readonly dataSource: DataSource) { }
 
   async create(dto: CreateCreditoEducacionalDto, codigoUtilizador: number) {
+
     // 1. Validação da Bolsa
-    const bolsaExiste = await this.dataSource.query(
-      `SELECT CODIGO FROM FK2_TB_BOLSAS WHERE CODIGO = :codigo`,
-      [dto.codigoBolsa],
+    const [bolsa] = await this.dataSource.query(
+      `SELECT CODIGO FROM FK2_TB_BOLSAS WHERE CODIGO = :codigoBolsa`,
+      { codigoBolsa: dto.codigoBolsa } as any,
     );
 
-    if (!bolsaExiste || bolsaExiste.length === 0) {
-      throw new BadRequestException('codigoBolsa inválido');
+    if (!bolsa) {
+      throw new NotFoundException(`Bolsa com código ${dto.codigoBolsa} não encontrada`);
     }
 
-    // 2. INSERT - Versão corrigida e balanceada
-    const sql = `
-      BEGIN
-        INSERT INTO FK2_TB_BOLSEIROS (
+    // 2. Validação da Matrícula
+    const [matricula] = await this.dataSource.query(
+      `SELECT CODIGO FROM FK2_TB_MATRICULAS WHERE CODIGO = :codigoMatricula`,
+      { codigoMatricula: dto.codigoMatricula } as any,
+    );
+
+    if (!matricula) {
+      throw new NotFoundException(`Matrícula com código ${dto.codigoMatricula} não encontrada`);
+    }
+
+    // 3. Verificar se já existe bolseiro activo para esta matrícula
+    const [bolseiroExiste] = await this.dataSource.query(
+      `
+      SELECT CODIGO 
+      FROM FK2_TB_BOLSEIROS 
+      WHERE CODIGO_MATRICULA = :codigoMatricula
+      AND STATUS_ = 1
+      AND CODIGO_ANOLECTIVO = :codigoAnoLectivo
+      AND SEMESTRE = :semestre
+      `,
+      { codigoMatricula: dto.codigoMatricula, codigoAnoLectivo: dto.codigoAnoLectivo, semestre: dto.semestre } as any,
+    );
+
+    if (bolseiroExiste) {
+      throw new BadRequestException(
+        `Já existe um bolseiro activo para a matrícula ${dto.codigoMatricula}`,
+      );
+    }
+
+    // 4. INSERT
+    await this.dataSource.query(
+      `
+      INSERT INTO FK2_TB_BOLSEIROS (
           CODIGO_MATRICULA,
           CODIGO_TIPO_BOLSA,
           DESCONTO,
-          ISENTA_MULTA,
+          ISENTAR_MULTA,
           CODIGO_UTILIZADOR,
           CANAL,
           CREATED_AT,
@@ -32,7 +65,7 @@ export class CreditoEducacionalService {
           DATA_INICIO_BOLSA,
           DATA_FIM_BOLSA,
           CODIGO_INSTITUICAO,
-          PAGAR_TAXAS_ADICIONAIS,
+          PAGARTAXASADICIONAIS,
           CODIGO_ANOLECTIVO,
           AFECTACAO,
           OBSERVACAO,
@@ -40,13 +73,12 @@ export class CreditoEducacionalService {
           SEMESTRE,
           ESTADOBOLSA,
           TIPO_ALUNO_ID,
-      
-          CODIGO_TIPO_DESCONTONUMBER,
-          CODIGO_TIPO_CREDITONUMBER,
-          CODIGO_CREDITONUMBER,
+          CODIGO_TIPO_DESCONTO,
+          CODIGO_TIPO_CREDITO,
+          CODIGO_CREDITO,
           CODIGO_BOLSA
-        )
-        VALUES (
+      )
+      VALUES (
           :codigoMatricula,
           :codigoTipoBolsa,
           :desconto,
@@ -66,52 +98,297 @@ export class CreditoEducacionalService {
           :semestre,
           :estadoBolsa,
           :tipoAlunoId,
-       
           :codigoTipoDesconto,
           :codigoTipoCredito,
           :codigoCredito,
           :codigoBolsa
-        );
+      )
+      `,
+      {
+        codigoMatricula: dto.codigoMatricula,
+        codigoTipoBolsa: dto.codigoTipoBolsa ?? null,
+        desconto: dto.desconto ?? null,
+        isentaMulta: dto.isentaMulta ?? null,
+        codigoUtilizador,
+        canal: dto.canal ?? null,
+        dataInicioBolsa: dto.dataInicioBolsa ?? null,
+        dataFimBolsa: dto.dataFimBolsa ?? null,
+        codigoInstituicao: dto.codigoInstituicao ?? null,
+        pagarTaxasAdicionais: dto.pagarTaxasAdicionais ?? null,
+        codigoAnoLectivo: dto.codigoAnoLectivo ?? null,
+        afectacao: dto.afectacao ?? null,
+        observacao: dto.observacao ?? null,
+        status: 1,
+        semestre: dto.semestre ?? null,
+        estadoBolsa: dto.estadoBolsa ?? null,
+        tipoAlunoId: dto.tipoAlunoId ?? null,
+        codigoTipoDesconto: dto.codigoTipoDesconto ?? null,
+        codigoTipoCredito: dto.codigoTipoCredito ?? null,
+        codigoCredito: dto.codigoCredito ?? null,
+        codigoBolsa: dto.codigoBolsa,
+      } as any,
+    );
 
-        COMMIT;
-      END;
-    `;
+    return {
+      statusCode: 201,
+      message: 'Bolseiro criado com sucesso',
+    };
+  }
 
-    const params = [
-      dto.codigoMatricula,
-      dto.codigoTipoBolsa,
-      dto.desconto,
-      dto.isentaMulta,
-      codigoUtilizador,
-      dto.canal,
-      dto.dataInicioBolsa,        // DATA_INICIO_BOLSA
-      dto.dataFimBolsa,           // DATA_FIM_BOLSA
-      dto.codigoInstituicao,
-      dto.pagarTaxasAdicionais,
-      dto.codigoAnoLectivo,
-      dto.afectacao,
-      dto.observacao,
-      dto.status,
-      dto.semestre,
-      dto.estadoBolsa,
-      dto.tipoAlunoId,
+  async update(codigo: number, dto: UpdateCreditoEducacionalDto, codigoUtilizador: number) {
 
-      dto.codigoTipoDesconto,
-      dto.codigoTipoCredito,
-      dto.codigoCredito,
-      dto.codigoBolsa
-    ];
+    // 1. Validação da Bolsa
+    const [bolsa] = await this.dataSource.query(
+      `SELECT CODIGO FROM FK2_TB_BOLSAS WHERE CODIGO = :codigoBolsa`,
+      { codigoBolsa: dto.codigoBolsa } as any,
+    );
 
-    try {
-      await this.dataSource.query(sql, params);
-
-      return {
-        statusCode: 201,
-        message: 'Bolseiro criado com sucesso',
-      };
-    } catch (error: any) {
-      console.error('Erro ao criar bolseiro:', error);
-      throw new BadRequestException(`Erro ao registar bolseiro: ${error.message}`);
+    if (!bolsa) {
+      throw new NotFoundException(`Bolsa com código ${dto.codigoBolsa} não encontrada`);
     }
+
+    // 2. Validação da Matrícula
+    const [matricula] = await this.dataSource.query(
+      `SELECT CODIGO FROM FK2_TB_MATRICULAS WHERE CODIGO = :codigoMatricula`,
+      { codigoMatricula: dto.codigoMatricula } as any,
+    );
+
+    if (!matricula) {
+      throw new NotFoundException(`Matrícula com código ${dto.codigoMatricula} não encontrada`);
+    }
+
+
+    await this.dataSource.query(
+      `
+  UPDATE FK2_TB_BOLSEIROS 
+  SET
+      CODIGO_MATRICULA      = :codigoMatricula,
+      CODIGO_TIPO_BOLSA     = :codigoTipoBolsa,
+      DESCONTO              = :desconto,
+      ISENTAR_MULTA         = :isentaMulta,
+      CODIGO_UTILIZADOR     = :codigoUtilizador,
+      CANAL                 = :canal,
+      UPDATED_AT            = TRUNC(SYSDATE),
+      DATA_INICIO_BOLSA     = :dataInicioBolsa,
+      DATA_FIM_BOLSA        = :dataFimBolsa,
+      CODIGO_INSTITUICAO    = :codigoInstituicao,
+      PAGARTAXASADICIONAIS  = :pagarTaxasAdicionais,
+      CODIGO_ANOLECTIVO     = :codigoAnoLectivo,
+      AFECTACAO             = :afectacao,
+      OBSERVACAO            = :observacao,
+      SEMESTRE              = :semestre,
+      ESTADOBOLSA           = :estadoBolsa,
+      TIPO_ALUNO_ID         = :tipoAlunoId,
+      CODIGO_TIPO_DESCONTO  = :codigoTipoDesconto,
+      CODIGO_TIPO_CREDITO   = :codigoTipoCredito,
+      CODIGO_CREDITO        = :codigoCredito,
+      CODIGO_BOLSA          = :codigoBolsa
+  WHERE CODIGO = :codigo
+  `,
+      {
+        codigoMatricula: dto.codigoMatricula,
+        codigoTipoBolsa: dto.codigoTipoBolsa ?? null,
+        desconto: dto.desconto ?? null,
+        isentaMulta: dto.isentaMulta ?? null,
+        codigoUtilizador,
+        canal: dto.canal ?? null,
+        dataInicioBolsa: dto.dataInicioBolsa ?? null,
+        dataFimBolsa: dto.dataFimBolsa ?? null,
+        codigoInstituicao: dto.codigoInstituicao ?? null,
+        pagarTaxasAdicionais: dto.pagarTaxasAdicionais ?? null,
+        codigoAnoLectivo: dto.codigoAnoLectivo ?? null,
+        afectacao: dto.afectacao ?? null,
+        observacao: dto.observacao ?? null,
+        semestre: dto.semestre ?? null,
+        estadoBolsa: dto.estadoBolsa ?? null,
+        tipoAlunoId: dto.tipoAlunoId ?? null,
+        codigoTipoDesconto: dto.codigoTipoDesconto ?? null,
+        codigoTipoCredito: dto.codigoTipoCredito ?? null,
+        codigoCredito: dto.codigoCredito ?? null,
+        codigoBolsa: dto.codigoBolsa,
+        codigo,
+      } as any,
+    );
+
+    return {
+      statusCode: 200,
+      message: 'Bolseiro actualizado com sucesso',
+    };
+  }
+  async findAll(query: FindCreditoEducacionalDto) {
+    const {
+      codigoInstituicao,
+      codigoAnoLectivo,
+      status,
+      codigoBolsa,
+      codigoTipoCredito,
+      codigoMatricula,
+      nome,
+      cursoId,
+      cursoDesignacao,
+      page = 1,
+      limit = 10,
+    } = query;
+
+    const offset = (page - 1) * limit;
+
+    const params = {
+      codigoInstituicao: codigoInstituicao ?? null,
+      codigoAnoLectivo: codigoAnoLectivo ?? null,
+      status: status ?? null,
+      codigoBolsa: codigoBolsa ?? null,
+      codigoTipoCredito: codigoTipoCredito ?? null,
+      codigoMatricula: codigoMatricula ?? null,
+      nome: nome ?? null,
+      cursoId: cursoId ?? null,
+      cursoDesignacao: cursoDesignacao ?? null,
+    };
+
+    const whereClause = `
+    WHERE 1=1
+    AND e.codigo_instituicao      = b.CODIGO (+)
+    AND a.CODIGO_ANOLECTIVO       = c.CODIGO (+)
+    AND a.CODIGO_BOLSA            = e.CODIGO (+)
+    AND e.CODIGO_TIPO_CREDITO     = f.CODIGO (+)
+    AND e.CODIGO_TIPO_DESCONTO    = g.CODIGO (+)
+    AND a.CODIGO_MATRICULA        = h.CODIGO (+)
+    AND h.CODIGO_ALUNO            = i.CODIGO (+)
+    AND i.PRE_INCRICAO            = j.CODIGO (+)
+    AND h.CODIGO_CURSO            = k.CODIGO (+)
+    AND a.codigo_bolsa            = e.codigo (+)
+    AND (:codigoInstituicao  IS NULL OR a.codigo_instituicao      = :codigoInstituicao)
+    AND (:codigoAnoLectivo   IS NULL OR a.CODIGO_ANOLECTIVO       = :codigoAnoLectivo)
+    AND (:status             IS NULL OR a.STATUS_                 = :status)
+    AND (:codigoBolsa        IS NULL OR e.CODIGO                  = :codigoBolsa)
+    AND (:codigoTipoCredito  IS NULL OR e.CODIGO_TIPO_CREDITO     = :codigoTipoCredito)
+    AND (:codigoMatricula    IS NULL OR a.CODIGO_MATRICULA        = :codigoMatricula)
+    AND (:nome               IS NULL OR UPPER(j.NOME_COMPLETO)    LIKE '%' || UPPER(:nome)  || '%')
+    AND (:cursoId            IS NULL OR k.CODIGO                  = :cursoId)
+    AND (:cursoDesignacao    IS NULL OR UPPER(k.DESIGNACAO)       LIKE '%' || UPPER(:cursoDesignacao) || '%')
+  `;
+
+    const fromClause = `
+    FROM FK2_TB_BOLSEIROS            a
+       , FK2_TB_INSTITUICAO          b
+       , FK2_TB_ANO_LECTIVO          c
+       , FK2_TB_BOLSAS               e
+       , FK2_TB_TIPO_CREDITO         f
+       , FK2_TB_TIPO_DESCONTO_BOLSAS g
+       , FK2_TB_MATRICULAS           h
+       , FK2_TB_ADMISSAO             i
+       , FK2_TB_PREINSCRICAO         j
+       , FK2_TB_CURSOS               k
+  `;
+
+    const [dataResutl, total] = await Promise.all([
+      this.dataSource.query(
+        `
+      SELECT
+          a.CODIGO,
+          a.CODIGO_MATRICULA,
+          j.NOME_COMPLETO,
+          j.BILHETE_IDENTIDADE,
+          k.DESIGNACAO                              AS CURSO,
+          c.DESIGNACAO                              AS TIPO_BOLSA,
+          a.CODIGO_UTILIZADOR,
+          a.CANAL,
+          a.CREATED_AT,
+          a.UPDATED_AT,
+          a.DATA_INICIO_BOLSA,
+          a.DATA_FIM_BOLSA,
+          b.CODIGO                                  AS CODIGO_INSTITUICAO,
+          b.INSTITUICAO,
+          a.CODIGO_ANOLECTIVO,
+          c.DESIGNACAO                              AS ANO_LECTIVO,
+          a.OBSERVACAO,
+          a.HISTORICO,
+          a.STATUS_,
+          a.SEMESTRE,
+          a.ESTADOBOLSA,
+         
+          a.TIPO_ALUNO_ID,
+          NVL(e.VALOR_DESCONTO, a.DESCONTO)         AS VALOR_DESCONTO,
+          NVL(e.CODIGO_TIPO_DESCONTO, 1)            AS CODIGO_TIPO_DESCONTO,
+          NVL(g.DESIGNACAO, 'PERCENTUAL')           AS TIPO_DESCONTO,
+          e.CODIGO_TIPO_CREDITO,
+          f.DESIGNACAO                              AS TIPO_CREDITO,
+          a.CODIGO_BOLSA,
+          e.DESIGNACAO                              AS BOLSA
+      ${fromClause}
+      ${whereClause}
+      ORDER BY a.CODIGO DESC
+      OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+      `,
+        { ...params, offset, limit } as any,
+      ),
+
+      this.dataSource.query(
+        `
+      SELECT COUNT(*) AS TOTAL
+      ${fromClause}
+      ${whereClause}
+      `,
+        params as any,
+      ),
+    ]);
+
+    const totalRecords = Number(total[0]?.TOTAL ?? 0);
+
+    return {
+      data: toLowerCaseKeys(dataResutl),
+      meta: {
+        total: totalRecords,
+        page,
+        limit,
+        totalPages: Math.ceil(totalRecords / limit),
+      },
+    };
+  }
+  async switchBolseiro(codigo: number) {
+    const [bolseiro] = await this.dataSource.query(
+      `
+      SELECT STATUS_
+      FROM FK2_TB_BOLSEIROS 
+      WHERE CODIGO = :codigo
+      `,
+      { codigo } as any,
+    );
+    if (bolseiro?.STATUS_ === 1) {
+      return this.inativarBolseiro(codigo);
+    } else {
+      return this.ativarBolseiro(codigo);
+    }
+  }
+  private async inativarBolseiro(codigo: number) {
+    await this.dataSource.query(
+      `
+      UPDATE FK2_TB_BOLSEIROS 
+      SET
+          STATUS_ = 0,
+          UPDATED_AT = TRUNC(SYSDATE)
+      WHERE CODIGO = :codigo
+      `,
+      { codigo } as any,
+    );
+    return {
+      statusCode: 200,
+      message: 'Bolseiro inativado com sucesso',
+    };
+  }
+  private async ativarBolseiro(codigo: number) {
+    await this.dataSource.query(
+      `
+      UPDATE FK2_TB_BOLSEIROS 
+      SET
+          STATUS_ = 1,
+          UPDATED_AT = TRUNC(SYSDATE)
+      WHERE CODIGO = :codigo
+      `,
+      { codigo } as any,
+    );
+    return {
+      statusCode: 200,
+      message: 'Bolseiro ativado com sucesso',
+    };
   }
 }

@@ -26,6 +26,7 @@ import { CashRegistersModule } from './module/cash-registers/cash-registers.modu
 import { UtilizadorModule } from './module/utilizadores/utilizador.module';
 import { CreditoEducacionalModule } from './module/credito_educacional/credito_educacional.module';
 import { TipoCreditoModule } from './module/credito_educacional/tipo_credito/tipo_credito.module';
+import { BolsaModule } from './module/credito_educacional/bolsa/bolsa.module';
 
 @Module({
   imports: [
@@ -106,6 +107,7 @@ import { TipoCreditoModule } from './module/credito_educacional/tipo_credito/tip
     CashRegistersModule,
     UtilizadorModule,
     CreditoEducacionalModule,
+    BolsaModule,
   ],
   providers: [BullMQWorkerService],
 })

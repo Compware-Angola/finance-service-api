@@ -68,16 +68,25 @@ export class CreditoEducacionalService {
 
       const valorMensalidade = mensalidade.preco;
 
-      const totalMensalidades = valorMensalidade * 10;
+      // Se semestre 1 ou 2 => 5 mensalidades
+      // Se semestre 3 => 10 mensalidades
+      const totalMeses = [1, 2].includes(dto.semestre!) ? 5 : 10;
+
+      const totalMensalidades = valorMensalidade * totalMeses;
 
       const saldoBolsa = bolsa.VALOR_DESCONTO - totalMensalidades;
 
       // Se sobrar dinheiro, vira crédito
       if (saldoBolsa > 0) {
-        await this.paymentService.updateCreditAccount(dadosAluno.codigo_preinscricao, saldoBolsa);
+        await this.paymentService.updateCreditAccount(
+          dadosAluno.codigo_preinscricao,
+          saldoBolsa,
+        );
       }
+
       console.log({
         valorMensalidade,
+        totalMeses,
         totalMensalidades,
         valorBolsa: bolsa.VALOR_DESCONTO,
         saldoBolsa,

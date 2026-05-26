@@ -5,6 +5,7 @@ import { UpdateBolsaDto } from './dto/update-bolsa.dto';
 import { DataSource } from 'typeorm';
 import { FindBolsaDto } from './dto/find-bolsa.dto';
 import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
+import { FindBolsaDropdownDto } from './dto/find-bolsa-dropdown.dto';
 
 @Injectable()
 export class BolsaService {
@@ -234,6 +235,28 @@ export class BolsaService {
       message: 'Bolsa restaurada com sucesso',
       statusCode: 200,
     };
+  }
+  async findDropdown(query: FindBolsaDropdownDto) {
+    const { designacao } = query;
+
+    const result = await this.dataSource.query(
+      `
+    SELECT 
+        A.CODIGO
+      , A.DESIGNACAO
+    FROM FK2_TB_BOLSAS A
+    WHERE 1=1
+    AND (:designacao IS NULL 
+         OR UPPER(A.DESIGNACAO) LIKE '%' || UPPER(:designacao) || '%')
+    AND A.STATUS = 1
+    ORDER BY A.DESIGNACAO
+    `,
+      {
+        designacao: designacao ?? null,
+      } as any,
+    );
+
+    return result;
   }
 
 }

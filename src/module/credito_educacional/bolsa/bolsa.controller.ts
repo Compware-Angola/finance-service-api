@@ -3,6 +3,7 @@ import { BolsaService } from './bolsa.service';
 import { CreateBolsaDto } from './dto/create-bolsa.dto';
 import { UpdateBolsaDto } from './dto/update-bolsa.dto';
 import { FindBolsaDto } from './dto/find-bolsa.dto';
+import { FindBolsaDropdownDto } from './dto/find-bolsa-dropdown.dto';
 
 @Controller('bolsa')
 export class BolsaController {
@@ -40,5 +41,10 @@ export class BolsaController {
   activeBolsa(@Param('id') id: number) {
     const codigoUtilizador = 1
     return this.bolsaService.activeBolsa(id, codigoUtilizador);
+  }
+
+  @Get('dropdown')
+  findDropdown(@Query() dto: FindBolsaDropdownDto) {
+    return this.bolsaService.findDropdown(dto);
   }
 }

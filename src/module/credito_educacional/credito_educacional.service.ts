@@ -105,7 +105,7 @@ export class CreditoEducacionalService {
           OBSERVACAO,
           STATUS_,
           SEMESTRE,
-          ESTADOBOLSA,
+        
           TIPO_ALUNO_ID,
           CODIGO_TIPO_DESCONTO,
           CODIGO_TIPO_CREDITO,
@@ -154,8 +154,8 @@ export class CreditoEducacionalService {
         observacao: dto.observacao ?? null,
         status: 1,
         semestre: dto.semestre ?? null,
-        estadoBolsa: dto.estadoBolsa ?? null,
-        tipoAlunoId: dto.tipoAlunoId ?? null,
+
+
         codigoTipoDesconto: dto.codigoTipoDesconto ?? null,
         codigoTipoCredito: dto.codigoTipoCredito ?? null,
         codigoCredito: dto.codigoCredito ?? null,
@@ -234,8 +234,8 @@ export class CreditoEducacionalService {
         afectacao: dto.afectacao ?? null,
         observacao: dto.observacao ?? null,
         semestre: dto.semestre ?? null,
-        estadoBolsa: dto.estadoBolsa ?? null,
-        tipoAlunoId: dto.tipoAlunoId ?? null,
+
+
         codigoTipoDesconto: dto.codigoTipoDesconto ?? null,
         codigoTipoCredito: dto.codigoTipoCredito ?? null,
         codigoCredito: dto.codigoCredito ?? null,

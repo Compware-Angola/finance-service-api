@@ -86,17 +86,7 @@ export class CreateCreditoEducacionalDto {
     @Type(() => Number)
     semestre?: number;
 
-    @ApiProperty({ example: 1, description: 'Estado da Bolsa' })
-    @IsNumber()
-    @IsNotEmpty()
-    @Type(() => Number)
-    estadoBolsa: number;
 
-    @ApiProperty({ example: 2 })
-    @IsNumber()
-    @IsNotEmpty()
-    @Type(() => Number)
-    tipoAlunoId: number;
 
 
 

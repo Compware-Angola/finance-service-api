@@ -9,8 +9,9 @@ export class BolsaController {
   constructor(private readonly bolsaService: BolsaService) { }
 
   @Post()
-  create(@Body() createBolsaDto: CreateBolsaDto) {
-    return this.bolsaService.create(createBolsaDto);
+  create(@Body() createBolsaDto: CreateBolsaDto, userLogadoId: number) {
+    const codigoUtilizador = 1
+    return this.bolsaService.create(createBolsaDto, codigoUtilizador);
   }
 
   @Get()

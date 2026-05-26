@@ -12,8 +12,53 @@ export class BolsaService {
     private readonly dataSource: DataSource,
   ) { }
 
-  async create(createBolsaDto: CreateBolsaDto) {
-    return 'This action adds a new bolsa';
+  async create(createBolsaDto: CreateBolsaDto, codigoUtilizador: number) {
+    const {
+      designacao,
+      codigoInstituicao,
+      codigoTipoDesconto,
+      valorDesconto,
+      codigoTipoCredito,
+    } = createBolsaDto;
+
+    await this.dataSource.query(
+      `
+    INSERT INTO FK2_TB_BOLSAS (
+        DESIGNACAO,
+        CODIGO_INSTITUICAO,
+        CODIGO_TIPO_DESCONTO,
+        VALOR_DESCONTO,
+        CODIGO_TIPO_CREDITO,
+        STATUS,
+        CREATEDBY,
+        UPDATEBY
+    )
+    VALUES (
+        :designacao,
+        :codigoInstituicao,
+        :codigoTipoDesconto,
+        :valorDesconto,
+        :codigoTipoCredito,
+        1,
+        :createdBy,
+        :updateBy
+    )
+    `,
+      {
+        designacao,
+        codigoInstituicao,
+        codigoTipoDesconto: codigoTipoDesconto ?? null,
+        valorDesconto: valorDesconto ?? null,
+        codigoTipoCredito: codigoTipoCredito ?? null,
+        createdBy: codigoUtilizador,
+        updateBy: codigoUtilizador
+      } as any,
+    );
+
+    return {
+      message: 'Bolsa criada com sucesso',
+      statusCode: 201,
+    };
   }
 
   async findAll(query: FindBolsaDto) {

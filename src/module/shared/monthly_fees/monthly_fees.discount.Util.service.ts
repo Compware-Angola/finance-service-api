@@ -58,7 +58,8 @@ export class MonthlyFeesDiscountUtilService {
       bo.valor_desconto AS VALOR_DESCONTO ,
       db.sigla,
       b.codigo_bolsa,
-      b.isentar_multa
+      b.isentar_multa,
+      b.semestre
     FROM fk2_tb_bolseiros b
     left join fk2_tb_bolsas bo
       ON bo.codigo = b.codigo_bolsa
@@ -66,7 +67,7 @@ export class MonthlyFeesDiscountUtilService {
       ON db.codigo = bo.codigo_tipo_desconto
     WHERE b.codigo_matricula = :codigoMatricula
       AND b.codigo_anolectivo = :anoLectivo
-      AND b.semestre = :semestre
+      AND (b.semestre = :semestre or b.semestre = 3)
   `;
 
     try {
@@ -413,16 +414,13 @@ export class MonthlyFeesDiscountUtilService {
       mesTemp.id,
     );
 
-
     if (!bolseiroInfo.isentar_multa && !temMesesSemMulta && !isDescontoTotal) {
       percentagemMulta = await this.calcularPercentagemMulta(
         codigoMatricula,
         mesTemp,
         periodosIsentos,
       );
-
     }
-
 
     const multa = mensalidadeComDesconto * percentagemMulta;
     const valorFinal = mensalidadeComDesconto + multa;

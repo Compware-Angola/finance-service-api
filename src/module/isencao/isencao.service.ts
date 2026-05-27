@@ -162,64 +162,60 @@ export class IsencaoService {
 
         const rowInfoFactura = resultadoInforFacura?.[0];
 
-        if (!rowInfoFactura) {
-          throw new Error('Não foi encontrado nenhuma factura com esse mês');
-        }
-
-        if (rowInfoFactura.ESTADO_FACTURA == InvoiceEnum.PAGO) {
+        if (rowInfoFactura?.ESTADO_FACTURA == InvoiceEnum.PAGO) {
           throw new Error('A Factura já está paga');
         }
-
-        // 3. Atualizar item
-        await queryRunner.query(
-          `
+        if (rowInfoFactura) {
+          // 3. Atualizar item
+          await queryRunner.query(
+            `
         update fk2_factura_items
         set estado = :estado
         where codigo = :codigo
         `,
-          {
-            estado: InvoiceItemEnum.ISENTO,
-            codigo: rowInfoFactura.CODIGO,
-          } as any,
-        );
+            {
+              estado: InvoiceItemEnum.ISENTO,
+              codigo: rowInfoFactura.CODIGO,
+            } as any,
+          );
 
-        // 4. Verificar pendentes
-        const resultadoContarPendentes = await queryRunner.query(
-          `
+          // 4. Verificar pendentes
+          const resultadoContarPendentes = await queryRunner.query(
+            `
         select count(*) as TOTAL
         from FK2_FACTURA_ITEMS
         where ESTADO = :estado
         and CODIGO <> :codigo
         and CODIGOFACTURA = :factura
         `,
-          {
-            estado: InvoiceEnum.PENDENTE,
-            codigo: rowInfoFactura.CODIGO,
-            factura: rowInfoFactura.CODIGOFACTURA,
-          } as any,
-        );
+            {
+              estado: InvoiceEnum.PENDENTE,
+              codigo: rowInfoFactura.CODIGO,
+              factura: rowInfoFactura.CODIGOFACTURA,
+            } as any,
+          );
 
-        let facturaStatus = InvoiceEnum.ISENTO;
+          let facturaStatus = InvoiceEnum.ISENTO;
 
-        if (resultadoContarPendentes?.[0]?.TOTAL > 0) {
-          facturaStatus = InvoiceEnum.PENDENTE;
-        }
+          if (resultadoContarPendentes?.[0]?.TOTAL > 0) {
+            facturaStatus = InvoiceEnum.PENDENTE;
+          }
 
-        // 5. Atualizar factura
-        await queryRunner.query(
-          `
+          // 5. Atualizar factura
+          await queryRunner.query(
+            `
         update fk2_factura
         set valorisento = :valor,
             estado = :estado
         where codigo = :codigo
         `,
-          {
-            valor: rowInfoFactura.TOTAL,
-            estado: facturaStatus,
-            codigo: rowInfoFactura.CODIGOFACTURA,
-          } as any,
-        );
-
+            {
+              valor: rowInfoFactura.TOTAL,
+              estado: facturaStatus,
+              codigo: rowInfoFactura.CODIGOFACTURA,
+            } as any,
+          );
+        }
         // 6. Inserir isenção
         await queryRunner.query(
           `

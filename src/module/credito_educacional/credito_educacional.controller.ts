@@ -30,4 +30,8 @@ export class CreditoEducacionalController {
   switchBolseiro(@Param('id') id: number) {
     return this.creditoEducacionalService.switchBolseiro(id);
   }
+  @Get('dados-info')
+  getInfoBolseiroDados(@Query('codigoMatricula') codigoMatricula: number) {
+    return this.creditoEducacionalService.getInfoBolseiroDados(codigoMatricula);
+  }
 }

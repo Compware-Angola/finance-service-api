@@ -61,6 +61,7 @@ export class AnoLectivoUtil {
     semestre: number | null;
     descricao: string;
     dataFim: Date | null;
+    dataInicio: Date | null;
   }> {
     const anoId = await this.getAnoAtualId();
 
@@ -99,6 +100,7 @@ export class AnoLectivoUtil {
       return {
         anoId,
         semestre: 1,
+        dataInicio: inicio1,
         dataFim: fim1,
         descricao: 'PRIMEIRO_SEMESTRE',
       };
@@ -108,6 +110,7 @@ export class AnoLectivoUtil {
       return {
         anoId,
         semestre: 2,
+        dataInicio: inicio2,
         dataFim: fim2,
         descricao: 'SEGUNDO_SEMESTRE',
       };
@@ -116,6 +119,7 @@ export class AnoLectivoUtil {
     return {
       anoId,
       semestre: null,
+      dataInicio: null,
       dataFim: null,
       descricao: 'FORA_DO_PERIODO',
     };

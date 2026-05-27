@@ -518,12 +518,31 @@ export class CreditoEducacionalService {
 
     const ano = await this.anoLectivoUtil.getAnoAtualId();
     const semestre = (await this.anoLectivoUtil.getSemestreAtual()).semestre ?? 1;
+    let data_inicio_bolsa: any = null, data_fim_bolsa: any = null
+
+    const result = await this.getBolseiroDados(codigoMatricula, ano, semestre);
 
 
-    const dados = await this.getBolseiroDados(codigoMatricula, ano, semestre);
+    if (result) {
+      switch (semestre) {
+        case 3:
+          data_inicio_bolsa = (await this.anoLectivoUtil.getSemestresConfigurados()).primeiroSemestre?.dataInicio
+          data_fim_bolsa = (await this.anoLectivoUtil.getSemestresConfigurados()).segundoSemestre?.dataFim
+          break;
+        default:
+          data_inicio_bolsa = (await this.anoLectivoUtil.getSemestreAtual()).dataInicio
+          data_fim_bolsa = (await this.anoLectivoUtil.getSemestreAtual()).dataFim
+          break;
+
+      }
+
+
+    }
     return {
-      isBolseiro: Boolean(dados),
-      dados
+      ...result,
+      isBolseiro: Boolean(result),
+      data_inicio_bolsa,
+      data_fim_bolsa
     };
   }
 
@@ -553,8 +572,7 @@ export class CreditoEducacionalService {
       a.CREATED_AT,
       a.UPDATED_AT,
 
-      a.DATA_INICIO_BOLSA,
-      a.DATA_FIM_BOLSA,
+    
 
       b.CODIGO                              AS CODIGO_INSTITUICAO,
       b.INSTITUICAO,

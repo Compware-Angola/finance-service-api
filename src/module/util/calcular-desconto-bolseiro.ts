@@ -3,6 +3,11 @@ const resolverDescontobolseiro = (
   mensalidade: number,
 ): number | null => {
   //DE ALGUMA FORMA SE TODOS FOREM NULAS ELE NÃO DEVE PERMITIR CALCULAR
+  const parcelasPorSemestre: Record<number, number> = {
+    1: 5,
+    2: 5,
+    3: 10,
+  };
   if (row?.DESCONTO == null && row?.VALOR_DESCONTO == null) {
     return null;
   }
@@ -14,9 +19,10 @@ const resolverDescontobolseiro = (
 
   if (row?.VALOR_DESCONTO == null) return null;
   if (row?.SIGLA === 'DESC_FIX') {
-    const valorBolsaMensal = row.VALOR_DESCONTO / 10;
+    const qtdParcelas = parcelasPorSemestre[row?.SEMESTRE] ?? 5;
+    const valorBolsaMensal = row.VALOR_DESCONTO / qtdParcelas;
     const percentual = (valorBolsaMensal / mensalidade) * 100;
-    return Math.min(Math.trunc(percentual), 100);
+    return Math.min(percentual, 100);
   }
 
   return Math.min(Number(row.VALOR_DESCONTO), 100);

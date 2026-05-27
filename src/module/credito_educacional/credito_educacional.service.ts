@@ -5,13 +5,36 @@ import { UpdateCreditoEducacionalDto } from './dto/update-credito_educacional.dt
 import { FindCreditoEducacionalDto } from './dto/find-credito-educacional.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { PaymentService } from '../payment/payment.service';
+import { AnoLectivoUtil } from '../util/current-academic-year';
+
 
 @Injectable()
 export class CreditoEducacionalService {
+
+  private anoAtualPrincipal: number | null = null;
+  private semestreAtual: number = 1;
+
   constructor(
     private readonly dataSource: DataSource,
+    private readonly anoLectivoUtil: AnoLectivoUtil,
     private readonly paymentService: PaymentService,
-  ) { }
+  ) {
+    this.initAnoAtual();
+  }
+
+  private async initAnoAtual() {
+    try {
+      this.anoAtualPrincipal = await this.anoLectivoUtil.getAnoAtualId();
+      const semestreResponse = await this.anoLectivoUtil.getSemestreAtual();
+      this.semestreAtual = semestreResponse?.semestre ?? 1;
+
+      console.log(`[CreditoEducacionalService] Ano Lectivo inicializado: ${this.anoAtualPrincipal} | Semestre: ${this.semestreAtual}`);
+    } catch (error) {
+      console.error('Erro ao inicializar ano lectivo/semestre:', error);
+      // Fallback seguro
+
+    }
+  }
 
   async create(dto: CreateCreditoEducacionalDto, codigoUtilizador: number) {
     const dadosAluno = await this.obterDadosCompletosAluno(dto.codigoMatricula);
@@ -488,6 +511,125 @@ export class CreditoEducacionalService {
     if (!row) {
       throw new BadRequestException('Informações do aluno não encontradas');
     }
+
+    return toLowerCaseKeys(row);
+  }
+  async getInfoBolseiroDados(codigoMatricula: number) {
+
+    const ano = await this.anoLectivoUtil.getAnoAtualId();
+    const semestre = (await this.anoLectivoUtil.getSemestreAtual()).semestre ?? 1;
+
+
+    const dados = await this.getBolseiroDados(codigoMatricula, ano, semestre);
+    return {
+      isBolseiro: Boolean(dados),
+      dados
+    };
+  }
+
+  private async getBolseiroDados(
+    codigoMatricula: number,
+    codigoAnoLectivo: number,
+    semestre: number,
+  ) {
+    if (!codigoMatricula || !codigoAnoLectivo || !semestre) {
+      throw new BadRequestException(
+        'Todos os parâmetros são obrigatórios',
+      );
+    }
+
+    const sql = `
+    SELECT
+      a.CODIGO,
+      a.CODIGO_MATRICULA,
+
+      j.NOME_COMPLETO,
+      j.BILHETE_IDENTIDADE,
+
+      k.DESIGNACAO                          AS CURSO,
+
+      a.CODIGO_UTILIZADOR,
+      a.CANAL,
+      a.CREATED_AT,
+      a.UPDATED_AT,
+
+      a.DATA_INICIO_BOLSA,
+      a.DATA_FIM_BOLSA,
+
+      b.CODIGO                              AS CODIGO_INSTITUICAO,
+      b.INSTITUICAO,
+
+      a.CODIGO_ANOLECTIVO,
+      c.DESIGNACAO                          AS ANO_LECTIVO,
+
+      a.OBSERVACAO,
+      a.HISTORICO,
+      a.STATUS_,
+      a.SEMESTRE,
+      a.ESTADOBOLSA,
+      a.TIPO_ALUNO_ID,
+
+      NVL(e.VALOR_DESCONTO, a.DESCONTO)     AS VALOR_DESCONTO,
+
+      NVL(e.CODIGO_TIPO_DESCONTO, 1)        AS CODIGO_TIPO_DESCONTO,
+
+      NVL(g.DESIGNACAO, 'PERCENTUAL')       AS TIPO_DESCONTO,
+
+      NVL(db.SIGLA, 'PERCENTUAL')           AS SIGLA,
+
+      e.CODIGO_TIPO_CREDITO,
+      f.DESIGNACAO                          AS TIPO_CREDITO,
+
+      a.CODIGO_BOLSA,
+      e.DESIGNACAO                          AS BOLSA,
+
+      a.ISENTAR_MULTA
+
+    FROM FK2_TB_BOLSEIROS a
+
+    LEFT JOIN FK2_TB_INSTITUICAO b
+      ON b.CODIGO = a.CODIGO_INSTITUICAO
+
+    LEFT JOIN FK2_TB_ANO_LECTIVO c
+      ON c.CODIGO = a.CODIGO_ANOLECTIVO
+
+    LEFT JOIN FK2_TB_BOLSAS e
+      ON e.CODIGO = a.CODIGO_BOLSA
+
+    LEFT JOIN FK2_TB_TIPO_CREDITO f
+      ON f.CODIGO = e.CODIGO_TIPO_CREDITO
+
+    LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS g
+      ON g.CODIGO = e.CODIGO_TIPO_DESCONTO
+
+    LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS db
+      ON db.CODIGO = e.CODIGO_TIPO_DESCONTO
+
+    LEFT JOIN FK2_TB_MATRICULAS h
+      ON h.CODIGO = a.CODIGO_MATRICULA
+
+    LEFT JOIN FK2_TB_ADMISSAO i
+      ON i.CODIGO = h.CODIGO_ALUNO
+
+    LEFT JOIN FK2_TB_PREINSCRICAO j
+      ON j.CODIGO = i.PRE_INCRICAO
+
+    LEFT JOIN FK2_TB_CURSOS k
+      ON k.CODIGO = h.CODIGO_CURSO
+
+    WHERE a.CODIGO_MATRICULA = :codigoMatricula
+      AND a.CODIGO_ANOLECTIVO = :codigoAnoLectivo
+      AND a.SEMESTRE = :semestre
+  `;
+
+    const [row] = await this.dataSource.query(
+      sql,
+      {
+        codigoMatricula,
+        codigoAnoLectivo,
+        semestre,
+      } as any,
+    );
 
     return toLowerCaseKeys(row);
   }

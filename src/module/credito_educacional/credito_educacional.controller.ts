@@ -6,6 +6,7 @@ import { RemoteJwtAuthGuard } from 'src/common/guard/remote.jwt-auth.guard';
 import { PermissionsGuard } from 'src/common/secret/permissions.guard';
 import { UpdateCreditoEducacionalDto } from './dto/update-credito_educacional.dto';
 import { FindCreditoEducacionalDto } from './dto/find-credito-educacional.dto';
+import { ValidarEstudanteCreditoDto } from './dto/validar-estudante-credito.dto';
 
 @Controller('credito-educacional')
 export class CreditoEducacionalController {
@@ -20,6 +21,10 @@ export class CreditoEducacionalController {
   @Get()
   findAll(@Query() findCreditoEducacionalDto: FindCreditoEducacionalDto) {
     return this.creditoEducacionalService.findAll(findCreditoEducacionalDto);
+  }
+  @Get('estudante/validar')
+  validarEstudante(@Query() query: ValidarEstudanteCreditoDto) {
+    return this.creditoEducacionalService.validarEstudanteParaCredito(query);
   }
   @Put(':id')
   update(@Param('id') id: number, @Body() updateCreditoEducacionalDto: UpdateCreditoEducacionalDto, @Req() req: any) {

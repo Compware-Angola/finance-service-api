@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { CreateCreditoEducacionalDto } from './dto/create-credito_educacional.dto';
 import { UpdateCreditoEducacionalDto } from './dto/update-credito_educacional.dto';
 import { FindCreditoEducacionalDto } from './dto/find-credito-educacional.dto';
+import { ValidarEstudanteCreditoDto } from './dto/validar-estudante-credito.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { PaymentService } from '../payment/payment.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
@@ -405,6 +406,63 @@ export class CreditoEducacionalService {
         limit,
         totalPages: Math.ceil(totalRecords / limit),
       },
+    };
+  }
+  async validarEstudanteParaCredito(query: ValidarEstudanteCreditoDto) {
+    const { codigoMatricula, codigoAnoLectivo, semestre } = query;
+
+    const sql = `
+      SELECT
+        m.CODIGO                AS CODIGO_MATRICULA,
+        p.NOME_COMPLETO         AS NOME_COMPLETO,
+        p.BILHETE_IDENTIDADE    AS BI,
+        c.DESIGNACAO            AS CURSO,
+        pe.DESIGNACAO           AS PERIODO,
+        m.ESTADO_MATRICULA      AS ESTADO_MATRICULA,
+        b.CODIGO                AS CODIGO_BOLSEIRO,
+        b.CODIGO_BOLSA          AS CODIGO_BOLSA,
+        bo.DESIGNACAO           AS BOLSA,
+        b.STATUS_               AS STATUS_BOLSEIRO,
+        b.CODIGO_ANOLECTIVO     AS CODIGO_ANO_LECTIVO,
+        b.SEMESTRE              AS SEMESTRE
+      FROM FK2_TB_MATRICULAS m
+      INNER JOIN FK2_TB_ADMISSAO a
+        ON a.CODIGO = m.CODIGO_ALUNO
+      INNER JOIN FK2_TB_PREINSCRICAO p
+        ON p.CODIGO = a.PRE_INCRICAO
+      INNER JOIN FK2_TB_CURSOS c
+        ON c.CODIGO = m.CODIGO_CURSO
+      INNER JOIN FK2_TB_PERIODOS pe
+        ON pe.CODIGO = p.CODIGO_TURNO
+      LEFT JOIN FK2_TB_BOLSEIROS b
+        ON b.CODIGO_MATRICULA = m.CODIGO
+       AND b.STATUS_ = 1
+       AND b.CODIGO_ANOLECTIVO = :codigoAnoLectivo
+       AND b.SEMESTRE = :semestre
+      LEFT JOIN FK2_TB_BOLSAS bo
+        ON bo.CODIGO = b.CODIGO_BOLSA
+      WHERE m.CODIGO = :codigoMatricula
+      ORDER BY b.CODIGO DESC
+      FETCH FIRST 1 ROW ONLY
+    `;
+
+    const [row] = await this.dataSource.query(sql, {
+      codigoMatricula,
+      codigoAnoLectivo,
+      semestre,
+    } as any);
+
+    if (!row) {
+      throw new NotFoundException('Aluno não encontrado');
+    }
+
+    if (row.ESTADO_MATRICULA?.toLowerCase() === 'diplomado') {
+      throw new BadRequestException('Aluno diplomado');
+    }
+
+    return {
+      ...toLowerCaseKeys(row),
+      ja_bolsista: Boolean(row.CODIGO_BOLSEIRO),
     };
   }
   async switchBolseiro(codigo: number) {

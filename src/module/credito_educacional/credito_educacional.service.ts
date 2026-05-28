@@ -93,6 +93,7 @@ export class CreditoEducacionalService {
     //  saber quando ele paga por mes e calcular quanto sera os  
     //  10 meses  se  depois vou subtrair se sobrar  vou devolver 
     //  no saldo  do aluno 
+
     if (bolsa.SIGLA === "DESC_FIX") {
       const mensalidade = await this.obterMensalidade(
         dto.codigoAnoLectivo,

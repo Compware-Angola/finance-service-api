@@ -65,14 +65,23 @@ export class CreditoEducacionalService {
     // 3. Verificar se já existe bolseiro activo para esta matrícula
     const [bolseiroExiste] = await this.dataSource.query(
       `
-      SELECT CODIGO 
-      FROM FK2_TB_BOLSEIROS 
-      WHERE CODIGO_MATRICULA = :codigoMatricula
-      AND STATUS_ = 1
-      AND CODIGO_ANOLECTIVO = :codigoAnoLectivo
-      AND SEMESTRE = :semestre
-      `,
-      { codigoMatricula: dto.codigoMatricula, codigoAnoLectivo: dto.codigoAnoLectivo, semestre: dto.semestre } as any,
+  SELECT CODIGO 
+  FROM FK2_TB_BOLSEIROS 
+  WHERE CODIGO_MATRICULA = :codigoMatricula
+  AND STATUS_ = 1
+  AND CODIGO_ANOLECTIVO = :codigoAnoLectivo
+  AND (
+    SEMESTRE = :semestre
+    OR (
+      :semestre = 3 AND SEMESTRE IN (1, 2)
+    )
+  )
+  `,
+      {
+        codigoMatricula: dto.codigoMatricula,
+        codigoAnoLectivo: dto.codigoAnoLectivo,
+        semestre: dto.semestre
+      } as any,
     );
 
     if (bolseiroExiste) {

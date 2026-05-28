@@ -4,25 +4,22 @@ import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AcademicYear } from '../invoice/entities/academic.year.entity';
 
+
 @Injectable()
 export class AnoLectivoUtil {
   private readonly FALLBACK_ANO_ID = 23;
   private static cachedAnoId: number | null = null;
   private static lastFetched = 0;
-  private static readonly CACHE_TTL = 10 * 60 * 1000; // 10 minutos (ajuste conforme necessidade)
+  private static readonly CACHE_TTL = 10 * 60 * 1000;
 
   constructor(
     @InjectRepository(AcademicYear)
     private readonly anoLectivoRepo: Repository<AcademicYear>,
-  ) {}
+  ) { }
 
-  /**
-   * Retorna o ID do ano letivo ativo com cache em memória + fallback
-   */
   async getAnoAtualId(): Promise<number> {
     const now = Date.now();
 
-    // 1. Usa cache em memória se válido
     if (
       AnoLectivoUtil.cachedAnoId !== null &&
       now - AnoLectivoUtil.lastFetched < AnoLectivoUtil.CACHE_TTL
@@ -31,34 +28,161 @@ export class AnoLectivoUtil {
     }
 
     try {
-      // 2. Busca no banco (com cache do TypeORM como backup)
       const anoAtivo = await this.anoLectivoRepo.findOne({
         where: { estado: 'Ativo' },
         select: ['Codigo'],
         cache: {
           id: 'ano_letivo_ativo',
-          milliseconds: 60_000, 
+          milliseconds: 60_000,
         },
       });
 
       const anoId = anoAtivo?.Codigo ?? this.FALLBACK_ANO_ID;
 
-      // 3. Atualiza cache em memória
       AnoLectivoUtil.cachedAnoId = anoId;
       AnoLectivoUtil.lastFetched = now;
 
       return anoId;
     } catch (error) {
-      console.warn('Erro ao buscar ano letivo ativo:', error instanceof Error ? error.message : error);
-      
-      // 4. Em caso de erro, retorna fallback e mantém cache antigo (se houver)
+      console.warn(
+        'Erro ao buscar ano letivo ativo:',
+        error instanceof Error ? error.message : error,
+      );
+
       return AnoLectivoUtil.cachedAnoId ?? this.FALLBACK_ANO_ID;
     }
   }
 
   /**
-   * Limpa o cache (útil em testes ou admin)
+   * 🔥 Retorna o semestre atual baseado na data de hoje
    */
+  async getSemestreAtual(): Promise<{
+    anoId: number;
+    semestre: number | null;
+    descricao: string;
+    dataFim: Date | null;
+    dataInicio: Date | null;
+  }> {
+    const anoId = await this.getAnoAtualId();
+
+    const ano = await this.anoLectivoRepo.findOne({
+      where: { Codigo: anoId },
+      select: [
+        'Codigo',
+        'dataInicioPrimeiroSemestre',
+        'dataFimPrimeiroSemestre',
+        'dataInicioSegundoSemestre',
+        'dataFimSegundoSemestre',
+      ],
+    });
+
+    if (!ano) {
+      throw new Error('Ano lectivo não encontrado');
+    }
+
+    const hoje = new Date();
+
+    if (
+      !ano.dataInicioPrimeiroSemestre ||
+      !ano.dataFimPrimeiroSemestre ||
+      !ano.dataInicioSegundoSemestre ||
+      !ano.dataFimSegundoSemestre
+    ) {
+      throw new Error('Datas do semestre não configuradas no ano lectivo');
+    }
+
+    const inicio1 = new Date(ano.dataInicioPrimeiroSemestre);
+    const fim1 = new Date(ano.dataFimPrimeiroSemestre);
+    const inicio2 = new Date(ano.dataInicioSegundoSemestre);
+    const fim2 = new Date(ano.dataFimSegundoSemestre);
+
+    if (hoje >= inicio1 && hoje <= fim1) {
+      return {
+        anoId,
+        semestre: 1,
+        dataInicio: inicio1,
+        dataFim: fim1,
+        descricao: 'PRIMEIRO_SEMESTRE',
+      };
+    }
+
+    if (hoje >= inicio2 && hoje <= fim2) {
+      return {
+        anoId,
+        semestre: 2,
+        dataInicio: inicio2,
+        dataFim: fim2,
+        descricao: 'SEGUNDO_SEMESTRE',
+      };
+    }
+
+    return {
+      anoId,
+      semestre: null,
+      dataInicio: null,
+      dataFim: null,
+      descricao: 'FORA_DO_PERIODO',
+    };
+  }
+
+  /**
+   * 🔥 Retorna os dois semestres configurados do ano letivo atual
+   */
+  async getSemestresConfigurados(): Promise<{
+    anoId: number;
+    primeiroSemestre: {
+      dataInicio: Date;
+      dataFim: Date;
+      descricao: string;
+    } | null;
+    segundoSemestre: {
+      dataInicio: Date;
+      dataFim: Date;
+      descricao: string;
+    } | null;
+  }> {
+    const anoId = await this.getAnoAtualId();
+
+    const ano = await this.anoLectivoRepo.findOne({
+      where: { Codigo: anoId },
+      select: [
+        'Codigo',
+        'dataInicioPrimeiroSemestre',
+        'dataFimPrimeiroSemestre',
+        'dataInicioSegundoSemestre',
+        'dataFimSegundoSemestre',
+      ],
+    });
+
+    if (!ano) {
+      throw new Error('Ano lectivo não encontrado');
+    }
+
+    const primeiroSemestre =
+      ano.dataInicioPrimeiroSemestre && ano.dataFimPrimeiroSemestre
+        ? {
+          dataInicio: new Date(ano.dataInicioPrimeiroSemestre),
+          dataFim: new Date(ano.dataFimPrimeiroSemestre),
+          descricao: 'PRIMEIRO_SEMESTRE',
+        }
+        : null;
+
+    const segundoSemestre =
+      ano.dataInicioSegundoSemestre && ano.dataFimSegundoSemestre
+        ? {
+          dataInicio: new Date(ano.dataInicioSegundoSemestre),
+          dataFim: new Date(ano.dataFimSegundoSemestre),
+          descricao: 'SEGUNDO_SEMESTRE',
+        }
+        : null;
+
+    return {
+      anoId,
+      primeiroSemestre,
+      segundoSemestre,
+    };
+  }
+
   static clearCache() {
     this.cachedAnoId = null;
     this.lastFetched = 0;

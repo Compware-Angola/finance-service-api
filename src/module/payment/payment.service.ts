@@ -350,8 +350,8 @@ export class PaymentService {
     );
     const valorDepositado =
       dto.valorDepositado || existingPayment?.valorDepositado || 0;
-    const estados = invoice.TotalPreco > valorDepositado ? 2 : 1;
-    const valor_restante = valorDepositado - invoice.TotalPreco;
+    const estados = invoice.ValorAPagar > valorDepositado ? 2 : 1;
+    const valor_restante = valorDepositado - invoice.ValorAPagar;
 
     const itens = await this.dataSource.query(
       `

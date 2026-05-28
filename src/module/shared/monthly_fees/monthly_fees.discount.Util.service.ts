@@ -15,7 +15,7 @@ import { TestMonthlyDTO } from './dto/test-monthly.dto';
 import { resolverDescontobolseiro } from 'src/module/util/calcular-desconto-bolseiro';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -68,6 +68,7 @@ export class MonthlyFeesDiscountUtilService {
     WHERE b.codigo_matricula = :codigoMatricula
       AND b.codigo_anolectivo = :anoLectivo
       AND (b.semestre = :semestre or b.semestre = 3)
+     -- AND b.STATUS_= 1
   `;
 
     try {

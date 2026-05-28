@@ -3,6 +3,7 @@ import { DataSource } from 'typeorm';
 import { CreateCreditoEducacionalDto } from './dto/create-credito_educacional.dto';
 import { UpdateCreditoEducacionalDto } from './dto/update-credito_educacional.dto';
 import { FindCreditoEducacionalDto } from './dto/find-credito-educacional.dto';
+import { ValidarEstudanteCreditoDto } from './dto/validar-estudante-credito.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { PaymentService } from '../payment/payment.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
@@ -49,7 +50,7 @@ export class CreditoEducacionalService {
     if (!bolsa) {
       throw new NotFoundException(`Bolsa com código ${dto.codigoBolsa} não encontrada`);
     }
-    console.log(bolsa);
+
 
     // 2. Validação da Matrícula
     const [matricula] = await this.dataSource.query(
@@ -64,14 +65,23 @@ export class CreditoEducacionalService {
     // 3. Verificar se já existe bolseiro activo para esta matrícula
     const [bolseiroExiste] = await this.dataSource.query(
       `
-      SELECT CODIGO 
-      FROM FK2_TB_BOLSEIROS 
-      WHERE CODIGO_MATRICULA = :codigoMatricula
-      AND STATUS_ = 1
-      AND CODIGO_ANOLECTIVO = :codigoAnoLectivo
-      AND SEMESTRE = :semestre
-      `,
-      { codigoMatricula: dto.codigoMatricula, codigoAnoLectivo: dto.codigoAnoLectivo, semestre: dto.semestre } as any,
+  SELECT CODIGO 
+  FROM FK2_TB_BOLSEIROS 
+  WHERE CODIGO_MATRICULA = :codigoMatricula
+  AND STATUS_ = 1
+  AND CODIGO_ANOLECTIVO = :codigoAnoLectivo
+  AND (
+    SEMESTRE = :semestre
+    OR (
+      :semestre = 3 AND SEMESTRE IN (1, 2)
+    )
+  )
+  `,
+      {
+        codigoMatricula: dto.codigoMatricula,
+        codigoAnoLectivo: dto.codigoAnoLectivo,
+        semestre: dto.semestre
+      } as any,
     );
 
     if (bolseiroExiste) {
@@ -83,6 +93,7 @@ export class CreditoEducacionalService {
     //  saber quando ele paga por mes e calcular quanto sera os  
     //  10 meses  se  depois vou subtrair se sobrar  vou devolver 
     //  no saldo  do aluno 
+
     if (bolsa.SIGLA === "DESC_FIX") {
       const mensalidade = await this.obterMensalidade(
         dto.codigoAnoLectivo,
@@ -407,6 +418,63 @@ export class CreditoEducacionalService {
       },
     };
   }
+  async validarEstudanteParaCredito(query: ValidarEstudanteCreditoDto) {
+    const { codigoMatricula, codigoAnoLectivo, semestre } = query;
+
+    const sql = `
+      SELECT
+        m.CODIGO                AS CODIGO_MATRICULA,
+        p.NOME_COMPLETO         AS NOME_COMPLETO,
+        p.BILHETE_IDENTIDADE    AS BI,
+        c.DESIGNACAO            AS CURSO,
+        pe.DESIGNACAO           AS PERIODO,
+        m.ESTADO_MATRICULA      AS ESTADO_MATRICULA,
+        b.CODIGO                AS CODIGO_BOLSEIRO,
+        b.CODIGO_BOLSA          AS CODIGO_BOLSA,
+        bo.DESIGNACAO           AS BOLSA,
+        b.STATUS_               AS STATUS_BOLSEIRO,
+        b.CODIGO_ANOLECTIVO     AS CODIGO_ANO_LECTIVO,
+        b.SEMESTRE              AS SEMESTRE
+      FROM FK2_TB_MATRICULAS m
+      INNER JOIN FK2_TB_ADMISSAO a
+        ON a.CODIGO = m.CODIGO_ALUNO
+      INNER JOIN FK2_TB_PREINSCRICAO p
+        ON p.CODIGO = a.PRE_INCRICAO
+      INNER JOIN FK2_TB_CURSOS c
+        ON c.CODIGO = m.CODIGO_CURSO
+      INNER JOIN FK2_TB_PERIODOS pe
+        ON pe.CODIGO = p.CODIGO_TURNO
+      LEFT JOIN FK2_TB_BOLSEIROS b
+        ON b.CODIGO_MATRICULA = m.CODIGO
+       AND b.STATUS_ = 1
+       AND b.CODIGO_ANOLECTIVO = :codigoAnoLectivo
+       AND b.SEMESTRE = :semestre
+      LEFT JOIN FK2_TB_BOLSAS bo
+        ON bo.CODIGO = b.CODIGO_BOLSA
+      WHERE m.CODIGO = :codigoMatricula
+      ORDER BY b.CODIGO DESC
+      FETCH FIRST 1 ROW ONLY
+    `;
+
+    const [row] = await this.dataSource.query(sql, {
+      codigoMatricula,
+      codigoAnoLectivo,
+      semestre,
+    } as any);
+
+    if (!row) {
+      throw new NotFoundException('Aluno não encontrado');
+    }
+
+    if (row.ESTADO_MATRICULA?.toLowerCase() === 'diplomado') {
+      throw new BadRequestException('Aluno diplomado');
+    }
+
+    return {
+      ...toLowerCaseKeys(row),
+      ja_bolsista: Boolean(row.CODIGO_BOLSEIRO),
+    };
+  }
   async switchBolseiro(codigo: number) {
     const [bolseiro] = await this.dataSource.query(
       `
@@ -591,9 +659,9 @@ export class CreditoEducacionalService {
 
       NVL(e.CODIGO_TIPO_DESCONTO, 1)        AS CODIGO_TIPO_DESCONTO,
 
-      NVL(g.DESIGNACAO, 'PERCENTUAL')       AS TIPO_DESCONTO,
+      NVL(db.DESIGNACAO, 'PERCENTUAL')       AS TIPO_DESCONTO,
 
-      NVL(db.SIGLA, 'PERCENTUAL')           AS SIGLA,
+      NVL(db.SIGLA, 'DESC_PERC')           AS SIGLA,
 
       e.CODIGO_TIPO_CREDITO,
       f.DESIGNACAO                          AS TIPO_CREDITO,
@@ -617,8 +685,6 @@ export class CreditoEducacionalService {
     LEFT JOIN FK2_TB_TIPO_CREDITO f
       ON f.CODIGO = e.CODIGO_TIPO_CREDITO
 
-    LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS g
-      ON g.CODIGO = e.CODIGO_TIPO_DESCONTO
 
     LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS db
       ON db.CODIGO = e.CODIGO_TIPO_DESCONTO

@@ -593,7 +593,7 @@ export class CreditoEducacionalService {
 
       NVL(db.DESIGNACAO, 'PERCENTUAL')       AS TIPO_DESCONTO,
 
-      NVL(db.SIGLA, 'PERCENTUAL')           AS SIGLA,
+      NVL(db.SIGLA, 'DESC_PERC')           AS SIGLA,
 
       e.CODIGO_TIPO_CREDITO,
       f.DESIGNACAO                          AS TIPO_CREDITO,

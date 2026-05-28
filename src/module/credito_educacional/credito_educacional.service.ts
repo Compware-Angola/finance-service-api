@@ -50,7 +50,7 @@ export class CreditoEducacionalService {
     if (!bolsa) {
       throw new NotFoundException(`Bolsa com código ${dto.codigoBolsa} não encontrada`);
     }
-    console.log(bolsa);
+
 
     // 2. Validação da Matrícula
     const [matricula] = await this.dataSource.query(

@@ -28,7 +28,7 @@ export class CreateCreditoEducacionalDto {
     @Type(() => Number)
     desconto?: number;
 
-    @ApiPropertyOptional({ example: 'S', description: 'Isenta Multa (S/N)' })
+    @ApiPropertyOptional({ example: 'SIM', description: 'Isenta Multa (SIM/NAO)' })
     @IsOptional()
     @IsString()
     @Length(1, 3)

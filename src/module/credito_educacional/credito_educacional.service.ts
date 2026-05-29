@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CreateCreditoEducacionalDto } from './dto/create-credito_educacional.dto';
 import { UpdateCreditoEducacionalDto } from './dto/update-credito_educacional.dto';
@@ -8,10 +12,8 @@ import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { PaymentService } from '../payment/payment.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 
-
 @Injectable()
 export class CreditoEducacionalService {
-
   private anoAtualPrincipal: number | null = null;
   private semestreAtual: number = 1;
 
@@ -29,11 +31,12 @@ export class CreditoEducacionalService {
       const semestreResponse = await this.anoLectivoUtil.getSemestreAtual();
       this.semestreAtual = semestreResponse?.semestre ?? 1;
 
-      console.log(`[CreditoEducacionalService] Ano Lectivo inicializado: ${this.anoAtualPrincipal} | Semestre: ${this.semestreAtual}`);
+      console.log(
+        `[CreditoEducacionalService] Ano Lectivo inicializado: ${this.anoAtualPrincipal} | Semestre: ${this.semestreAtual}`,
+      );
     } catch (error) {
       console.error('Erro ao inicializar ano lectivo/semestre:', error);
       // Fallback seguro
-
     }
   }
 
@@ -48,9 +51,10 @@ export class CreditoEducacionalService {
     );
 
     if (!bolsa) {
-      throw new NotFoundException(`Bolsa com código ${dto.codigoBolsa} não encontrada`);
+      throw new NotFoundException(
+        `Bolsa com código ${dto.codigoBolsa} não encontrada`,
+      );
     }
-
 
     // 2. Validação da Matrícula
     const [matricula] = await this.dataSource.query(
@@ -59,7 +63,9 @@ export class CreditoEducacionalService {
     );
 
     if (!matricula) {
-      throw new NotFoundException(`Matrícula com código ${dto.codigoMatricula} não encontrada`);
+      throw new NotFoundException(
+        `Matrícula com código ${dto.codigoMatricula} não encontrada`,
+      );
     }
 
     // 3. Verificar se já existe bolseiro activo para esta matrícula
@@ -80,7 +86,7 @@ export class CreditoEducacionalService {
       {
         codigoMatricula: dto.codigoMatricula,
         codigoAnoLectivo: dto.codigoAnoLectivo,
-        semestre: dto.semestre
+        semestre: dto.semestre,
       } as any,
     );
 
@@ -89,12 +95,12 @@ export class CreditoEducacionalService {
         `Já existe um bolseiro activo para a matrícula ${dto.codigoMatricula}`,
       );
     }
-    //   Ser fixo  deve ver pesquisar a mensalidade do aluno  e 
-    //  saber quando ele paga por mes e calcular quanto sera os  
-    //  10 meses  se  depois vou subtrair se sobrar  vou devolver 
-    //  no saldo  do aluno 
+    //   Ser fixo  deve ver pesquisar a mensalidade do aluno  e
+    //  saber quando ele paga por mes e calcular quanto sera os
+    //  10 meses  se  depois vou subtrair se sobrar  vou devolver
+    //  no saldo  do aluno
 
-    if (bolsa.SIGLA === "DESC_FIX") {
+    if (bolsa.SIGLA === 'DESC_FIX') {
       const mensalidade = await this.obterMensalidade(
         dto.codigoAnoLectivo,
         dadosAluno,
@@ -197,7 +203,6 @@ export class CreditoEducacionalService {
         status: 1,
         semestre: dto.semestre ?? null,
 
-
         codigoTipoDesconto: dto.codigoTipoDesconto ?? null,
         codigoTipoCredito: dto.codigoTipoCredito ?? null,
         codigoCredito: dto.codigoCredito ?? null,
@@ -211,8 +216,11 @@ export class CreditoEducacionalService {
     };
   }
 
-  async update(codigo: number, dto: UpdateCreditoEducacionalDto, codigoUtilizador: number) {
-
+  async update(
+    codigo: number,
+    dto: UpdateCreditoEducacionalDto,
+    codigoUtilizador: number,
+  ) {
     // 1. Validação da Bolsa
     const [bolsa] = await this.dataSource.query(
       `SELECT CODIGO FROM FK2_TB_BOLSAS WHERE CODIGO = :codigoBolsa`,
@@ -220,7 +228,9 @@ export class CreditoEducacionalService {
     );
 
     if (!bolsa) {
-      throw new NotFoundException(`Bolsa com código ${dto.codigoBolsa} não encontrada`);
+      throw new NotFoundException(
+        `Bolsa com código ${dto.codigoBolsa} não encontrada`,
+      );
     }
 
     // 2. Validação da Matrícula
@@ -230,9 +240,10 @@ export class CreditoEducacionalService {
     );
 
     if (!matricula) {
-      throw new NotFoundException(`Matrícula com código ${dto.codigoMatricula} não encontrada`);
+      throw new NotFoundException(
+        `Matrícula com código ${dto.codigoMatricula} não encontrada`,
+      );
     }
-
 
     await this.dataSource.query(
       `
@@ -274,7 +285,6 @@ export class CreditoEducacionalService {
         afectacao: dto.afectacao ?? null,
         observacao: dto.observacao ?? null,
         semestre: dto.semestre ?? null,
-
 
         codigoTipoDesconto: dto.codigoTipoDesconto ?? null,
         codigoTipoCredito: dto.codigoTipoCredito ?? null,
@@ -379,6 +389,7 @@ export class CreditoEducacionalService {
           a.STATUS_,
           a.SEMESTRE,
           a.ESTADOBOLSA,
+          a.ISENTAR_MULTA,
          
           a.TIPO_ALUNO_ID,
           NVL(e.VALOR_DESCONTO, a.DESCONTO)         AS VALOR_DESCONTO,
@@ -583,34 +594,37 @@ export class CreditoEducacionalService {
     return toLowerCaseKeys(row);
   }
   async getInfoBolseiroDados(codigoMatricula: number) {
-
     const ano = await this.anoLectivoUtil.getAnoAtualId();
-    const semestre = (await this.anoLectivoUtil.getSemestreAtual()).semestre ?? 1;
-    let data_inicio_bolsa: any = null, data_fim_bolsa: any = null
+    const semestre =
+      (await this.anoLectivoUtil.getSemestreAtual()).semestre ?? 1;
+    let data_inicio_bolsa: any = null,
+      data_fim_bolsa: any = null;
 
     const result = await this.getBolseiroDados(codigoMatricula, ano, semestre);
-
 
     if (result) {
       switch (semestre) {
         case 3:
-          data_inicio_bolsa = (await this.anoLectivoUtil.getSemestresConfigurados()).primeiroSemestre?.dataInicio
-          data_fim_bolsa = (await this.anoLectivoUtil.getSemestresConfigurados()).segundoSemestre?.dataFim
+          data_inicio_bolsa = (
+            await this.anoLectivoUtil.getSemestresConfigurados()
+          ).primeiroSemestre?.dataInicio;
+          data_fim_bolsa = (
+            await this.anoLectivoUtil.getSemestresConfigurados()
+          ).segundoSemestre?.dataFim;
           break;
         default:
-          data_inicio_bolsa = (await this.anoLectivoUtil.getSemestreAtual()).dataInicio
-          data_fim_bolsa = (await this.anoLectivoUtil.getSemestreAtual()).dataFim
+          data_inicio_bolsa = (await this.anoLectivoUtil.getSemestreAtual())
+            .dataInicio;
+          data_fim_bolsa = (await this.anoLectivoUtil.getSemestreAtual())
+            .dataFim;
           break;
-
       }
-
-
     }
     return {
       ...result,
       isBolseiro: Boolean(result),
       data_inicio_bolsa,
-      data_fim_bolsa
+      data_fim_bolsa,
     };
   }
 
@@ -620,9 +634,7 @@ export class CreditoEducacionalService {
     semestre: number,
   ) {
     if (!codigoMatricula || !codigoAnoLectivo || !semestre) {
-      throw new BadRequestException(
-        'Todos os parâmetros são obrigatórios',
-      );
+      throw new BadRequestException('Todos os parâmetros são obrigatórios');
     }
 
     const sql = `
@@ -706,14 +718,11 @@ export class CreditoEducacionalService {
       AND a.SEMESTRE = :semestre
   `;
 
-    const [row] = await this.dataSource.query(
-      sql,
-      {
-        codigoMatricula,
-        codigoAnoLectivo,
-        semestre,
-      } as any,
-    );
+    const [row] = await this.dataSource.query(sql, {
+      codigoMatricula,
+      codigoAnoLectivo,
+      semestre,
+    } as any);
 
     return toLowerCaseKeys(row);
   }

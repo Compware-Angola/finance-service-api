@@ -14,7 +14,7 @@ export class MonthlyFeesService {
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
 
     private readonly monthlyFeeDiscount: MonthlyFeesDiscountUtilService,
-  ) { }
+  ) {}
 
   async findMonthlyFees(
     paginationQuery: MonthlyFeesFilterDto,
@@ -60,8 +60,7 @@ export class MonthlyFeesService {
         'fi.CodigoProduto AS "codigo_servico"',
         'ts.Descricao AS "descricao_servico"',
         'ts.TipoServico AS "tipo_servico"',
-
-        'NVL(fi.preco, ts.Preco) AS "mensalidade"',
+        'NVL(ts.Preco, fi.preco) AS "mensalidade"',
         'NVL(fi.descontoProduto, 0) AS "desconto"',
         'fi.Multa AS "multa"',
         'fi.Total AS "total_item"',
@@ -81,10 +80,10 @@ export class MonthlyFeesService {
         'pg.data_operacao AS "data_operacao"',
         'pg.Data     AS "data_pagamento"',
 
-        `CASE 
+        `CASE
          WHEN fi.valor_pago >= fi.Total THEN 1
-         WHEN fi.valor_pago > 0 THEN 2 
-         ELSE 0 
+         WHEN fi.valor_pago > 0 THEN 2
+         ELSE 0
        END AS "status_pagamento"`,
       ])
       .innerJoin('UMA_FACTURA_ITEMS', 'fi', 'fi.mes_temp_id = mt.id')
@@ -92,7 +91,9 @@ export class MonthlyFeesService {
       .leftJoin('UMA_TB_TIPO_SERVICOS', 'ts', 'fi.CodigoProduto = ts.Codigo')
       .leftJoin('UMA_TB_PAGAMENTOS', 'pg', 'pg.codigo_factura = f.Codigo')
       .where('mt.ano_lectivo = :anoLectivo', { anoLectivo: codAnoLectivo })
-      .andWhere('f.CodigoMatricula = :matricula', { matricula: codigo_matricula })
+      .andWhere('f.CodigoMatricula = :matricula', {
+        matricula: codigo_matricula,
+      })
       .andWhere('f.estado != 3'); // excluído
 
     // Filtro de status
@@ -108,8 +109,6 @@ export class MonthlyFeesService {
       .select('COUNT(DISTINCT mt.id)', 'total')
       .getRawOne()
       .then((r) => Number(r?.total || 0));
-
-
 
     // ====================== DADOS ======================
     const results = await qb

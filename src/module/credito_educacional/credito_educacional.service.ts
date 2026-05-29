@@ -379,6 +379,7 @@ export class CreditoEducacionalService {
           a.STATUS_,
           a.SEMESTRE,
           a.ESTADOBOLSA,
+          b.ISENTAR_MULTA,
          
           a.TIPO_ALUNO_ID,
           NVL(e.VALOR_DESCONTO, a.DESCONTO)         AS VALOR_DESCONTO,

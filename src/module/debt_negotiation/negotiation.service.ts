@@ -111,6 +111,7 @@ export class NegotiationService {
             codAnoLectivo: codAnoLectivo!,
             codigo_matricula,
             status: 'pending',
+            is_Negotation: true
         });
         console.log(generated);
 

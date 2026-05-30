@@ -497,38 +497,90 @@ export class MonthlyFeesDiscountUtilService {
       // Negociação COM ano lectivo específico: filtra pelo ano passado, mas bloqueia se for activo
       if (is_Negotation && isAnoLectivoNumero) {
         return `
-      SELECT
-        tp.DATA_LIMITE,
-        tp.DATA_FINAL,
-        tp.DATA_INICIAL,
-        tp.SEMESTRE,
-        tp.ID,
-        tp.DESIGNACAO,
-        tp.PRESTACAO,
-        tp.ANO_LECTIVO
-      FROM fk2_mes_temp tp
-      INNER JOIN fk2_tb_ano_lectivo a
-        ON a.codigo = tp.ano_lectivo
-      WHERE tp.ano_lectivo = :codAnoLectivo
-        AND tp.activo = 1
-        AND TRIM(UPPER(a.estado)) != 'ACTIVO'
+        SELECT
+          tp.DATA_LIMITE,
+          tp.DATA_FINAL,
+          tp.DATA_INICIAL,
+          tp.SEMESTRE,
+          tp.ID,
+          tp.DESIGNACAO,
+          tp.PRESTACAO,
+          tp.ANO_LECTIVO
+        FROM fk2_mes_temp tp
+        INNER JOIN fk2_tb_ano_lectivo a
+          ON a.codigo = tp.ano_lectivo
+        WHERE tp.ano_lectivo = :codAnoLectivo
+          AND tp.activo = 1
+          AND TRIM(UPPER(a.estado)) != 'ACTIVO'
 
-        AND tp.id NOT IN (
-          SELECT it.mes_temp_id
-          FROM fk2_factura ft
-          INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
-          INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
-          WHERE ft.codigomatricula = :codigo_matricula
-            AND it.mes_temp_id IS NOT NULL
-            AND mt.ano_lectivo = :codAnoLectivo
-            AND ft.estado != 3
-        )
-    `;
+          AND tp.id NOT IN (
+            SELECT it.mes_temp_id
+            FROM fk2_factura ft
+            INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
+            INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
+            WHERE ft.codigomatricula = :codigo_matricula
+              AND it.mes_temp_id IS NOT NULL
+              AND mt.ano_lectivo = :codAnoLectivo
+              AND ft.estado != 3
+          )
+      `;
       }
 
       // Negociação SEM ano lectivo: todos os anos confirmados e não activos
       if (is_Negotation) {
         return `
+        SELECT
+          DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
+          SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
+        FROM fk2_mes_temp tp
+        WHERE tp.activo = 1
+
+          AND EXISTS (
+            SELECT 1
+            FROM fk2_tb_confirmacoes cf
+            INNER JOIN fk2_tb_ano_lectivo a
+              ON a.codigo = cf.CODIGO_ANO_LECTIVO
+            WHERE cf.codigo_matricula = :codigo_matricula
+              AND cf.CODIGO_ANO_LECTIVO = tp.ano_lectivo
+              AND TRIM(UPPER(a.estado)) != 'ACTIVO'
+          )
+
+          AND tp.id NOT IN (
+            SELECT it.mes_temp_id
+            FROM fk2_factura ft
+            INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
+            INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
+            WHERE ft.codigomatricula = :codigo_matricula
+              AND it.mes_temp_id IS NOT NULL
+              AND ft.estado != 3
+          )
+      `;
+      }
+
+      // Fluxo normal com ano lectivo específico
+      if (isAnoLectivoNumero) {
+        return `
+        SELECT
+          DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
+          SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
+        FROM fk2_mes_temp tp
+        WHERE tp.ano_lectivo = :codAnoLectivo
+          AND tp.activo = 1
+          AND tp.id NOT IN (
+            SELECT it.mes_temp_id
+            FROM fk2_factura ft
+            INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
+            INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
+            WHERE ft.codigomatricula = :codigo_matricula
+              AND it.mes_temp_id IS NOT NULL
+              AND mt.ano_lectivo = :codAnoLectivo
+              AND ft.estado != 3
+          )
+      `;
+      }
+
+      // Fallback: sem ano lectivo, sem negociação
+      return `
       SELECT
         DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
         SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
@@ -555,68 +607,17 @@ export class MonthlyFeesDiscountUtilService {
             AND ft.estado != 3
         )
     `;
-      }
-
-      // Fluxo normal com ano lectivo específico
-      if (isAnoLectivoNumero) {
-        return `
-      SELECT
-        DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
-        SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
-      FROM fk2_mes_temp tp
-      WHERE tp.ano_lectivo = :codAnoLectivo
-        AND tp.activo = 1
-        AND tp.id NOT IN (
-          SELECT it.mes_temp_id
-          FROM fk2_factura ft
-          INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
-          INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
-          WHERE ft.codigomatricula = :codigo_matricula
-            AND it.mes_temp_id IS NOT NULL
-            AND mt.ano_lectivo = :codAnoLectivo
-            AND ft.estado != 3
-        )
-    `;
-      }
-
-      // Fallback: sem ano lectivo, sem negociação
-      return `
-    SELECT
-      DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
-      SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
-    FROM fk2_mes_temp tp
-    WHERE tp.activo = 1
-
-      AND EXISTS (
-        SELECT 1
-        FROM fk2_tb_confirmacoes cf
-        INNER JOIN fk2_tb_ano_lectivo a
-          ON a.codigo = cf.CODIGO_ANO_LECTIVO
-        WHERE cf.codigo_matricula = :codigo_matricula
-          AND cf.CODIGO_ANO_LECTIVO = tp.ano_lectivo
-          AND TRIM(UPPER(a.estado)) != 'ACTIVO'
-      )
-
-      AND tp.id NOT IN (
-        SELECT it.mes_temp_id
-        FROM fk2_factura ft
-        INNER JOIN fk2_factura_items it ON ft.codigo = it.codigofactura
-        INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
-        WHERE ft.codigomatricula = :codigo_matricula
-          AND it.mes_temp_id IS NOT NULL
-          AND ft.estado != 3
-      )
-  `;
     })();
 
-    const queryParams = codAnoLectivo
-      ? { codAnoLectivo, codigo_matricula }
-      : { codigo_matricula };
+    // ====================== PARAMS DINÂMICOS ======================
+    const queryParams =
+      is_Negotation && isAnoLectivoNumero
+        ? { codAnoLectivo, codigo_matricula }  // negociação com ano
+        : isAnoLectivoNumero
+          ? { codAnoLectivo, codigo_matricula }  // fluxo normal com ano
+          : { codigo_matricula };                // negociação sem ano + fallback
 
-    const resultado = await this.dataSource.query(
-      sqlMesTemp,
-      queryParams as any,
-    );
+    const resultado = await this.dataSource.query(sqlMesTemp, queryParams as any);
     const mesTemps: MesTempResponse[] = toLowerCaseKeys(resultado);
 
     const periodosIsentos = await this.dataSource.query(`
@@ -646,6 +647,7 @@ export class MonthlyFeesDiscountUtilService {
         pagamentos.push(pagamento);
       }
     }
+
     return pagamentos;
   }
 }

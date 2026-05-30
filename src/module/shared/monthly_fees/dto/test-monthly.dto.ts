@@ -26,4 +26,8 @@ export class TestMonthlyDTO extends PaginationQueryDto {
 
   @IsOptional()
   status?: 'all' | 'paid' | 'pending' | string;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  is_Negotation?: boolean;
 }

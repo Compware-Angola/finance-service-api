@@ -498,8 +498,14 @@ export class MonthlyFeesDiscountUtilService {
       if (is_Negotation && isAnoLectivoNumero) {
         return `
       SELECT
-        DATA_LIMITE, DATA_FINAL, DATA_INICIAL,
-        SEMESTRE, ID, DESIGNACAO, PRESTACAO, ANO_LECTIVO
+        tp.DATA_LIMITE,
+        tp.DATA_FINAL,
+        tp.DATA_INICIAL,
+        tp.SEMESTRE,
+        tp.ID,
+        tp.DESIGNACAO,
+        tp.PRESTACAO,
+        tp.ANO_LECTIVO
       FROM fk2_mes_temp tp
       INNER JOIN fk2_tb_ano_lectivo a
         ON a.codigo = tp.ano_lectivo

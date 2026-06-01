@@ -645,20 +645,19 @@ export class CreditoEducacionalService {
       j.NOME_COMPLETO,
       j.BILHETE_IDENTIDADE,
 
-      k.DESIGNACAO                          AS CURSO,
+      k.DESIGNACAO                              AS CURSO,
 
       a.CODIGO_UTILIZADOR,
       a.CANAL,
       a.CREATED_AT,
       a.UPDATED_AT,
 
-    
-
-      b.CODIGO                              AS CODIGO_INSTITUICAO,
-      b.INSTITUICAO,
+      -- Instituição: tenta na estrutura antiga (via bolsa), fallback na nova (via bolseiro)
+      COALESCE(b_bolsa.CODIGO,       b_bolseiro.CODIGO)       AS CODIGO_INSTITUICAO,
+      COALESCE(b_bolsa.INSTITUICAO,  b_bolseiro.INSTITUICAO)  AS INSTITUICAO,
 
       a.CODIGO_ANOLECTIVO,
-      c.DESIGNACAO                          AS ANO_LECTIVO,
+      c.DESIGNACAO                              AS ANO_LECTIVO,
 
       a.OBSERVACAO,
       a.HISTORICO,
@@ -667,36 +666,37 @@ export class CreditoEducacionalService {
       a.ESTADOBOLSA,
       a.TIPO_ALUNO_ID,
 
-      NVL(e.VALOR_DESCONTO, a.DESCONTO)     AS VALOR_DESCONTO,
-
-      NVL(e.CODIGO_TIPO_DESCONTO, 1)        AS CODIGO_TIPO_DESCONTO,
-
-      NVL(db.DESIGNACAO, 'PERCENTUAL')       AS TIPO_DESCONTO,
-
-      NVL(db.SIGLA, 'DESC_PERC')           AS SIGLA,
+      NVL(e.VALOR_DESCONTO, a.DESCONTO)         AS VALOR_DESCONTO,
+      NVL(e.CODIGO_TIPO_DESCONTO, 1)            AS CODIGO_TIPO_DESCONTO,
+      NVL(db.DESIGNACAO, 'PERCENTUAL')          AS TIPO_DESCONTO,
+      NVL(db.SIGLA, 'DESC_PERC')               AS SIGLA,
 
       e.CODIGO_TIPO_CREDITO,
-      f.DESIGNACAO                          AS TIPO_CREDITO,
+      f.DESIGNACAO                              AS TIPO_CREDITO,
 
       a.CODIGO_BOLSA,
-      e.DESIGNACAO                          AS BOLSA,
+      e.DESIGNACAO                              AS BOLSA,
 
       a.ISENTAR_MULTA
 
     FROM FK2_TB_BOLSEIROS a
 
-    LEFT JOIN FK2_TB_INSTITUICAO b
-      ON b.CODIGO = a.CODIGO_INSTITUICAO
+    -- Estrutura ANTIGA: instituição vem através da bolsa (e.CODIGO_INSTITUICAO)
+    LEFT JOIN FK2_TB_BOLSAS e
+      ON e.CODIGO = a.CODIGO_BOLSA
+
+    LEFT JOIN FK2_TB_INSTITUICAO b_bolsa
+      ON b_bolsa.CODIGO = e.CODIGO_INSTITUICAO
+
+    -- Estrutura NOVA: instituição vem directamente do bolseiro (a.CODIGO_INSTITUICAO)
+    LEFT JOIN FK2_TB_INSTITUICAO b_bolseiro
+      ON b_bolseiro.CODIGO = a.CODIGO_INSTITUICAO
 
     LEFT JOIN FK2_TB_ANO_LECTIVO c
       ON c.CODIGO = a.CODIGO_ANOLECTIVO
 
-    LEFT JOIN FK2_TB_BOLSAS e
-      ON e.CODIGO = a.CODIGO_BOLSA
-
     LEFT JOIN FK2_TB_TIPO_CREDITO f
       ON f.CODIGO = e.CODIGO_TIPO_CREDITO
-
 
     LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS db
       ON db.CODIGO = e.CODIGO_TIPO_DESCONTO
@@ -713,9 +713,9 @@ export class CreditoEducacionalService {
     LEFT JOIN FK2_TB_CURSOS k
       ON k.CODIGO = h.CODIGO_CURSO
 
-    WHERE a.CODIGO_MATRICULA = :codigoMatricula
+    WHERE a.CODIGO_MATRICULA  = :codigoMatricula
       AND a.CODIGO_ANOLECTIVO = :codigoAnoLectivo
-      AND a.SEMESTRE = :semestre
+      AND a.SEMESTRE          = :semestre
   `;
 
     const [row] = await this.dataSource.query(sql, {

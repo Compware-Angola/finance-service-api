@@ -303,7 +303,9 @@ export class PaymentService {
       throw new BadRequestException('Você não tem uma caixa aberta');
     }
     if (cashRegister.blocked === YesNo.YES) {
-      throw new BadRequestException("Caixa bloqueado, desative para prosseguir")
+      throw new BadRequestException(
+        'Caixa bloqueado, desative para prosseguir',
+      );
     }
 
     const anoCorrente = this.anoAtualPrincipal;
@@ -487,7 +489,7 @@ export class PaymentService {
       2. Saldo na conta corrente da pré-inscrição (FK2_TB_PREINSCRICAO)
       3. Transferência/criação de crédito na conta do próximo ano letivo
 
-     
+
       if (valor_restante > 0 && student?.codigo_preinscricao) {
         console.log("ENTREI");
 
@@ -503,12 +505,12 @@ export class PaymentService {
         tda:
           tdaResult && !tdaResult.success
             ? {
-              error: true,
-              message: tdaResult.message,
-            }
+                error: true,
+                message: tdaResult.message,
+              }
             : {
-              error: false,
-            },
+                error: false,
+              },
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -545,12 +547,12 @@ export class PaymentService {
       const saldo_reset_final = saldo_reset_atual + valor;
 
       await queryRunner.query(
-        `UPDATE FK2_TB_PREINSCRICAO 
-       SET SALDO = :saldo_final, 
-           SALDO_ANTERIOR = :saldo_atual, 
-           OBS_SALDO = 'Pagamento de serviços', 
-           SALDO_RESET = :saldo_reset_final, 
-           SALDO_RESET_ANTER = :saldo_reset_atual 
+        `UPDATE FK2_TB_PREINSCRICAO
+       SET SALDO = :saldo_final,
+           SALDO_ANTERIOR = :saldo_atual,
+           OBS_SALDO = 'Pagamento de serviços',
+           SALDO_RESET = :saldo_reset_final,
+           SALDO_RESET_ANTER = :saldo_reset_atual
        WHERE CODIGO = :codigo`,
         {
           saldo_final,
@@ -786,9 +788,7 @@ export class PaymentService {
 
   private async findAluno(codigo: number | string, by: FindAlunoBy) {
     const whereClause =
-      by === 'matricula'
-        ? `m.codigo = ${codigo}`
-        : `p.codigo = ${codigo}`;
+      by === 'matricula' ? `m.codigo = ${codigo}` : `p.codigo = ${codigo}`;
 
     const sql = `
     SELECT p.codigo AS codigo_preinscricao, m.codigo AS codigo_matricula
@@ -810,7 +810,7 @@ export class PaymentService {
   private async getaccountBalance(preInscricao: number) {
     //obter o balanço
     const sql = `
-    SELECT 
+    SELECT
     c.SALDO          AS saldo,
     c.SALDO_ANTERIOR AS saldo_anterior,
     c.SALDO_RESET    AS saldo_reset,

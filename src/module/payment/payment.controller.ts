@@ -28,6 +28,9 @@ import { FindPaymentMonthlyDTO } from './dto/find-payment-monthly.dto';
 import { ListarServicosPagosAlunoDto } from './dto/listar-servico-pagos.dto';
 import { EstatisticasService } from './estatisticas.service';
 import { EstatisticasQueryDto } from './dto/estatisticas-query.dto';
+import { VoidPaymentService } from './void-payments.service';
+import { VoidPaymentDTO } from './dto/void-payment.dto';
+import { VoidPaymentTaxService } from './void-payments-tax.service';
 
 @ApiTags('payment')
 @Controller('payment')
@@ -36,6 +39,8 @@ export class PaymentController {
     private readonly paymentService: PaymentService,
     private httpService: HttpService,
     private readonly estatisticasService: EstatisticasService,
+    private readonly voidPaymentService: VoidPaymentService,
+    private readonly voidPaymentServiceTax: VoidPaymentTaxService,
   ) {}
   @Post('create')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
@@ -143,5 +148,47 @@ export class PaymentController {
   @UsePipes(new ValidationPipe({ transform: true }))
   async getEstatisticasAgrupado(@Query() query: EstatisticasQueryDto) {
     return this.estatisticasService.getAgrupado(query);
+  }
+
+  @Post('void-payment')
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+  @ApiOperation({ summary: 'Anular um pagamento.' })
+  @ApiResponse({ status: 201, description: 'Pagamento anulado com sucesso.' })
+  async voidPayment(
+    @Body() dto: VoidPaymentDTO,
+    @Req() req: any,
+  ): Promise<Payment | any> {
+    const user = req.user;
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+
+    await this.voidPaymentService.anularPagamento(dto, user?.sub);
+    AccessLogHelper.logAccess(this.httpService, {
+      descricao: `Utilizador ${user?.nome} anulou um pagamento com código de pagamento ${dto.codigoPagamento}`,
+      fkUtilizadorResponsavel: user?.sub,
+      fkOperacaoLog: 7,
+      ip: ip,
+    });
+  }
+
+  @Post('void-payment-tax')
+  @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
+  @ApiOperation({ summary: 'Anular multa de Pagamento.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Anulado multa de Pagamento  com sucesso.',
+  })
+  async voidPaymentTax(
+    @Body() dto: VoidPaymentDTO,
+    @Req() req: any,
+  ): Promise<Payment | any> {
+    const user = req.user;
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+
+    await this.voidPaymentServiceTax.anularMulta(dto, user?.sub);
+    AccessLogHelper.logAccess(this.httpService, {
+      descricao: `Utilizador ${user?.nome} anulou a multa com código de pagamento ${dto.codigoPagamento}`,
+      fkUtilizadorResponsavel: user?.sub,
+      ip: ip,
+    });
   }
 }

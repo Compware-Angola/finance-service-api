@@ -55,8 +55,6 @@ export class ListPaymentDTO extends PaginationQueryDto {
   @IsOptional()
   n_operacao_bancaria2?: string;
 
-
-
   @ApiPropertyOptional({
     description: 'Data de início',
     example: '2022-01-01',

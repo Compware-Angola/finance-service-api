@@ -15,6 +15,8 @@ import { EstatisticasService } from './estatisticas.service';
 import { CashRegister } from '../cash-registers/entities/cash-register.entity';
 import { CashRegisterMovement } from '../cash-registers/entities/cash-register-movement.entity';
 import { CashRegistersService } from '../cash-registers/cash-registers.service';
+import { VoidPaymentService } from './void-payments.service';
+import { VoidPaymentTaxService } from './void-payments-tax.service';
 
 @Module({
   imports: [
@@ -40,6 +42,8 @@ import { CashRegistersService } from '../cash-registers/cash-registers.service';
     AnoLectivoUtil,
     EstatisticasService,
     CashRegistersService,
+    VoidPaymentService,
+    VoidPaymentTaxService,
   ],
   exports: [PaymentService],
 })

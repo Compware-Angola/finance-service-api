@@ -1,11 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
-import { obterMultaPorData } from '../util/obter-multa';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { VoidPaymentDTO } from './dto/void-payment.dto';
+import { CancellationType } from 'src/enum/cancellation-type.enum';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
   PENDENTE = 'pendente',
 }
+
 interface BuscarFatura {
   datafactura: string;
   totalpreco: number;
@@ -14,8 +17,9 @@ interface BuscarFatura {
   valorentregue: number;
   ano_lectivo: string;
   estado: string;
-  codigo: string;
+  codigo: number;
 }
+
 interface BuscarFacturaItems {
   codigoproduto: string;
   codigofactura: string;
@@ -31,6 +35,7 @@ interface BuscarFacturaItems {
   codigo: number;
   data_final: string;
 }
+
 interface BuscarPagamento {
   data: string;
   anolectivo: string;
@@ -38,140 +43,115 @@ interface BuscarPagamento {
   databanco: string;
   valor_depositado: number;
   estado: string;
-  codigo_factura: string;
-  codigo: string;
+  codigo_factura: number;
+  codigo: number;
 }
+
 @Injectable()
-export class PaymentService {
-  constructor(private dataSource: DataSource) { }
-  private queryRunner!: QueryRunner;
+export class VoidPaymentTaxService {
+  constructor(private dataSource: DataSource) {}
 
-  private async initQueryRunner() {
-    this.queryRunner = this.dataSource.createQueryRunner();
-    await this.queryRunner.connect();
+  private async createQueryRunner(): Promise<QueryRunner> {
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    return qr;
   }
-  private async anularPagamento(codigoFactura: number) {
-    const pagamento = await this.buscarPagamento(codigoFactura);
-    const factura = await this.buscarFactura(codigoFactura);
-    const facturaItems = await this.buscarFacturaItems(codigoFactura);
-    let totalMultaRetirar = 0;
+  async anularMulta(params: VoidPaymentDTO, userId: number): Promise<void> {
+    const { codigoPagamento, motivo } = params;
+    const qr = await this.createQueryRunner();
 
-    for (const facturaItem of facturaItems) {
-      if (!facturaItem.data_limite || !pagamento.databanco) continue;
-      const dataLimiteFactura = new Date(facturaItem.data_limite);
-      const dataBanco = new Date(pagamento.databanco);
-      if (dataBanco <= dataLimiteFactura) {
-        const total = facturaItem.total - facturaItem.multa;
-        await this.actualizarFacturaItem(
-          facturaItem.codigo,
-          total,
-          facturaItem.multa,
-        );
-        totalMultaRetirar += facturaItem.multa;
+    await qr.startTransaction();
+    try {
+      const pagamento = await this.buscarPagamento(qr, codigoPagamento);
+
+      const factura = await this.buscarFactura(qr, pagamento.codigo_factura);
+
+      if (factura?.totalmulta === 0) {
+        throw new BadRequestException('A factura não contém uma multa');
       }
-    }
-    //Actualizar a factura
-    const novoValorApagar = factura.valorapagar - totalMultaRetirar;
-    const novaMulta = factura.totalmulta - totalMultaRetirar;
-    const novoValorEntregue = factura.valorentregue - totalMultaRetirar;
-    await this.queryRunner.query(
-      `
-      update fk2_factura
-      set totalmulta = :novaMulta,
-          valorapagar = :novoValorApagar,
-          valorentregue = :novoValorEntregue
-      where 1=1
-      and codigo = :codigoFactura
-    `,
-      {
-        codigoFactura: factura.codigo,
-        novaMulta: novaMulta,
-        novoValorEntregue: novoValorEntregue,
-        novoValorApagar: novoValorApagar,
-      } as any,
-    );
-    //Actualizar Pagamento
-    await this.queryRunner.query(
-      `
-      update fk2_tb_pagamentos
-      set totalgeral = :novoValorApagar,
+      const novoValorApagar = factura.valorapagar - factura.totalmulta;
+      const novoValorDepositado =
+        pagamento.valor_depositado - factura.totalmulta;
+      const multaAnulada = factura.totalmulta;
 
-      `,
-    );
-  }
-  private async aplicarMultaFactura(
-    facturaItem: BuscarFacturaItems,
-    dataBanco: Date,
-  ) {
-    const dataFinal = new Date(facturaItem.data_final);
-    const dataLimiteFactura = new Date(facturaItem.data_limite);
-    const percentagemMulta = obterMultaPorData(
-      dataBanco,
-      dataLimiteFactura,
-      dataFinal,
-    );
-    const valorSemMulta = facturaItem.total - facturaItem.multa;
-    const novoValorMulta = valorSemMulta * percentagemMulta;
-    if (facturaItem.multa > novoValorMulta) {
-      const total = valorSemMulta + novoValorMulta;
-      this.actualizarFacturaItem(facturaItem.codigo, total, novoValorMulta);
-      //Retorna a Diferença simplesmente
-      return facturaItem.multa - novoValorMulta;
-    }
-    return 0;
-  }
-  private async actualizarFacturaItem(
-    codigoFacturaItem: number,
-    total: number,
-    multa: number,
-  ) {
-    await this.queryRunner.query(
-      `
-      update fk2_factura_items
-      set total = :total,
-          multa = :multa
-      where 1=1
-      and codigo = :codigoFacturaItem
-    `,
-      {
-        total,
-        multa,
-        codigoFacturaItem,
-      } as any,
-    );
-  }
-  private async buscarFactura(codigoFactura: number): Promise<BuscarFatura> {
-    const result = await this.queryRunner.query(
-      `
-    select
-        datafactura,
-        totalpreco,
-        totalmulta,
-        valorapagar,
-        valorentregue,
-        ano_lectivo,
-        estado,
-        codigo
-      from fk2_factura
-      where 1=1
-      and codigo = :codigoFactura
-      `,
-      {
-        codigoFactura,
-      } as any,
-    );
+      await this.retirarMultaFacturaItens(qr, pagamento.codigo_factura);
 
-    if (!result || result.length == 0) {
-      throw new BadRequestException('Nenhuma factura encontrada');
+      await qr.query(
+        `
+        UPDATE fk2_factura
+        SET totalmulta = :totalMulta,
+            valorapagar = :valorApagar
+        WHERE codigo = :codigoFactura
+        `,
+        {
+          totalMulta: 0,
+          valorApagar: novoValorApagar,
+          codigoFactura: pagamento.codigo_factura,
+        } as any,
+      );
+
+      await qr.query(
+        `
+        UPDATE fk2_tb_pagamentos
+        SET valor_depositado = :valorDepositado
+        WHERE codigo = :codigoPagamento
+        `,
+        {
+          codigoPagamento: pagamento.codigo,
+          valorDepositado: novoValorDepositado,
+        } as any,
+      );
+
+      await this.registarHistoricoAnulacao(qr, {
+        codigoPagamento: pagamento.codigo,
+        codigoOperador: userId,
+        valor: multaAnulada,
+        motivo,
+      });
+
+      await qr.commitTransaction();
+    } catch (err) {
+      await qr.rollbackTransaction();
+      throw err;
+    } finally {
+      await qr.release();
     }
-    return result;
   }
+
+  private async registarHistoricoAnulacao(
+    qr: QueryRunner,
+    params: {
+      codigoPagamento: number;
+      codigoOperador: number;
+      valor: number;
+      motivo: string;
+    },
+  ): Promise<void> {
+    const { codigoPagamento, codigoOperador, valor, motivo } = params;
+    await qr.query(
+      `INSERT INTO fk2_tb_historico_anulacao_financeira
+         (codigo_pagamento, codigo_operador, tipo_anulacao,
+          valor, motivo, data_anulacao, created_at)
+       VALUES
+         (:codigoPagamento, :codigoOperador, :tipoAnulacao,
+          :valor, :motivo, SYSDATE, SYSDATE)`,
+      {
+        codigoPagamento,
+        codigoOperador,
+        tipoAnulacao: CancellationType.MULTA,
+        valor,
+        motivo,
+      } as any,
+    );
+  }
+
   private async buscarFacturaItems(
+    qr: QueryRunner,
     codigoFactura: number,
   ): Promise<BuscarFacturaItems[]> {
-    const result = await this.queryRunner.query(
+    const result = await qr.query(
       `
-      select
+      SELECT
         it.codigoproduto,
         it.codigofactura,
         it.quantidade,
@@ -183,27 +163,55 @@ export class PaymentService {
         it.codigo_anolectivo,
         it.estado,
         it.valor_pago,
+        it.codigo,
         mt.data_final
-      from fk2_factura_items it
-      inner join fk2_mes_temp mt
-        on mt.id = it.mes_temp_id
-      where 1=1
-      and codigofactura = :codigoFactura
-    `,
-      {
-        codigoFactura,
-      } as any,
+      FROM fk2_factura_items it
+      INNER JOIN fk2_mes_temp mt ON mt.id = it.mes_temp_id
+      WHERE codigofactura = :codigoFactura
+      `,
+      { codigoFactura } as any,
     );
-    if (!result || result.length == 0) {
-      throw new BadRequestException('Nenhuma factura encontrada');
+
+    if (!result || result.length === 0) {
+      throw new BadRequestException('Nenhum item de factura encontrado');
     }
-    return result;
+
+    return toLowerCaseKeys(result);
   }
-  private async buscarPagamento(
+
+  private async retirarMultaFacturaItens(
+    qr: QueryRunner,
     codigoFactura: number,
+  ): Promise<void> {
+    const facturaItens = await this.buscarFacturaItems(qr, codigoFactura);
+
+    for (const item of facturaItens) {
+      if (item.multa !== 0) {
+        const novoTotal = item.total - item.multa;
+        await qr.query(
+          `
+          UPDATE fk2_factura_items
+          SET multa = :multa,
+              total = :total
+          WHERE codigo = :codigoFacturaItem
+          `,
+          {
+            multa: 0,
+            total: novoTotal,
+            codigoFacturaItem: item.codigo,
+          } as any,
+        );
+      }
+    }
+  }
+
+  private async buscarPagamento(
+    qr: QueryRunner,
+    codigoPagamento: number,
   ): Promise<BuscarPagamento> {
-    const result = await this.queryRunner.query(`
-      select
+    const result = await qr.query(
+      `
+      SELECT
         data,
         anolectivo,
         totalgeral,
@@ -212,13 +220,45 @@ export class PaymentService {
         estado,
         codigo_factura,
         codigo
-      from fk2_tb_pagamentos
-      where 1=1
-      and codigo_factura = :codigoFactura
-    `);
-    if (!result || result.length == 0) {
+      FROM fk2_tb_pagamentos
+      WHERE codigo = :codigoPagamento
+      `,
+      { codigoPagamento } as any,
+    );
+
+    if (!result || result.length === 0) {
+      throw new BadRequestException(
+        'Nenhum pagamento encontrado para a factura',
+      );
+    }
+    return toLowerCaseKeys(result[0]);
+  }
+
+  private async buscarFactura(
+    qr: QueryRunner,
+    codigoFactura: number,
+  ): Promise<BuscarFatura> {
+    const result = await qr.query(
+      `
+      SELECT
+        datafactura,
+        totalpreco,
+        totalmulta,
+        valorapagar,
+        valorentregue,
+        ano_lectivo,
+        estado,
+        codigo
+      FROM fk2_factura
+      WHERE codigo = :codigoFactura
+      `,
+      { codigoFactura } as any,
+    );
+
+    if (!result || result.length === 0) {
       throw new BadRequestException('Nenhuma factura encontrada');
     }
-    return result;
+
+    return toLowerCaseKeys(result[0]);
   }
 }

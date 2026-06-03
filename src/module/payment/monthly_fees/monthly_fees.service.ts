@@ -14,7 +14,7 @@ export class MonthlyFeesService {
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
 
     private readonly monthlyFeeDiscount: MonthlyFeesDiscountUtilService,
-  ) {}
+  ) { }
 
   async findMonthlyFees(
     paginationQuery: MonthlyFeesFilterDto,
@@ -139,6 +139,10 @@ export class MonthlyFeesService {
       limit,
       totalPages: Math.ceil((total + generated.length) / limit),
     };
+  }
+  async recalculatePayments(invoiceId: number) {
+    const pagamento = await this.monthlyFeeDiscount.recalculatedPayments(invoiceId);
+    return pagamento;
   }
   async verificarConfirmacao(codigoMatricula: number, anoLectivo: number) {
     const sql = `

@@ -650,4 +650,115 @@ export class MonthlyFeesDiscountUtilService {
 
     return pagamentos;
   }
+
+  async recalculatedPayments(invoiceId: number) {
+    const factura = await this.dataSource.query(`
+    SELECT * FROM fk2_factura WHERE codigo = :invoiceId
+    FETCH FIRST 1 ROWS ONLY
+  `, { invoiceId } as any);
+
+    if (!factura.length) {
+      throw new Error('Fatura não encontrada');
+    }
+
+    const mesTempsResultado = await this.dataSource.query(`
+    SELECT
+      tp.DATA_LIMITE, tp.DATA_FINAL, tp.DATA_INICIAL,
+      tp.SEMESTRE, tp.ID, tp.DESIGNACAO, tp.PRESTACAO, tp.ANO_LECTIVO,
+      it.CODIGO AS codigo_item_fatura
+    FROM fk2_mes_temp tp
+    INNER JOIN fk2_factura_items it ON tp.id = it.mes_temp_id
+    WHERE tp.activo = 1
+      AND it.codigofactura = :invoiceId
+  `, { invoiceId } as any);
+
+    const dadosAluno = await this.obterDadosCompletosAluno(factura[0].CODIGOMATRICULA);
+    const mesTemps: MesTempResponse[] = toLowerCaseKeys(mesTempsResultado);
+
+    const pagamentos: any[] = [];
+
+    for (const mesTemp of mesTemps) {
+      const pagamento = await this.calcularValorMensalidade({
+        anoLectivo: factura[0].ANO_LECTIVO,
+        codigoMatricula: factura[0].CODIGOMATRICULA,
+        mesTemp,
+        periodosIsentos: [],
+        dadosAluno,
+      });
+
+      if (pagamento.estado_fatura === 4) {
+        // Deletar o item da fatura se estiver isento/cancelado
+        await this.dataSource.query(`
+        DELETE FROM fk2_factura_items 
+        WHERE codigo = :codigo
+      `, {
+          codigo: mesTemp.codigo_item_fatura,
+        } as any);
+        continue;
+      }
+
+      // ✅ CORRIGIDO: total = mensalidade + multa, totaliva com campo correto
+      await this.dataSource.query(`
+      UPDATE fk2_factura_items 
+      SET 
+        total          = :total,
+        valor_desconto = :desconto,
+    
+        multa          = :totalmulta
+      WHERE codigo = :codigo
+    `, {
+        total: (pagamento.total_preco ?? 0) + (pagamento.multa ?? 0),
+        desconto: pagamento.desconto ?? 0,
+
+        totalmulta: pagamento.multa ?? 0,
+        codigo: mesTemp.codigo_item_fatura,
+      } as any);
+
+      pagamentos.push(pagamento);
+    }
+
+
+    const totais = pagamentos.reduce((acc, p) => ({
+      totalpreco: acc.totalpreco + (p.total_preco ?? 0),
+      desconto: acc.desconto + (p.desconto ?? 0),
+
+      totalmulta: acc.totalmulta + (p.multa ?? 0),
+      valorapagar: acc.valorapagar + ((p.total_preco ?? 0) + (p.multa ?? 0)),
+      valorentregue: acc.valorentregue + (p.valorEntregue ?? p.valor_pago ?? 0),
+    }), {
+      totalpreco: 0,
+      desconto: 0,
+      totaliva: 0,
+      totalmulta: 0,
+      valorapagar: 0,
+      valorentregue: 0,
+    });
+
+    // ✅ Atualiza a fatura principal com os totais somados
+    await this.dataSource.query(`
+    UPDATE fk2_factura 
+    SET 
+      totalpreco    = :totalpreco,
+      desconto      = :desconto,
+      totalmulta    = :totalmulta,
+      valorapagar   = :valorapagar,
+      valorentregue = :valorentregue
+    WHERE codigo = :invoiceId
+  `, {
+      totalpreco: totais.totalpreco,
+      desconto: totais.desconto,
+
+      totalmulta: totais.totalmulta,
+      valorapagar: totais.valorapagar,
+      valorentregue: totais.valorentregue,
+      invoiceId: invoiceId,
+    } as any);
+
+    return {
+      success: true,
+      totais,
+      message: 'Pagamentos recalculados com sucesso',
+    };
+  }
+
 }

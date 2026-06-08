@@ -390,6 +390,7 @@ export class CreditoEducacionalService {
           a.SEMESTRE,
           a.ESTADOBOLSA,
           a.ISENTAR_MULTA,
+          a.INSTITUICAO_PAGOU,
          
           a.TIPO_ALUNO_ID,
           NVL(e.VALOR_DESCONTO, a.DESCONTO)         AS VALOR_DESCONTO,
@@ -500,6 +501,55 @@ export class CreditoEducacionalService {
     } else {
       return this.ativarBolseiro(codigo);
     }
+  }
+  async toggleInstituicaoPagou(codigo: number) {
+    const [instituicaoPagou] = await this.dataSource.query(
+      `
+      SELECT INSTITUICAO_PAGOU
+      FROM FK2_TB_BOLSEIROS 
+      WHERE CODIGO = :codigo
+      `,
+      { codigo } as any,
+    );
+    if (instituicaoPagou?.INSTITUICAO_PAGOU === 1) {
+      return this.desativarInstituicaoPagou(codigo);
+    } else {
+      return this.ativarInstituicaoPagou(codigo);
+    }
+  }
+
+  private async desativarInstituicaoPagou(codigo: number) {
+    await this.dataSource.query(
+      `
+      UPDATE FK2_TB_BOLSEIROS 
+      SET
+          INSTITUICAO_PAGOU = 0,
+          UPDATED_AT = TRUNC(SYSDATE)
+      WHERE CODIGO = :codigo
+      `,
+      { codigo } as any,
+    );
+    return {
+      success: true,
+      message: 'Bolsa não marcada como paga pela instituição',
+    };
+  }
+
+  private async ativarInstituicaoPagou(codigo: number) {
+    await this.dataSource.query(
+      `
+      UPDATE FK2_TB_BOLSEIROS 
+      SET
+          INSTITUICAO_PAGOU = 1,
+          UPDATED_AT = TRUNC(SYSDATE)
+      WHERE CODIGO = :codigo
+      `,
+      { codigo } as any,
+    );
+    return {
+      success: true,
+      message: 'Bolsa marcada como paga pela instituição',
+    };
   }
   private async inativarBolseiro(codigo: number) {
     await this.dataSource.query(

@@ -621,16 +621,22 @@ export class PaymentService {
     }
 
     let tipoClause = '';
+    const mensalidadeClause = `
+      (
+        TRIM(UPPER(NVL(s.SIGLA, ''))) = 'PROP'
+        OR TRIM(UPPER(NVL(s.TIPOSERVICO, ''))) = 'MENSAL'
+      )
+    `;
 
     if (tipo === 'MENSALIDADES') {
       tipoClause = `
-      AND s.CODIGO IN (1149893, 1149835, 22241)
+      AND ${mensalidadeClause}
     `;
     }
 
     if (tipo === 'SERVICOS') {
       tipoClause = `
-      AND s.CODIGO NOT IN (1149893, 1149835, 22241)
+      AND NOT ${mensalidadeClause}
     `;
     }
 

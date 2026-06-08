@@ -39,4 +39,8 @@ export class CreditoEducacionalController {
   getInfoBolseiroDados(@Query('codigoMatricula') codigoMatricula: number) {
     return this.creditoEducacionalService.getInfoBolseiroDados(codigoMatricula);
   }
+  @Patch(':id/toggle-instituicao-pagou')
+  toggleInstituicaoPagou(@Param('id') id: number) {
+    return this.creditoEducacionalService.toggleInstituicaoPagou(id);
+  }
 }

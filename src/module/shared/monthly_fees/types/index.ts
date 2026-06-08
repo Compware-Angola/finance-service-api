@@ -40,6 +40,8 @@ export interface BolseiroResult {
   bolseiro: boolean;
   desconto: number;
   isentar_multa: boolean;
+  instituicaoPagou?: boolean;
+  codigoBolseiro?: number | null;
 }
 interface EstudanteInfo {
   curso: number;

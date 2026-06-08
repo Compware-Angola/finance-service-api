@@ -726,6 +726,7 @@ export class CreditoEducacionalService {
 
       a.CODIGO_BOLSA,
       e.DESIGNACAO                              AS BOLSA,
+      a.INSTITUICAO_PAGOU,
 
       a.ISENTAR_MULTA
 

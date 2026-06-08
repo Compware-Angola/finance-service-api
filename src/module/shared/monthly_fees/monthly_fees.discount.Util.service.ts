@@ -725,7 +725,6 @@ export class MonthlyFeesDiscountUtilService {
         continue;
       }
 
-      // ✅ CORRIGIDO: total = mensalidade + multa, totaliva com campo correto
       await this.dataSource.query(
         `
       UPDATE fk2_factura_items

@@ -25,6 +25,8 @@ import { formatTime } from '../util/formatTime';
 import { HttpService } from '@nestjs/axios';
 import { HashHelper } from 'src/common/helpers/hash-helper';
 import { EmailHelper } from 'src/common/helpers/email.helper';
+import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
+import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
 
 type ValidateMovementParams = {
   id: number;
@@ -122,6 +124,75 @@ export class CashRegistersService {
 
     return cashRegister;
   }
+
+async create(
+  dto: CreateCashRegisterDto,
+  adminId: number,
+) {
+  const exists = await this.cashRegisterRepository.findOne({
+    where: {
+      name: dto.name,
+      deletedAt: IsNull(),
+    },
+  });
+
+  if (exists) {
+    throw new BadRequestException(
+      'Já existe um caixa com este nome',
+    );
+  }
+
+  const cashRegister = this.cashRegisterRepository.create({
+    name: dto.name,
+    status: CashRegisterStatus.CLOSED,
+    blocked: YesNo.NO,
+    createdBy: adminId,
+  });
+
+  return await this.cashRegisterRepository.save(cashRegister);
+}
+
+ async update(
+  id: number,
+  dto: UpdateCashRegisterDto,
+  adminId: number,
+) {
+  const cashRegister = await this.findById(id);
+
+  if (cashRegister.status === CashRegisterStatus.OPEN) {
+    throw new BadRequestException(
+      'Não é possível editar um caixa aberto',
+    );
+  }
+
+  Object.assign(cashRegister, dto);
+
+  cashRegister.updatedBy = adminId;
+
+  return await this.cashRegisterRepository.save(cashRegister);
+}
+
+async delete(
+  id: number,
+  adminId: number,
+) {
+  const cashRegister = await this.findById(id);
+
+  if (cashRegister.status === CashRegisterStatus.OPEN) {
+    throw new BadRequestException(
+      'Não é possível eliminar um caixa aberto',
+    );
+  }
+
+  cashRegister.deletedAt = new Date();
+  cashRegister.deletedBy = adminId;
+
+  await this.cashRegisterRepository.save(cashRegister);
+
+  return {
+    message: 'Caixa eliminado com sucesso',
+  };
+}
 
   async open(params: OpenCashRegisterParams) {
     const { id, openingAmount, operatorId, adminId } = params;

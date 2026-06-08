@@ -757,7 +757,6 @@ export class MonthlyFeesDiscountUtilService {
       }), {
       totalpreco: 0,
       desconto: 0,
-      totaliva: 0,
       totalmulta: 0,
       valorapagar: 0,
       valorentregue: 0,

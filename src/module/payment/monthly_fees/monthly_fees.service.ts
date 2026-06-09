@@ -144,6 +144,15 @@ export class MonthlyFeesService {
     const pagamento = await this.monthlyFeeDiscount.recalculatedPayments(invoiceId);
     return pagamento;
   }
+  async ajustarFaturaParcial(data: {
+    codigo_matricula: number;
+    mes_temp_id: number;
+    ano_lectivo: number;
+    valor_ja_pago: number;
+    observacao?: string;
+  }) {
+    return this.monthlyFeeDiscount.ajustarFaturaParcialEstudante(data);
+  }
   async verificarConfirmacao(codigoMatricula: number, anoLectivo: number) {
     const sql = `
       select codigo

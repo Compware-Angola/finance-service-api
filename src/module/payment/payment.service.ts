@@ -22,6 +22,8 @@ import { AxiosError } from 'axios';
 import { TipoPagamento } from './dto/listar-servico-pagos.dto';
 import { CashRegistersService } from '../cash-registers/cash-registers.service';
 import { YesNo } from '../cash-registers/enums/cash-register-status.enum';
+import { ExportPaymentMonthlyDTO } from './dto/export-payment-monthly.dto';
+import { CsvHelper } from 'src/common/helpers/csv.helper';
 
 export enum PaymentStatus {
   CONCLUIDO = 'concluido',
@@ -33,6 +35,18 @@ type InvoiceContext = {
   codigoPreinscricao: number | null;
 };
 type FindAlunoBy = 'matricula' | 'preinscricao';
+type PaymentMonthlyExportRow = {
+  CODIGOPAGAMENTO: number;
+  CODIGOMATRICULA: number;
+  TIPO: string | null;
+  NOMECOMPLETO: string;
+  FACULDADE: string;
+  CURSO: string;
+  PERIODO: string;
+  MES: string;
+  VALORMENSALIDADE: number;
+  ANOLECTIVO: string;
+};
 @Injectable()
 export class PaymentService {
   private anoAtualPrincipal: number;
@@ -1147,5 +1161,252 @@ WHERE c.codigo = :preInscricao
       limit,
       totalPages,
     };
+  }
+
+  async *exportPaymentMonthly(
+    filters: ExportPaymentMonthlyDTO,
+  ): AsyncGenerator<string> {
+    yield '\uFEFF';
+    yield [
+      'Codigo Pagamento',
+      'Matricula',
+      'Tipo de Estudante',
+      'Nome',
+      'Faculdade',
+      'Curso',
+      'Turno',
+      'Mes/Parcela',
+      'Valor',
+      'Ano Lectivo',
+    ].join(';') + '\n';
+
+    for await (const rows of this.iteratePaymentMonthlyRows(filters)) {
+      yield rows
+        .map((row) =>
+          [
+            row.CODIGOPAGAMENTO,
+            row.CODIGOMATRICULA,
+            row.TIPO,
+            row.NOMECOMPLETO,
+            row.FACULDADE,
+            row.CURSO,
+            row.PERIODO,
+            row.MES,
+            row.VALORMENSALIDADE,
+            row.ANOLECTIVO,
+          ]
+            .map((value) => CsvHelper.formatCell(value))
+            .join(';'),
+        )
+        .join('\n') + '\n';
+    }
+  }
+
+  async writePaymentMonthlyPdf(
+    filters: ExportPaymentMonthlyDTO,
+    document: PDFKit.PDFDocument,
+  ): Promise<void> {
+    const columns = [
+      { label: 'Pagamento', key: 'CODIGOPAGAMENTO', width: 55 },
+      { label: 'Matricula', key: 'CODIGOMATRICULA', width: 50 },
+      { label: 'Tipo', key: 'TIPO', width: 55 },
+      { label: 'Nome', key: 'NOMECOMPLETO', width: 115 },
+      { label: 'Faculdade', key: 'FACULDADE', width: 85 },
+      { label: 'Curso', key: 'CURSO', width: 105 },
+      { label: 'Turno', key: 'PERIODO', width: 45 },
+      { label: 'Mes', key: 'MES', width: 55 },
+      { label: 'Valor', key: 'VALORMENSALIDADE', width: 55 },
+      { label: 'Ano', key: 'ANOLECTIVO', width: 55 },
+    ] as const;
+    const startX = document.page.margins.left;
+    const rowHeight = 15;
+    const bottomLimit =
+      document.page.height - document.page.margins.bottom - rowHeight;
+
+    const drawHeader = () => {
+      document
+        .font('Helvetica-Bold')
+        .fontSize(12)
+        .text('Mensalidades pagas', startX, 20, { align: 'center' });
+
+      let x = startX;
+      const y = 42;
+      document.fontSize(6).fillColor('#FFFFFF');
+
+      for (const column of columns) {
+        document.rect(x, y, column.width, rowHeight).fill('#0D1B48');
+        document
+          .fillColor('#FFFFFF')
+          .text(column.label, x + 2, y + 4, {
+            width: column.width - 4,
+            height: rowHeight - 4,
+            ellipsis: true,
+          });
+        x += column.width;
+      }
+
+      document.fillColor('#000000').font('Helvetica');
+      return y + rowHeight;
+    };
+
+    let y = drawHeader();
+
+    for await (const rows of this.iteratePaymentMonthlyRows(filters)) {
+      for (const row of rows) {
+        if (y > bottomLimit) {
+          document.addPage();
+          y = drawHeader();
+        }
+
+        let x = startX;
+        document.fontSize(5.5);
+
+        for (const column of columns) {
+          const value = row[column.key];
+          document.rect(x, y, column.width, rowHeight).stroke('#D1D5DB');
+          document.text(value === null ? '' : String(value), x + 2, y + 4, {
+            width: column.width - 4,
+            height: rowHeight - 4,
+            ellipsis: true,
+          });
+          x += column.width;
+        }
+
+        y += rowHeight;
+      }
+    }
+  }
+
+  private async *iteratePaymentMonthlyRows(
+    filters: ExportPaymentMonthlyDTO,
+  ): AsyncGenerator<PaymentMonthlyExportRow[]> {
+    const {
+      codigoAnoLectivo,
+      codigoCurso,
+      codigoPagamento,
+      codigoFaculdade,
+      codigoMatricula,
+      codigoPeriodo,
+      nome,
+      mesId,
+    } = filters;
+
+    const conditions: string[] = ['fac.ESTADO = 1'];
+    const params: Record<string, string | number> = {};
+
+    if (codigoPagamento) {
+      conditions.push('pag.CODIGO = :codigoPagamento');
+      params.codigoPagamento = codigoPagamento;
+    }
+
+    if (codigoCurso) {
+      conditions.push('cur.CODIGO = :codigoCurso');
+      params.codigoCurso = codigoCurso;
+    }
+
+    if (codigoAnoLectivo) {
+      conditions.push('al.CODIGO = :codigoAnoLectivo');
+      params.codigoAnoLectivo = codigoAnoLectivo;
+    }
+
+    if (codigoFaculdade) {
+      conditions.push('fab.CODIGO = :codigoFaculdade');
+      params.codigoFaculdade = codigoFaculdade;
+    }
+
+    if (codigoMatricula) {
+      conditions.push('tm.CODIGO = :codigoMatricula');
+      params.codigoMatricula = codigoMatricula;
+    }
+
+    if (codigoPeriodo) {
+      conditions.push('per.CODIGO = :codigoPeriodo');
+      params.codigoPeriodo = codigoPeriodo;
+    }
+
+    if (mesId) {
+      conditions.push('mes.ID = :mesId');
+      params.mesId = mesId;
+    }
+
+    if (nome) {
+      conditions.push(`
+        fn_remove_acentos(UPPER(pre.NOME_COMPLETO))
+        LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%'
+      `);
+      params.nome = nome;
+    }
+
+    const whereClause = conditions.join(' AND ');
+    const batchSize = 1000;
+    let offset = 0;
+
+    while (true) {
+      const rows = (await this.dataSource.query(
+        `
+          SELECT
+              pag.CODIGO          AS codigoPagamento,
+              tm.CODIGO           AS codigoMatricula,
+              fn_tipo_estudante(
+                vw.codigo_bolseiro,
+                vw.renuncia,
+                vw.codigo_tipo_bolsa
+              )                   AS tipo,
+              pre.NOME_COMPLETO   AS nomeCompleto,
+              fab.DESIGNACAO      AS faculdade,
+              cur.DESIGNACAO      AS curso,
+              per.DESIGNACAO      AS periodo,
+              mes.DESIGNACAO      AS mes,
+              fai.PRECO           AS valorMensalidade,
+              al.DESIGNACAO       AS anoLectivo
+          FROM FK2_TB_MATRICULAS tm
+          INNER JOIN FK2_TB_ADMISSAO ad
+              ON ad.CODIGO = tm.CODIGO_ALUNO
+          INNER JOIN FK2_TB_PREINSCRICAO pre
+              ON pre.CODIGO = ad.PRE_INCRICAO
+          INNER JOIN FK2_TB_CURSOS cur
+              ON cur.CODIGO = tm.CODIGO_CURSO
+          INNER JOIN FK2_TB_FACULDADE fab
+              ON fab.CODIGO = cur.FACULDADE_ID
+          INNER JOIN FK2_FACTURA fac
+              ON fac.CODIGOMATRICULA = tm.CODIGO
+          INNER JOIN FK2_FACTURA_ITEMS fai
+              ON fai.CODIGOFACTURA = fac.CODIGO
+          INNER JOIN FK2_TB_PAGAMENTOS pag
+              ON pag.CODIGO_FACTURA = fac.CODIGO
+          INNER JOIN FK2_MES_TEMP mes
+              ON mes.ID = fai.MES_TEMP_ID
+          INNER JOIN FK2_TB_ANO_LECTIVO al
+              ON al.CODIGO = fac.ANO_LECTIVO
+          INNER JOIN FK2_TB_PERIODOS per
+              ON per.CODIGO = pre.CODIGO_TURNO
+          LEFT JOIN FK2_TIPO_ESTUDANTE_BOLSEIRO_VW vw
+              ON vw.codigo_matricula = tm.codigo
+              AND vw.codigo_ano_lectivo = al.codigo
+              AND vw.semestre = mes.semestre
+              AND vw.status_ = 0
+          WHERE ${whereClause}
+          ORDER BY pag.CODIGO DESC, fac.CODIGO DESC, fai.CODIGO DESC
+          OFFSET :offset ROWS FETCH NEXT :batchSize ROWS ONLY
+        `,
+        {
+          ...params,
+          offset,
+          batchSize,
+        } as any,
+      )) as PaymentMonthlyExportRow[];
+
+      if (rows.length === 0) {
+        break;
+      }
+
+      yield rows;
+
+      offset += rows.length;
+
+      if (rows.length < batchSize) {
+        break;
+      }
+    }
   }
 }

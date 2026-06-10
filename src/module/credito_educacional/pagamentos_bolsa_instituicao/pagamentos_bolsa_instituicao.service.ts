@@ -224,62 +224,66 @@ export class PagamentosBolsaInstituicaoService {
       nomeInstituicao: nomeInstituicao ?? null,
     };
 
-    // Se apenasSemPagamento=1 → mostra bolsas SEM pagamento registado
-    // const joinType = apenasSemPagamento === 1 ? 'LEFT' : 'LEFT';
+    // Filtro para bolsas sem pagamento
     const semPagamentoFilter =
-      apenasSemPagamento === 1
-        ? `AND p.CODIGO IS NULL`
-        : ``;
+      apenasSemPagamento === 1 ? `AND p.CODIGO IS NULL` : ``;
 
     const baseQuery = `
-      FROM FK2_TB_BOLSAS b
-      INNER JOIN FK2_TB_INSTITUICAO  i  ON i.CODIGO  = b.CODIGO_INSTITUICAO
-      INNER JOIN FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p  ON p.BOLSA_ID = b.CODIGO
-      LEFT JOIN FK2_TB_ANO_LECTIVO al ON al.CODIGO = p.ANO_LECTIVO
-                                      AND p.DELETED_AT IS NULL
-                                      AND (:anoLectivo IS NULL OR p.ANO_LECTIVO = :anoLectivo)
-                                      AND (:semestre   IS NULL OR p.SEMESTRE    = :semestre)
-                                    
-                                    
-      LEFT JOIN (
-          SELECT
-            bs.CODIGO_BOLSA,
-            COUNT(bs.CODIGO)  AS QTD_BOLSEIROS
-          FROM FK2_TB_BOLSEIROS bs
-          WHERE bs.STATUS_ = 1
-            AND (:anoLectivo IS NULL OR bs.CODIGO_ANOLECTIVO = :anoLectivo)
-            AND (:semestre   IS NULL OR bs.SEMESTRE          = :semestre)
-          GROUP BY bs.CODIGO_BOLSA
-      ) resumo ON resumo.CODIGO_BOLSA = b.CODIGO
-      WHERE  b.STATUS = 1 
-        AND (:codigoBolsa        IS NULL OR b.CODIGO               = :codigoBolsa)
-        AND (:codigoInstituicao  IS NULL OR b.CODIGO_INSTITUICAO   = :codigoInstituicao)
-        AND (:estado             IS NULL OR p.ESTADO               = :estado)
-        AND (:nomeInstituicao    IS NULL OR UPPER(i.INSTITUICAO)   LIKE '%' || UPPER(:nomeInstituicao) || '%')
-        ${semPagamentoFilter}
-    `;
+    FROM FK2_TB_BOLSAS b
+    INNER JOIN FK2_TB_INSTITUICAO i 
+        ON i.CODIGO = b.CODIGO_INSTITUICAO
+
+    INNER JOIN FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p 
+        ON p.BOLSA_ID = b.CODIGO
+
+    LEFT JOIN FK2_TB_ANO_LECTIVO al 
+        ON al.CODIGO = p.ANO_LECTIVO
+
+    LEFT JOIN (
+        SELECT
+          bs.CODIGO_BOLSA,
+          COUNT(bs.CODIGO) AS QTD_BOLSEIROS
+        FROM FK2_TB_BOLSEIROS bs
+        WHERE bs.STATUS_ = 1
+          AND (:anoLectivo IS NULL OR bs.CODIGO_ANOLECTIVO = :anoLectivo)
+          AND (:semestre IS NULL OR bs.SEMESTRE = :semestre)
+        GROUP BY bs.CODIGO_BOLSA
+    ) resumo ON resumo.CODIGO_BOLSA = b.CODIGO
+
+    WHERE b.STATUS = 1
+      AND p.DELETED_AT IS NULL
+      AND (:codigoBolsa IS NULL OR b.CODIGO = :codigoBolsa)
+      AND (:codigoInstituicao IS NULL OR b.CODIGO_INSTITUICAO = :codigoInstituicao)
+      AND (:estado IS NULL OR p.ESTADO = :estado)
+      AND (:nomeInstituicao IS NULL OR UPPER(i.INSTITUICAO) LIKE '%' || UPPER(:nomeInstituicao) || '%')
+      AND (:anoLectivo IS NULL OR p.ANO_LECTIVO = :anoLectivo)
+      AND (:semestre IS NULL OR p.SEMESTRE = :semestre)
+      ${semPagamentoFilter}
+  `;
 
     const [dataResult, totalResult] = await Promise.all([
       this.dataSource.query(
-        `SELECT
-            b.CODIGO                            AS CODIGO_BOLSA,
-            b.DESIGNACAO                        AS BOLSA,
-            i.CODIGO                            AS CODIGO_INSTITUICAO,
-            i.INSTITUICAO,
-            p.CODIGO                            AS CODIGO_PAGAMENTO,
-            p.ANO_LECTIVO                    AS CODIGO_ANO_LETIVO,
-            p.SEMESTRE,
-            p.VALOR_DEPOSITADO,
-            p.DATA_DEPOSITO,
-            p.REFERENCIA,
-            p.OBSERVACAO,
-            p.ESTADO                            AS ESTADO_PAGAMENTO,
-            p.CREATED_AT                        AS DATA_REGISTO,
-            NVL(resumo.QTD_BOLSEIROS, 0)        AS QTD_ESTUDANTES,
-            al.DESIGNACAO                       AS ANO_LETIVO
-         ${baseQuery}
-         ORDER BY i.INSTITUICAO ASC, b.DESIGNACAO ASC
-         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+        `
+      SELECT
+        b.CODIGO AS CODIGO_BOLSA,
+        b.DESIGNACAO AS BOLSA,
+        i.CODIGO AS CODIGO_INSTITUICAO,
+        i.INSTITUICAO,
+        p.CODIGO AS CODIGO_PAGAMENTO,
+        p.ANO_LECTIVO AS CODIGO_ANO_LETIVO,
+        p.SEMESTRE,
+        p.VALOR_DEPOSITADO,
+        p.DATA_DEPOSITO,
+        p.REFERENCIA,
+        p.OBSERVACAO,
+        p.ESTADO AS ESTADO_PAGAMENTO,
+        p.CREATED_AT AS DATA_REGISTO,
+        NVL(resumo.QTD_BOLSEIROS, 0) AS QTD_ESTUDANTES,
+        al.DESIGNACAO AS ANO_LETIVO
+      ${baseQuery}
+      ORDER BY i.INSTITUICAO ASC, b.DESIGNACAO ASC
+      OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+      `,
         { ...params, offset, limit } as any,
       ),
 

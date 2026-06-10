@@ -234,7 +234,7 @@ export class PagamentosBolsaInstituicaoService {
     const baseQuery = `
       FROM FK2_TB_BOLSAS b
       LEFT JOIN FK2_TB_INSTITUICAO  i  ON i.CODIGO  = b.CODIGO_INSTITUICAO
-      LEFT JOIN TB_PAGAMENTOS_BOLSA p  ON p.CODIGO_BOLSA = b.CODIGO
+      LEFT JOIN FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p  ON p.BOLSA_ID = b.CODIGO
                                       AND p.DELETED_AT IS NULL
                                       AND (:anoLectivo IS NULL OR p.ANO_LECTIVO = :anoLectivo)
                                       AND (:semestre   IS NULL OR p.SEMESTRE    = :semestre)
@@ -248,7 +248,7 @@ export class PagamentosBolsaInstituicaoService {
             AND (:semestre   IS NULL OR bs.SEMESTRE          = :semestre)
           GROUP BY bs.CODIGO_BOLSA
       ) resumo ON resumo.CODIGO_BOLSA = b.CODIGO
-      WHERE b.DELETED_AT IS NULL
+      WHERE  b.STATUS = 1 
         AND (:codigoBolsa        IS NULL OR b.CODIGO               = :codigoBolsa)
         AND (:codigoInstituicao  IS NULL OR b.CODIGO_INSTITUICAO   = :codigoInstituicao)
         AND (:estado             IS NULL OR p.ESTADO               = :estado)

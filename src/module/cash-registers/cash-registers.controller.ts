@@ -181,6 +181,11 @@ export class CashRegistersController {
     };
   }
 
+   @Get('movements')
+  async findMovements(@Query() query: ListCashRegisterMovementsDto) {
+    return await this.cashRegistersService.findMovements(query);
+  }
+
   // =====================================================
   // MOVIMENTOS - VALIDAR
   // =====================================================

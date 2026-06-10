@@ -233,8 +233,8 @@ export class PagamentosBolsaInstituicaoService {
 
     const baseQuery = `
       FROM FK2_TB_BOLSAS b
-      LEFT JOIN FK2_TB_INSTITUICAO  i  ON i.CODIGO  = b.CODIGO_INSTITUICAO
-      LEFT JOIN FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p  ON p.BOLSA_ID = b.CODIGO
+      INNER JOIN FK2_TB_INSTITUICAO  i  ON i.CODIGO  = b.CODIGO_INSTITUICAO
+      INNER JOIN FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p  ON p.BOLSA_ID = b.CODIGO
       LEFT JOIN FK2_TB_ANO_LECTIVO al ON al.CODIGO = p.ANO_LECTIVO
                                       AND p.DELETED_AT IS NULL
                                       AND (:anoLectivo IS NULL OR p.ANO_LECTIVO = :anoLectivo)

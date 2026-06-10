@@ -10,8 +10,10 @@ import {
   Req,
   ValidationPipe,
   UsePipes,
+  Res,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { PaymentService } from './payment.service';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { Payment } from './entities/payment.entity';
@@ -31,6 +33,8 @@ import { EstatisticasQueryDto } from './dto/estatisticas-query.dto';
 import { VoidPaymentService } from './void-payments.service';
 import { VoidPaymentDTO } from './dto/void-payment.dto';
 import { VoidPaymentTaxService } from './void-payments-tax.service';
+import { ExportPaymentMonthlyDTO } from './dto/export-payment-monthly.dto';
+import PDFDocument = require('pdfkit');
 
 @ApiTags('payment')
 @Controller('payment')
@@ -142,6 +146,76 @@ export class PaymentController {
   })
   async findPaymentMonthly(@Query() query: FindPaymentMonthlyDTO) {
     return this.paymentService.findPaymentMonthly(query);
+  }
+
+  @Get('monthly/export')
+  @ApiOperation({
+    summary: 'Exporta todos os pagamentos por mensalidades em CSV',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Ficheiro CSV completo, compatível com Excel, conforme os filtros informados.',
+  })
+  async exportPaymentMonthly(
+    @Query() query: ExportPaymentMonthlyDTO,
+    @Res() response: Response,
+  ) {
+    const fileName = `mensalidades-pagas-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"`,
+    );
+    response.setHeader('Cache-Control', 'no-store');
+
+    for await (const chunk of this.paymentService.exportPaymentMonthly(query)) {
+      if (!response.write(chunk)) {
+        await new Promise<void>((resolve) =>
+          response.once('drain', () => resolve()),
+        );
+      }
+    }
+
+    response.end();
+  }
+
+  @Get('monthly/export/pdf')
+  @ApiOperation({
+    summary: 'Exporta todos os pagamentos por mensalidades em PDF',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Ficheiro PDF completo conforme os filtros informados.',
+  })
+  async exportPaymentMonthlyPdf(
+    @Query() query: ExportPaymentMonthlyDTO,
+    @Res() response: Response,
+  ) {
+    const fileName = `mensalidades-pagas-${new Date()
+      .toISOString()
+      .slice(0, 10)}.pdf`;
+
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"`,
+    );
+    response.setHeader('Cache-Control', 'no-store');
+
+    const document = new PDFDocument({
+      size: 'A4',
+      layout: 'landscape',
+      margin: 24,
+      bufferPages: false,
+    });
+
+    document.pipe(response);
+    await this.paymentService.writePaymentMonthlyPdf(query, document);
+    document.end();
   }
 
   @Get('estatisticas')

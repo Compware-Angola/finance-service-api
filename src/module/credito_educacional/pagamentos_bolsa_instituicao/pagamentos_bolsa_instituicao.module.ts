@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { PagamentosBolsaInstituicaoService } from './pagamentos_bolsa_instituicao.service';
-import { PagamentosBolsaInstituicaoController } from './pagamentos_bolsa_instituicao.controller';
+import { PagamentoBolsaController } from './pagamentos_bolsa_instituicao.controller';
 
 @Module({
-  controllers: [PagamentosBolsaInstituicaoController],
+  controllers: [PagamentoBolsaController],
   providers: [PagamentosBolsaInstituicaoService],
 })
-export class PagamentosBolsaInstituicaoModule {}
+export class PagamentosBolsaInstituicaoModule { }

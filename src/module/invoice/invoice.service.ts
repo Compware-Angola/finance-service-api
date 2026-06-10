@@ -617,6 +617,7 @@ FROM (
         f.desconto                        AS desconto,
         f.totaliva                        AS total_iva,
         f.TOTAL_INCIDENCIA                AS total_incidencia,
+        pg.DATA_PAGAMENTO                 AS data_pagamento,
 
         -- MOTIVO ANULAÇÃO
         haf.MOTIVO_ANULACAO               AS motivo_anulacao,
@@ -670,6 +671,72 @@ FROM (
     LEFT JOIN FK2_TB_ANO_LECTIVO ano
            ON ano.Codigo = f.ano_lectivo
 
+    LEFT JOIN (
+        SELECT
+            CODIGO_FACTURA,
+            MAX(
+                CASE
+                    WHEN REGEXP_LIKE(
+                        TRIM(DATA),
+                        '^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}$'
+                    ) THEN TO_DATE(
+                        REGEXP_SUBSTR(TRIM(DATA), '[0-9]+', 1, 1)
+                        || '-' ||
+                        LPAD(REGEXP_SUBSTR(TRIM(DATA), '[0-9]+', 1, 2), 2, '0')
+                        || '-' ||
+                        LPAD(REGEXP_SUBSTR(TRIM(DATA), '[0-9]+', 1, 3), 2, '0')
+                        DEFAULT NULL ON CONVERSION ERROR,
+                        'YYYY-MM-DD'
+                    )
+                    WHEN REGEXP_LIKE(
+                        TRIM(DATA),
+                        '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}$'
+                    ) THEN TO_DATE(
+                        TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                        'DD/MM/YYYY HH24:MI:SS'
+                    )
+                    WHEN REGEXP_LIKE(
+                        TRIM(DATA),
+                        '^[0-9]{2}-[0-9]{2}-[0-9]{4}$'
+                    ) THEN TO_DATE(
+                        TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                        'DD-MM-YYYY'
+                    )
+                    WHEN REGEXP_LIKE(
+                        TRIM(DATA),
+                        '^[0-9]{2}-[[:alpha:]]{3}-[0-9]{2}$'
+                    ) THEN TO_DATE(
+                        TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                        'DD-MON-RR',
+                        'NLS_DATE_LANGUAGE=ENGLISH'
+                    )
+                    WHEN REGEXP_LIKE(
+                        TRIM(DATA),
+                        '^[0-9]{2}-[[:alpha:]]{3}-[0-9]{2}[[:space:]]'
+                    ) THEN CAST(
+                        TO_TIMESTAMP(
+                            TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                            'DD-MON-RR HH.MI.SS.FF AM',
+                            'NLS_DATE_LANGUAGE=ENGLISH'
+                        ) AS DATE
+                    )
+                    WHEN REGEXP_LIKE(
+                        TRIM(DATA),
+                        '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
+                    ) THEN TO_DATE(
+                        TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                        'MM/DD/YYYY'
+                    )
+                    ELSE NULL
+                END
+            ) AS DATA_PAGAMENTO
+        FROM FK2_TB_PAGAMENTOS
+        WHERE ESTADO IN (1, 2)
+          AND CODIGO_FACTURA IS NOT NULL
+        GROUP BY CODIGO_FACTURA
+    ) pg
+           ON pg.CODIGO_FACTURA = f.Codigo
+
     LEFT JOIN FK2_FACTURA_ITEMS fi
            ON fi.CodigoFactura = f.Codigo
 
@@ -687,6 +754,7 @@ FROM (
         f.totalmulta,
         f.totaliva,
         f.TOTAL_INCIDENCIA,
+        pg.DATA_PAGAMENTO,
         f.CodigoMatricula,
         f.Referencia,
         f.Descricao,

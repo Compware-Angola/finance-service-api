@@ -6,4 +6,12 @@ export class FindBolsaDropdownDto {
     @IsOptional()
     @IsString()
     designacao?: string;
+
+
+    @ApiPropertyOptional({ example: '1', description: 'Pesquisar por código da instituição' })
+    @IsOptional()
+    @IsString()
+    codigoInstituicao?: string;
+
+
 }

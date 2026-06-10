@@ -5,10 +5,12 @@ import { PaymentModule } from '../payment/payment.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AcademicYear } from '../invoice/entities/academic.year.entity';
 import { AnoLectivoUtil } from '../util/current-academic-year';
+import { PagamentosBolsaInstituicaoModule } from './pagamentos_bolsa_instituicao/pagamentos_bolsa_instituicao.module';
 
 @Module({
   imports: [TypeOrmModule.forFeature([AcademicYear]),
-    PaymentModule],
+    PaymentModule,
+    PagamentosBolsaInstituicaoModule],
   controllers: [CreditoEducacionalController],
   providers: [CreditoEducacionalService, AnoLectivoUtil],
   exports: [CreditoEducacionalService],

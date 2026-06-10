@@ -260,28 +260,43 @@ export class BolsaService {
     };
   }
 
-  async findDropdown(query: FindBolsaDropdownDto) {
-    const { designacao } = query;
+async findDropdown(query: FindBolsaDropdownDto) {
+  const { designacao, codigoInstituicao } = query;
 
-    const result = await this.dataSource.query(
-      `
-    SELECT 
-        A.CODIGO
-      , A.DESIGNACAO
-    FROM FK2_TB_BOLSAS A
-    WHERE 1=1
-    AND (:designacao IS NULL 
-         OR UPPER(A.DESIGNACAO) LIKE '%' || UPPER(:designacao) || '%')
-    AND A.STATUS = 1
-    ORDER BY A.DESIGNACAO
-    `,
-      {
-        designacao: designacao ?? null,
-      } as any,
+  const conditions: string[] = ['A.STATUS = 1'];
+  const params: Record<string, any> = {};
+
+  if (designacao?.trim()) {
+    conditions.push(`
+      UPPER(A.DESIGNACAO)
+      LIKE '%' || UPPER(:designacao) || '%'
+    `);
+
+    params.designacao = designacao.trim();
+  }
+
+  if (codigoInstituicao) {
+    conditions.push(
+      'A.CODIGO_INSTITUICAO = :codigoInstituicao',
     );
 
-    return toLowerCaseKeys(result);
+    params.codigoInstituicao = codigoInstituicao;
   }
+
+  const result = await this.dataSource.query(
+    `
+    SELECT
+      A.CODIGO,
+      A.DESIGNACAO
+    FROM FK2_TB_BOLSAS A
+    WHERE ${conditions.join('\nAND ')}
+    ORDER BY A.DESIGNACAO
+    `,
+    params as any,
+  );
+
+  return toLowerCaseKeys(result);
+}
 
   async switchStatus(id: number, utilizadorId: number) {
     const bolsa = await this.findOne(id);

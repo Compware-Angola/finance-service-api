@@ -40,8 +40,8 @@ export class PagamentosBolsaInstituicaoService {
 
     // 2. Verificar duplicado (mesma bolsa + ano + semestre)
     const [jaExiste] = await this.dataSource.query(
-      `SELECT CODIGO FROM TB_PAGAMENTOS_BOLSA
-       WHERE CODIGO_BOLSA   = :codigoBolsa
+      `SELECT CODIGO FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO
+       WHERE BOLSA_ID   = :codigoBolsa
          AND ANO_LECTIVO    = :anoLectivo
          AND SEMESTRE       = :semestre
          AND ESTADO         = 1`,
@@ -60,41 +60,40 @@ export class PagamentosBolsaInstituicaoService {
 
     // 3. INSERT
     await this.dataSource.query(
-      `INSERT INTO TB_PAGAMENTOS_BOLSA (
-          CODIGO_BOLSA,
-          ANO_LECTIVO,
-          SEMESTRE,
-          VALOR_DEPOSITADO,
-          DATA_DEPOSITO,
-          REFERENCIA,
-          OBSERVACAO,
-          CODIGO_UTILIZADOR,
-          ESTADO,
-          CREATED_AT
-       ) VALUES (
-          :codigoBolsa,
-          :anoLectivo,
-          :semestre,
-          :valorDepositado,
-          :dataDeposito,
-          :referencia,
-          :observacao,
-          :codigoUtilizador,
-          1,
-          SYSDATE
-       )`,
+      `INSERT INTO FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO (
+      BOLSA_ID,
+      ANO_LECTIVO,
+      SEMESTRE,
+      VALOR_DEPOSITADO,
+      DATA_DEPOSITO,
+      REFERENCIA,
+      OBSERVACAO,
+      CODIGO_UTILIZADOR,
+      ESTADO,
+      CREATED_AT
+   ) VALUES (
+      :bolsa_id,
+      :anoLectivo,
+      :semestre,
+      :valorDepositado,
+      TO_DATE(:dataDeposito, 'YYYY-MM-DD'),
+      :referencia,
+      :observacao,
+      :codigoUtilizador,
+      1,
+      SYSDATE
+   )`,
       {
-        codigoBolsa: dto.codigoBolsa,
+        bolsa_id: dto.codigoBolsa,
         anoLectivo: dto.anoLectivo,
         semestre: dto.semestre,
         valorDepositado: dto.valorDepositado,
-        dataDeposito: dto.dataDeposito ?? null,
+        dataDeposito: dto.dataDeposito,
         referencia: dto.referencia ?? null,
         observacao: dto.observacao ?? null,
         codigoUtilizador,
       } as any,
     );
-
     return {
       statusCode: 201,
       message: 'Pagamento registado com sucesso',
@@ -106,7 +105,7 @@ export class PagamentosBolsaInstituicaoService {
   // ─────────────────────────────────────────────────────────────
   async update(codigo: number, dto: UpdatePagamentosBolsaInstituicaoDto, codigoUtilizador: number) {
     const [pagamento] = await this.dataSource.query(
-      `SELECT CODIGO FROM TB_PAGAMENTOS_BOLSA WHERE CODIGO = :codigo`,
+      `SELECT CODIGO FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO WHERE CODIGO = :codigo`,
       { codigo } as any,
     );
 
@@ -115,8 +114,8 @@ export class PagamentosBolsaInstituicaoService {
     }
 
     await this.dataSource.query(
-      `UPDATE TB_PAGAMENTOS_BOLSA SET
-          CODIGO_BOLSA     = NVL(:codigoBolsa,     CODIGO_BOLSA),
+      `UPDATE FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO SET
+          BOLSA_ID         = NVL(:codigoBolsa,     BOLSA_ID),
           ANO_LECTIVO      = NVL(:anoLectivo,      ANO_LECTIVO),
           SEMESTRE         = NVL(:semestre,        SEMESTRE),
           VALOR_DEPOSITADO = NVL(:valorDepositado, VALOR_DEPOSITADO),
@@ -147,7 +146,7 @@ export class PagamentosBolsaInstituicaoService {
   // ─────────────────────────────────────────────────────────────
   async remove(codigo: number) {
     const [pagamento] = await this.dataSource.query(
-      `SELECT CODIGO FROM TB_PAGAMENTOS_BOLSA WHERE CODIGO = :codigo AND DELETED_AT IS NULL`,
+      `SELECT CODIGO FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO WHERE CODIGO = :codigo AND DELETED_AT IS NULL`,
       { codigo } as any,
     );
 
@@ -156,7 +155,7 @@ export class PagamentosBolsaInstituicaoService {
     }
 
     await this.dataSource.query(
-      `UPDATE TB_PAGAMENTOS_BOLSA SET DELETED_AT = SYSDATE, ESTADO = 0 WHERE CODIGO = :codigo`,
+      `UPDATE FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO SET DELETED_AT = SYSDATE, ESTADO = 0 WHERE CODIGO = :codigo`,
       { codigo } as any,
     );
 
@@ -170,7 +169,7 @@ export class PagamentosBolsaInstituicaoService {
     const [row] = await this.dataSource.query(
       `SELECT
           p.CODIGO,
-          p.CODIGO_BOLSA,
+          p.BOLSA_ID,
           b.DESIGNACAO            AS BOLSA,
           b.CODIGO_INSTITUICAO,
           i.INSTITUICAO,
@@ -183,8 +182,8 @@ export class PagamentosBolsaInstituicaoService {
           p.ESTADO,
           p.CREATED_AT,
           p.UPDATED_AT
-       FROM TB_PAGAMENTOS_BOLSA p
-       INNER JOIN FK2_TB_BOLSAS      b ON b.CODIGO = p.CODIGO_BOLSA
+       FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p
+       INNER JOIN FK2_TB_BOLSAS      b ON b.CODIGO = p.BOLSA_ID
        LEFT  JOIN FK2_TB_INSTITUICAO i ON i.CODIGO = b.CODIGO_INSTITUICAO
        WHERE p.CODIGO = :codigo AND p.DELETED_AT IS NULL`,
       { codigo } as any,
@@ -235,9 +234,12 @@ export class PagamentosBolsaInstituicaoService {
       FROM FK2_TB_BOLSAS b
       LEFT JOIN FK2_TB_INSTITUICAO  i  ON i.CODIGO  = b.CODIGO_INSTITUICAO
       LEFT JOIN FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p  ON p.BOLSA_ID = b.CODIGO
+      LEFT JOIN FK2_TB_ANO_LECTIVO al ON al.CODIGO = p.ANO_LECTIVO
                                       AND p.DELETED_AT IS NULL
                                       AND (:anoLectivo IS NULL OR p.ANO_LECTIVO = :anoLectivo)
                                       AND (:semestre   IS NULL OR p.SEMESTRE    = :semestre)
+                                    
+                                    
       LEFT JOIN (
           SELECT
             bs.CODIGO_BOLSA,
@@ -264,7 +266,7 @@ export class PagamentosBolsaInstituicaoService {
             i.CODIGO                            AS CODIGO_INSTITUICAO,
             i.INSTITUICAO,
             p.CODIGO                            AS CODIGO_PAGAMENTO,
-            p.ANO_LECTIVO,
+            p.ANO_LECTIVO                    AS CODIGO_ANO_LETIVO,
             p.SEMESTRE,
             p.VALOR_DEPOSITADO,
             p.DATA_DEPOSITO,
@@ -272,7 +274,8 @@ export class PagamentosBolsaInstituicaoService {
             p.OBSERVACAO,
             p.ESTADO                            AS ESTADO_PAGAMENTO,
             p.CREATED_AT                        AS DATA_REGISTO,
-            NVL(resumo.QTD_BOLSEIROS, 0)        AS QTD_ESTUDANTES
+            NVL(resumo.QTD_BOLSEIROS, 0)        AS QTD_ESTUDANTES,
+            al.DESIGNACAO                       AS ANO_LETIVO
          ${baseQuery}
          ORDER BY i.INSTITUICAO ASC, b.DESIGNACAO ASC
          OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
@@ -357,8 +360,8 @@ export class PagamentosBolsaInstituicaoService {
          AND bs.STATUS_           = 1
          AND bs.CODIGO_ANOLECTIVO = :anoLectivo
          AND (:semestre IS NULL OR bs.SEMESTRE = :semestre)
-       LEFT JOIN TB_PAGAMENTOS_BOLSA p
-          ON p.CODIGO_BOLSA  = b.CODIGO
+       LEFT JOIN FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p
+          ON p.BOLSA_ID  = b.CODIGO
          AND p.ANO_LECTIVO   = :anoLectivo
          AND (:semestre IS NULL OR p.SEMESTRE = :semestre)
          AND p.DELETED_AT IS NULL
@@ -432,8 +435,8 @@ export class PagamentosBolsaInstituicaoService {
          AND (:semestre IS NULL OR bs.SEMESTRE = :semestre)
        WHERE i.DELETED_AT IS NULL
          AND NOT EXISTS (
-           SELECT 1 FROM TB_PAGAMENTOS_BOLSA p
-           WHERE p.CODIGO_BOLSA = b.CODIGO
+           SELECT 1 FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p
+           WHERE p.BOLSA_ID = b.CODIGO
              AND p.ANO_LECTIVO  = :anoLectivo
              AND (:semestre IS NULL OR p.SEMESTRE = :semestre)
              AND p.DELETED_AT IS NULL
@@ -641,8 +644,8 @@ export class PagamentosBolsaInstituicaoService {
           p.OBSERVACAO,
           p.ESTADO,
           p.CREATED_AT
-       FROM TB_PAGAMENTOS_BOLSA p
-       WHERE p.CODIGO_BOLSA = :codigoBolsa
+       FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p
+       WHERE p.BOLSA_ID = :codigoBolsa
          AND p.DELETED_AT IS NULL
        ORDER BY p.ANO_LECTIVO DESC, p.SEMESTRE DESC`,
       { codigoBolsa } as any,
@@ -656,7 +659,7 @@ export class PagamentosBolsaInstituicaoService {
   // ─────────────────────────────────────────────────────────────
   async toggleEstado(codigo: number) {
     const [pagamento] = await this.dataSource.query(
-      `SELECT CODIGO, ESTADO FROM TB_PAGAMENTOS_BOLSA WHERE CODIGO = :codigo AND DELETED_AT IS NULL`,
+      `SELECT CODIGO, ESTADO FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO WHERE CODIGO = :codigo AND DELETED_AT IS NULL`,
       { codigo } as any,
     );
 
@@ -667,7 +670,7 @@ export class PagamentosBolsaInstituicaoService {
     const novoEstado = pagamento.ESTADO === 1 ? 0 : 1;
 
     await this.dataSource.query(
-      `UPDATE TB_PAGAMENTOS_BOLSA SET ESTADO = :novoEstado, UPDATED_AT = SYSDATE WHERE CODIGO = :codigo`,
+      `UPDATE FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO SET ESTADO = :novoEstado, UPDATED_AT = SYSDATE WHERE CODIGO = :codigo`,
       { novoEstado, codigo } as any,
     );
 

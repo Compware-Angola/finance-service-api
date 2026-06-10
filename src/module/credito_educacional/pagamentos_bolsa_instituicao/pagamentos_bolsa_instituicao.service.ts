@@ -7,7 +7,8 @@ import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
 import { FindPagamentoBolsaDto } from './dto/find-pagamento-bolsa.dto';
 import { FindEstudantesPorBolsaDto } from './dto/find-estudantes-por-bolsa.dto';
 
-
+// Número de meses cobertos por cada semestre
+const MESES_POR_SEMESTRE: Record<number, number> = { 1: 5, 2: 5, 3: 10 };
 
 @Injectable()
 export class PagamentosBolsaInstituicaoService {
@@ -119,7 +120,7 @@ export class PagamentosBolsaInstituicaoService {
           ANO_LECTIVO      = NVL(:anoLectivo,      ANO_LECTIVO),
           SEMESTRE         = NVL(:semestre,        SEMESTRE),
           VALOR_DEPOSITADO = NVL(:valorDepositado, VALOR_DEPOSITADO),
-          DATA_DEPOSITO    = NVL(:dataDeposito,    DATA_DEPOSITO),
+          DATA_DEPOSITO    = NVL(TO_DATE(:dataDeposito, 'YYYY-MM-DD'), DATA_DEPOSITO),
           REFERENCIA       = NVL(:referencia,      REFERENCIA),
           OBSERVACAO       = NVL(:observacao,      OBSERVACAO),
           CODIGO_UTILIZADOR= :codigoUtilizador,
@@ -304,113 +305,238 @@ export class PagamentosBolsaInstituicaoService {
   // ─────────────────────────────────────────────────────────────
   // RESUMO POR INSTITUIÇÃO  (tela de conciliação / dashboard)
   // ─────────────────────────────────────────────────────────────
-  async resumoPorInstituicao(anoLectivo: number, semestre?: number) {
-    if (!anoLectivo) {
-      throw new BadRequestException('O ano lectivo é obrigatório');
+
+  // ─────────────────────────────────────────────────────────────
+  // HELPER PRIVADO — calcula valor esperado por bolsa
+  //
+  // Regras:
+  //   DESC_FIX  → VALOR_DESCONTO já é o total em dinheiro
+  //   DESC_PERC → (mensalidade do estudante × % desconto / 100) × nº meses × nº bolseiros
+  // ─────────────────────────────────────────────────────────────
+  private calcularValorEsperado(
+    sigla: string,
+    valorDesconto: number,
+    qtdBolseiros: number,
+    mensalidadeMedia: number,
+    semestre: number,
+  ): number {
+    const meses = MESES_POR_SEMESTRE[semestre] ?? 5;
+
+    if (sigla === 'DESC_FIX') {
+      // Valor fixo total já definido na bolsa (cobre todos os bolseiros)
+      return Number(valorDesconto);
     }
 
+    // Percentual: cada bolseiro paga (mensalidade × %) por mês
+    const descontoUnitarioPorMes = (mensalidadeMedia * Number(valorDesconto)) / 100;
+    return descontoUnitarioPorMes * meses * qtdBolseiros;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // RESUMO POR INSTITUIÇÃO  (conciliação — sem insights)
+  // ─────────────────────────────────────────────────────────────
+  async resumoPorInstituicao(anoLectivo: number, semestre?: number) {
+    if (!anoLectivo) throw new BadRequestException('O ano lectivo é obrigatório');
+
+    // Busca dados base: bolsas, depósitos, tipo de desconto e
+    // mensalidade média dos bolseiros (necessária para DESC_PERC)
     const rows = await this.dataSource.query(
       `SELECT
-          i.CODIGO                                  AS CODIGO_INSTITUICAO,
+          i.CODIGO                                    AS CODIGO_INSTITUICAO,
           i.INSTITUICAO,
-          COUNT(DISTINCT b.CODIGO)                  AS QTD_BOLSAS,
-          COUNT(DISTINCT bs.CODIGO)                 AS QTD_BOLSEIROS,
+          COUNT(DISTINCT b.CODIGO)                    AS QTD_BOLSAS,
+          COUNT(DISTINCT bs.CODIGO)                   AS QTD_BOLSEIROS,
+          NVL(SUM(p.VALOR_DEPOSITADO), 0)             AS VALOR_DEPOSITADO,
 
-          -- Valor que a instituição já depositou
-          NVL(SUM(p.VALOR_DEPOSITADO), 0)           AS VALOR_DEPOSITADO,
+          -- Tipo de desconto da bolsa
+          MAX(td.SIGLA)                               AS TIPO_DESCONTO_SIGLA,
 
-          -- Valor esperado = nº bolseiros × mensalidade total por semestre
-          -- (simplificado: soma dos descontos fixos atribuídos)
-          NVL(SUM(b.VALOR_DESCONTO), 0)             AS VALOR_ESPERADO,
+          -- Para DESC_FIX: soma directa do valor configurado na bolsa
+          NVL(SUM(b.VALOR_DESCONTO), 0)               AS SOMA_VALOR_DESCONTO,
 
-          -- Diferença
-          NVL(SUM(p.VALOR_DEPOSITADO), 0)
-            - NVL(SUM(b.VALOR_DESCONTO), 0)         AS DIFERENCA,
+          -- Para DESC_PERC: percentagem (assumimos que todas da mesma inst. têm a mesma %)
+          MAX(b.VALOR_DESCONTO)                       AS PCT_DESCONTO,
 
-          -- % de divergência
-          CASE
-            WHEN NVL(SUM(b.VALOR_DESCONTO), 0) = 0 THEN 0
-            ELSE ROUND(
-              (
-                (NVL(SUM(p.VALOR_DEPOSITADO), 0) - NVL(SUM(b.VALOR_DESCONTO), 0))
-                / NVL(SUM(b.VALOR_DESCONTO), 1)
-              ) * 100, 2
-            )
-          END                                       AS PCT_DIVERGENCIA,
+          -- Mensalidade média dos bolseiros desta instituição no período
+          -- (média das propinas activas dos cursos dos bolseiros)
+          NVL(AVG(ts.PRECO), 0)                       AS MENSALIDADE_MEDIA,
 
-          -- Status de pagamento
-          CASE
-            WHEN SUM(p.VALOR_DEPOSITADO) IS NULL THEN 'Sem pagamento'
-            WHEN ABS(
-              NVL(SUM(p.VALOR_DEPOSITADO), 0) - NVL(SUM(b.VALOR_DESCONTO), 0)
-            ) / NULLIF(NVL(SUM(b.VALOR_DESCONTO), 1), 0) * 100 >= 5
-              THEN 'Divergência significativa'
-            WHEN ABS(
-              NVL(SUM(p.VALOR_DEPOSITADO), 0) - NVL(SUM(b.VALOR_DESCONTO), 0)
-            ) / NULLIF(NVL(SUM(b.VALOR_DESCONTO), 1), 0) * 100 > 0
-              THEN 'Divergência leve'
-            ELSE 'Conciliado'
-          END                                       AS STATUS_CONCILIACAO
+          -- Semestre pedido (para calcular nº de meses no lado JS/TS)
+          :semestre                                   AS SEMESTRE_FILTRO
 
        FROM FK2_TB_INSTITUICAO i
        INNER JOIN FK2_TB_BOLSAS b
           ON b.CODIGO_INSTITUICAO = i.CODIGO
+       LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS td
+          ON td.CODIGO = b.CODIGO_TIPO_DESCONTO
        LEFT JOIN FK2_TB_BOLSEIROS bs
           ON bs.CODIGO_BOLSA      = b.CODIGO
          AND bs.STATUS_           = 1
          AND bs.CODIGO_ANOLECTIVO = :anoLectivo
          AND (:semestre IS NULL OR bs.SEMESTRE = :semestre)
+       -- Mensalidade do curso do bolseiro no ano lectivo
+       LEFT JOIN FK2_TB_MATRICULAS m
+          ON m.CODIGO = bs.CODIGO_MATRICULA
+       LEFT JOIN FK2_TB_CURSOS c
+          ON c.CODIGO = m.CODIGO_CURSO
+       LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+          ON ts.DESCRICAO LIKE 'Propina ' || c.DESIGNACAO || '%'
+         AND ts.CODIGO_ANO_LECTIVO = :anoLectivo
+         AND ts.ESTADO = 'Ativo'
        LEFT JOIN FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p
           ON p.BOLSA_ID  = b.CODIGO
          AND p.ANO_LECTIVO   = :anoLectivo
          AND (:semestre IS NULL OR p.SEMESTRE = :semestre)
          AND p.DELETED_AT IS NULL
-       WHERE i.DELETED_AT IS NULL
+      
        GROUP BY i.CODIGO, i.INSTITUICAO
        ORDER BY i.INSTITUICAO ASC`,
       { anoLectivo, semestre: semestre ?? null } as any,
     );
 
-    const data = toLowerCaseKeys(rows);
+    const semestreEfetivo = semestre ?? 1;
 
-    // Métricas gerais (para o painel de Insights)
-    const totalDepositado = data.reduce((s: number, r: any) => s + Number(r.valor_depositado), 0);
-    const totalEsperado = data.reduce((s: number, r: any) => s + Number(r.valor_esperado), 0);
-    const comDivergencia = data.filter((r: any) => r.status_conciliacao !== 'Conciliado' && r.status_conciliacao !== 'Sem pagamento').length;
-    const semPagamento = data.filter((r: any) => r.status_conciliacao === 'Sem pagamento').length;
+    const data = toLowerCaseKeys(rows).map((r: any) => {
+      const valorEsperado = this.calcularValorEsperado(
+        r.tipo_desconto_sigla ?? 'DESC_PERC',
+        r.tipo_desconto_sigla === 'DESC_FIX' ? r.soma_valor_desconto : r.pct_desconto,
+        Number(r.qtd_bolseiros),
+        Number(r.mensalidade_media),
+        semestreEfetivo,
+      );
+
+      const valorDepositado = Number(r.valor_depositado);
+      const diferenca = valorDepositado - valorEsperado;
+      const pctDivergencia = valorEsperado > 0
+        ? +((diferenca / valorEsperado) * 100).toFixed(2)
+        : 0;
+
+      let statusConciliacao: string;
+      if (valorDepositado === 0) {
+        statusConciliacao = 'Sem pagamento';
+      } else if (Math.abs(pctDivergencia) >= 5) {
+        statusConciliacao = 'Divergência significativa';
+      } else if (Math.abs(pctDivergencia) > 0) {
+        statusConciliacao = 'Divergência leve';
+      } else {
+        statusConciliacao = 'Conciliado';
+      }
+
+      return {
+        codigo_instituicao: r.codigo_instituicao,
+        instituicao: r.instituicao,
+        qtd_bolsas: Number(r.qtd_bolsas),
+        qtd_bolseiros: Number(r.qtd_bolseiros),
+        tipo_desconto_sigla: r.tipo_desconto_sigla,
+        mensalidade_media: Number(r.mensalidade_media),
+        valor_depositado: valorDepositado,
+        valor_esperado: +valorEsperado.toFixed(2),
+        diferenca: +diferenca.toFixed(2),
+        pct_divergencia: pctDivergencia,
+        status_conciliacao: statusConciliacao,
+      };
+    });
+
+    return { data };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // INSIGHTS  (rota separada GET /conciliacao/insights)
+  // ─────────────────────────────────────────────────────────────
+  async insights(anoLectivo: number, semestre?: number) {
+    if (!anoLectivo) throw new BadRequestException('O ano lectivo é obrigatório');
+
+    // Reutiliza o resumo já calculado (com os valores esperados correctos)
+    const { data } = await this.resumoPorInstituicao(anoLectivo, semestre);
+
+    const totalDepositado = data.reduce((s: number, r: any) => s + r.valor_depositado, 0);
+    const totalEsperado = data.reduce((s: number, r: any) => s + r.valor_esperado, 0);
+    const totalBolseiros = data.reduce((s: number, r: any) => s + r.qtd_bolseiros, 0);
+
+    const comDivergenciaSignificativa = data.filter(
+      (r: any) => r.status_conciliacao === 'Divergência significativa',
+    ).length;
+
+    const semPagamento = data.filter(
+      (r: any) => r.status_conciliacao === 'Sem pagamento',
+    ).length;
+
     const saudeConciliacao = totalEsperado > 0
       ? +((totalDepositado / totalEsperado) * 100).toFixed(2)
       : 0;
 
-    const comMaiorValor = data.reduce(
-      (max: any, r: any) => (Number(r.valor_depositado) > Number(max?.valor_depositado ?? 0) ? r : max),
-      data[0] ?? null,
+    // Crescimento vs período anterior (semestre/ano anterior)
+    const periodoAnterior = await this.totalDepositadoPeriodoAnterior(anoLectivo, semestre);
+    const crescimento = periodoAnterior > 0
+      ? +(((totalDepositado - periodoAnterior) / periodoAnterior) * 100).toFixed(2)
+      : 0;
+
+    const instituicaoMaiorValor = data.reduce(
+      (max: any, r: any) => (r.valor_depositado > (max?.valor_depositado ?? -1) ? r : max),
+      null as any,
     );
 
-    const comMaisBolseiros = data.reduce(
-      (max: any, r: any) => (Number(r.qtd_bolseiros) > Number(max?.qtd_bolseiros ?? 0) ? r : max),
-      data[0] ?? null,
+    const instituicaoMaisBolseiros = data.reduce(
+      (max: any, r: any) => (r.qtd_bolseiros > (max?.qtd_bolseiros ?? -1) ? r : max),
+      null as any,
     );
 
     return {
-      data,
-      insights: {
-        totalDepositado,
-        totalEsperado,
-        diferenca: totalDepositado - totalEsperado,
-        saudeConciliacao,
-        comDivergenciaSignificativa: comDivergencia,
+      instituicaoMaiorValor: instituicaoMaiorValor
+        ? { nome: instituicaoMaiorValor.instituicao, valor: instituicaoMaiorValor.valor_depositado }
+        : null,
+      instituicaoMaisBolseiros: instituicaoMaisBolseiros
+        ? { nome: instituicaoMaisBolseiros.instituicao, qtd: instituicaoMaisBolseiros.qtd_bolseiros }
+        : null,
+      divergenciasFinanceiras: {
+        label: 'Instituições com divergências financeiras',
+        descricao: `${comDivergenciaSignificativa} instituição(ões) com divergência ≥ 5%`,
+        valor: comDivergenciaSignificativa,
+      },
+      crescimentoVsPeriodoAnterior: {
+        label: 'Crescimento vs período anterior',
+        descricao: `${crescimento >= 0 ? '+' : ''}${crescimento}% ${crescimento >= 0 ? 'de aumento' : 'de redução'} nos pagamentos`,
+        valor: crescimento,
+      },
+      tendenciaCustos: {
+        label: 'Tendência dos custos das bolsas',
+        descricao:
+          totalDepositado < totalEsperado
+            ? 'Custo total das bolsas em redução estimado para o próximo período'
+            : 'Custo total das bolsas em crescimento estimado para o próximo período',
+      },
+      saudeConciliacao: {
+        label: 'Saúde da conciliação',
+        descricao: `${saudeConciliacao}% das verbas conciliadas com as bolsas calculadas`,
+        valor: saudeConciliacao,
+      },
+      totais: {
+        totalDepositado: +totalDepositado.toFixed(2),
+        totalEsperado: +totalEsperado.toFixed(2),
+        diferenca: +(totalDepositado - totalEsperado).toFixed(2),
+        totalBolseiros,
         semPagamento,
-        instituicaoMaiorValor: comMaiorValor
-          ? { nome: comMaiorValor.instituicao, valor: comMaiorValor.valor_depositado }
-          : null,
-        instituicaoMaisBolseiros: comMaisBolseiros
-          ? { nome: comMaisBolseiros.instituicao, qtd: comMaisBolseiros.qtd_bolseiros }
-          : null,
+        totalInstituicoes: data.length,
       },
     };
   }
 
+  // Helper: total depositado no período anterior (ano anterior, mesmo semestre)
+  private async totalDepositadoPeriodoAnterior(
+    anoLectivo: number,
+    semestre?: number,
+  ): Promise<number> {
+    const [row] = await this.dataSource.query(
+      `SELECT NVL(SUM(p.VALOR_DEPOSITADO), 0) AS TOTAL
+       FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p
+       WHERE p.ANO_LECTIVO = :anoAnterior
+         AND (:semestre IS NULL OR p.SEMESTRE = :semestre)
+         AND p.DELETED_AT IS NULL
+         AND p.ESTADO = 1`,
+      { anoAnterior: anoLectivo - 1, semestre: semestre ?? null } as any,
+    );
+    return Number(row?.TOTAL ?? 0);
+  }
   // ─────────────────────────────────────────────────────────────
   // INSTITUIÇÕES SEM PAGAMENTO
   // ─────────────────────────────────────────────────────────────
@@ -433,7 +559,7 @@ export class PagamentosBolsaInstituicaoService {
          AND bs.STATUS_           = 1
          AND bs.CODIGO_ANOLECTIVO = :anoLectivo
          AND (:semestre IS NULL OR bs.SEMESTRE = :semestre)
-       WHERE i.DELETED_AT IS NULL
+       
          AND NOT EXISTS (
            SELECT 1 FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p
            WHERE p.BOLSA_ID = b.CODIGO

@@ -164,7 +164,25 @@ export class PagamentoBolsaController {
   ) {
     return this.service.estudantesPorInstituicao(codigoInstituicao, query);
   }
-
+  @Get('conciliacao/insights')
+  @ApiOperation({
+    summary: 'Insights financeiros da conciliação',
+    description:
+      'Devolve os cards de insights: instituição com maior valor recebido, com mais bolseiros, ' +
+      'nº com divergências ≥ 5%, crescimento vs período anterior, tendência de custos e ' +
+      'saúde geral da conciliação.',
+  })
+  @ApiQuery({ name: 'anoLectivo', required: true, type: Number })
+  @ApiQuery({ name: 'semestre', required: false, type: Number })
+  insightsConciliacao(
+    @Query('anoLectivo', ParseIntPipe) anoLectivo: number,
+    @Query('semestre') semestre?: string,
+  ) {
+    return this.service.insights(
+      anoLectivo,
+      semestre ? Number(semestre) : undefined,
+    );
+  }
   // ──────────────────────────────────────────────────────────────
   // HISTÓRICO
   // ──────────────────────────────────────────────────────────────

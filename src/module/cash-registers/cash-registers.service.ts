@@ -237,9 +237,9 @@ export class CashRegistersService {
 
       await movementRepository.save(movement);
       const { code, ...rest } = cashRegister;
-      const email = await this.findOperatorEmail(operatorId);
+      const operator = await this.findOperatorEmail(operatorId);
       EmailHelper.sendEmail(this.httpService, {
-        to: email,
+        to: operator.email,
         subject: 'Caixa aberto',
         company: 'universidade_metodista_angola',
         type: 'codigo_validacao_abertura_caixa',
@@ -671,16 +671,16 @@ export class CashRegistersService {
     );
     cashRegister.code = hashOpeningCode;
     await this.cashRegisterRepository.save(cashRegister);
-    const operatorEmail = await this.findOperatorEmail(operatorId);
+    const operator = await this.findOperatorEmail(operatorId);
     EmailHelper.sendEmail(this.httpService, {
-      to: operatorEmail,
+      to: operator.email,
       subject: 'Recuperação de código de abertura de caixa',
       company: 'universidade_metodista_angola',
       type: 'recuperacao_codigo_abertura_caixa',
       template:
         'universidade_metodista_angola:recuperacao_codigo_abertura_caixa',
       context: {
-        nome: 'Operador',
+        nome: operator.nome,
         codigo_abertura: openingCode,
       },
     });
@@ -708,12 +708,14 @@ export class CashRegistersService {
   private async findOperatorEmail(id: number) {
     const [data] = await this.dataSource.query<
       {
-        EMAIL: string;
+        email: string;
+        nome: string;
       }[]
     >(
       `
     SELECT
-    uti.EMAIL
+    uti.EMAIL,
+    uti.NOME
     FROM FK2_MCA_TB_UTILIZADOR uti
     WHERE uti.PK_UTILIZADOR = :1
     `,
@@ -724,7 +726,7 @@ export class CashRegistersService {
         'Operador nao tem email cadastrado, por favor cadastre o email',
       );
     }
-    return data.EMAIL;
+    return toLowerCaseKeys(data) as { email: string; nome: string };
   }
    private returnCashRegisterObj(cashRegister: CashRegister | null) {
    return cashRegister ? {

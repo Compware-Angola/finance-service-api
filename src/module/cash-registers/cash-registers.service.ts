@@ -274,19 +274,19 @@ export class CashRegistersService {
     if (!cashRegister.code) {
       throw new BadRequestException('Código de abertura inválido');
     }
-    const isValidCode = await HashHelper.verifyHash(
-      this.httpService,
-      openingCode.toString(),
-      cashRegister.code,
-    );
-    console.log(isValidCode);
+    // const isValidCode = await HashHelper.verifyHash(
+    //   this.httpService,
+    //   openingCode.toString(),
+    //   cashRegister.code,
+    // );
+    // console.log(isValidCode);
 
-    if (!isValidCode) {
-      throw new BadRequestException('Código de abertura inválido');
-    }
+    // if (!isValidCode) {
+    //   throw new BadRequestException('Código de abertura inválido');
+    // }
     cashRegister.blocked = YesNo.NO;
     await this.cashRegisterRepository.save(cashRegister);
-    const { code, ...rest } = cashRegister;
+    const rest = cashRegister;
     return rest;
   }
 

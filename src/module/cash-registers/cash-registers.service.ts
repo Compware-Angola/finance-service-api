@@ -245,7 +245,7 @@ export class CashRegistersService {
         type: 'codigo_validacao_abertura_caixa',
         context: {
           codigo_abertura: openingCode,
-          operador: operatorId,
+          operador: operator.nome,
           valor_abertura: openingAmount,
           data_abertura: new Date().toLocaleDateString(),
           hora_abertura: formatTime(new Date()),

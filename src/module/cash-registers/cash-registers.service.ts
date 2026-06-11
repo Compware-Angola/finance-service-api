@@ -24,7 +24,7 @@ import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
 import { formatTime } from '../util/formatTime';
 import { HttpService } from '@nestjs/axios';
 import { HashHelper } from 'src/common/helpers/hash-helper';
-import { EmailHelper } from 'src/common/helpers/email.helper';
+// import { EmailHelper } from 'src/common/helpers/email.helper';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
 
@@ -125,74 +125,58 @@ export class CashRegistersService {
     return cashRegister;
   }
 
-async create(
-  dto: CreateCashRegisterDto,
-  adminId: number,
-) {
-  const exists = await this.cashRegisterRepository.findOne({
-    where: {
+  async create(dto: CreateCashRegisterDto, adminId: number) {
+    const exists = await this.cashRegisterRepository.findOne({
+      where: {
+        name: dto.name,
+        deletedAt: IsNull(),
+      },
+    });
+
+    if (exists) {
+      throw new BadRequestException('Já existe um caixa com este nome');
+    }
+
+    const cashRegister = this.cashRegisterRepository.create({
       name: dto.name,
-      deletedAt: IsNull(),
-    },
-  });
+      status: CashRegisterStatus.CLOSED,
+      blocked: YesNo.NO,
+      createdBy: adminId,
+    });
 
-  if (exists) {
-    throw new BadRequestException(
-      'Já existe um caixa com este nome',
-    );
+    return await this.cashRegisterRepository.save(cashRegister);
   }
 
-  const cashRegister = this.cashRegisterRepository.create({
-    name: dto.name,
-    status: CashRegisterStatus.CLOSED,
-    blocked: YesNo.NO,
-    createdBy: adminId,
-  });
+  async update(id: number, dto: UpdateCashRegisterDto, adminId: number) {
+    const cashRegister = await this.findById(id);
 
-  return await this.cashRegisterRepository.save(cashRegister);
-}
+    if (cashRegister.status === CashRegisterStatus.OPEN) {
+      throw new BadRequestException('Não é possível editar um caixa aberto');
+    }
 
- async update(
-  id: number,
-  dto: UpdateCashRegisterDto,
-  adminId: number,
-) {
-  const cashRegister = await this.findById(id);
+    Object.assign(cashRegister, dto);
 
-  if (cashRegister.status === CashRegisterStatus.OPEN) {
-    throw new BadRequestException(
-      'Não é possível editar um caixa aberto',
-    );
+    cashRegister.updatedBy = adminId;
+
+    return await this.cashRegisterRepository.save(cashRegister);
   }
 
-  Object.assign(cashRegister, dto);
+  async delete(id: number, adminId: number) {
+    const cashRegister = await this.findById(id);
 
-  cashRegister.updatedBy = adminId;
+    if (cashRegister.status === CashRegisterStatus.OPEN) {
+      throw new BadRequestException('Não é possível eliminar um caixa aberto');
+    }
 
-  return await this.cashRegisterRepository.save(cashRegister);
-}
+    cashRegister.deletedAt = new Date();
+    cashRegister.deletedBy = adminId;
 
-async delete(
-  id: number,
-  adminId: number,
-) {
-  const cashRegister = await this.findById(id);
+    await this.cashRegisterRepository.save(cashRegister);
 
-  if (cashRegister.status === CashRegisterStatus.OPEN) {
-    throw new BadRequestException(
-      'Não é possível eliminar um caixa aberto',
-    );
+    return {
+      message: 'Caixa eliminado com sucesso',
+    };
   }
-
-  cashRegister.deletedAt = new Date();
-  cashRegister.deletedBy = adminId;
-
-  await this.cashRegisterRepository.save(cashRegister);
-
-  return {
-    message: 'Caixa eliminado com sucesso',
-  };
-}
 
   async open(params: OpenCashRegisterParams) {
     const { id, openingAmount, operatorId, adminId } = params;
@@ -223,14 +207,14 @@ async delete(
 
       this.validateCashRegisterAvailability(cashRegister);
       const openingCode = generateRandomCode();
-      const hashOpeningCode = await HashHelper.generateHash(
-        this.httpService,
-        openingCode.toString(),
-      );
+      // const hashOpeningCode = await HashHelper.generateHash(
+      //   this.httpService,
+      //   openingCode.toString(),
+      // );
       cashRegister.status = CashRegisterStatus.OPEN;
       cashRegister.operatorId = operatorId;
       cashRegister.blocked = YesNo.YES;
-      cashRegister.code = hashOpeningCode;
+      cashRegister.code = openingCode.toString();
       cashRegister.createdBy = adminId;
       await cashRegisterRepository.save(cashRegister);
       const movement = movementRepository.create({
@@ -253,21 +237,21 @@ async delete(
 
       await movementRepository.save(movement);
       const { code, ...rest } = cashRegister;
-      const email = await this.findOperatorEmail(operatorId);
-      EmailHelper.sendEmail(this.httpService, {
-        to: email,
-        subject: 'Caixa aberto',
-        company: 'universidade_metodista_angola',
-        type: 'codigo_validacao_abertura_caixa',
-        context: {
-          codigo_abertura: openingCode,
-          operador: operatorId,
-          valor_abertura: openingAmount,
-          data_abertura: new Date().toLocaleDateString(),
-          hora_abertura: formatTime(new Date()),
-        },
-      });
-      return rest;
+      // const email = await this.findOperatorEmail(operatorId);
+      // EmailHelper.sendEmail(this.httpService, {
+      //   to: email,
+      //   subject: 'Caixa aberto',
+      //   company: 'universidade_metodista_angola',
+      //   type: 'codigo_validacao_abertura_caixa',
+      //   context: {
+      //     codigo_abertura: openingCode,
+      //     operador: operatorId,
+      //     valor_abertura: openingAmount,
+      //     data_abertura: new Date().toLocaleDateString(),
+      //     hora_abertura: formatTime(new Date()),
+      //   },
+      // });
+      return { ...rest, code };
     });
   }
   async verifyMyCashRegister({
@@ -290,19 +274,19 @@ async delete(
     if (!cashRegister.code) {
       throw new BadRequestException('Código de abertura inválido');
     }
-    const isValidCode = await HashHelper.verifyHash(
-      this.httpService,
-      openingCode.toString(),
-      cashRegister.code,
-    );
-    console.log(isValidCode);
+    // const isValidCode = await HashHelper.verifyHash(
+    //   this.httpService,
+    //   openingCode.toString(),
+    //   cashRegister.code,
+    // );
+    // console.log(isValidCode);
 
-    if (!isValidCode) {
-      throw new BadRequestException('Código de abertura inválido');
-    }
+    // if (!isValidCode) {
+    //   throw new BadRequestException('Código de abertura inválido');
+    // }
     cashRegister.blocked = YesNo.NO;
     await this.cashRegisterRepository.save(cashRegister);
-    const { code, ...rest } = cashRegister;
+    const rest = cashRegister;
     return rest;
   }
 
@@ -683,29 +667,30 @@ async delete(
 
     const openingCode = generateRandomCode();
 
-    const hashOpeningCode = await HashHelper.generateHash(
-      this.httpService,
-      openingCode.toString(),
-    );
+    // const hashOpeningCode = await HashHelper.generateHash(
+    //   this.httpService,
+    //   openingCode.toString(),
+    // );
 
-    cashRegister.code = hashOpeningCode;
+    cashRegister.code = openingCode.toString();
 
     await this.cashRegisterRepository.save(cashRegister);
 
-    const operatorEmail = await this.findOperatorEmail(operatorId);
+    // const operatorEmail = await this.findOperatorEmail(operatorId);
 
-    EmailHelper.sendEmail(this.httpService, {
-      to: operatorEmail,
-      subject: 'Recuperação de código de abertura de caixa',
-      company: 'universidade_metodista_angola',
-      type: 'recuperacao_codigo_abertura_caixa',
-      template:
-        'universidade_metodista_angola:recuperacao_codigo_abertura_caixa',
-      context: {
-        nome: 'Operador',
-        codigo_abertura: openingCode,
-      },
-    });
+    // EmailHelper.sendEmail(this.httpService, {
+    //   to: operatorEmail,
+    //   subject: 'Recuperação de código de abertura de caixa',
+    //   company: 'universidade_metodista_angola',
+    //   type: 'recuperacao_codigo_abertura_caixa',
+    //   template:
+    //     'universidade_metodista_angola:recuperacao_codigo_abertura_caixa',
+    //   context: {
+    //     nome: 'Operador',
+    //     codigo_abertura: openingCode,
+    //   },
+    // });
+    return { openingCode };
   }
 
   async blockMyCashRegister(operatorId: number) {
@@ -733,7 +718,7 @@ async delete(
       }[]
     >(
       `
-    SELECT 
+    SELECT
     uti.EMAIL
     FROM FK2_MCA_TB_UTILIZADOR uti
     WHERE uti.PK_UTILIZADOR = :1

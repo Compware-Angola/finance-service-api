@@ -70,7 +70,7 @@ export class MonthlyFeesDiscountUtilService {
     WHERE b.codigo_matricula = :codigoMatricula
       AND b.codigo_anolectivo = :anoLectivo
       AND (b.semestre = :semestre or b.semestre = 3)
-     -- AND b.STATUS_= 1
+      AND b.STATUS_= 1
   `;
 
     try {

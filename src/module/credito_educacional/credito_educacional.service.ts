@@ -767,6 +767,7 @@ export class CreditoEducacionalService {
     WHERE a.CODIGO_MATRICULA  = :codigoMatricula
       AND a.CODIGO_ANOLECTIVO = :codigoAnoLectivo
       AND a.SEMESTRE          = :semestre
+      AND a.STATUS_ = 1
   `;
 
     const [row] = await this.dataSource.query(sql, {

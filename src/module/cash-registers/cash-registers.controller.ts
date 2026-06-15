@@ -44,8 +44,6 @@ type Action =
   | 'RECUPERAR'
   | 'VERIFICAR';
 
-
-
 @ApiTags('caixas')
 @Controller('cash-registers')
 @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
@@ -71,10 +69,7 @@ export class CashRegistersController {
   async create(@Body() body: CreateCashRegisterDto, @Req() req: any) {
     const user = req.user;
 
-    const cashRegister = await this.cashRegistersService.create(
-      body,
-      user.sub,
-    );
+    const cashRegister = await this.cashRegistersService.create(body, user.sub);
 
     this.log(req, user, 'CRIAR', 'CAIXA', {
       id: cashRegister.id,
@@ -122,10 +117,7 @@ export class CashRegistersController {
   async delete(@Param('id') id: string, @Req() req: any) {
     const user = req.user;
 
-    const result = await this.cashRegistersService.delete(
-      Number(id),
-      user.sub,
-    );
+    const result = await this.cashRegistersService.delete(Number(id), user.sub);
 
     this.log(req, user, 'ELIMINAR', 'CAIXA', {
       id,
@@ -181,7 +173,7 @@ export class CashRegistersController {
     };
   }
 
-   @Get('movements')
+  @Get('movements')
   async findMovements(@Query() query: ListCashRegisterMovementsDto) {
     return await this.cashRegistersService.findMovements(query);
   }
@@ -222,9 +214,7 @@ export class CashRegistersController {
   @Get('me')
   async findMyOpenCashRegister(@Req() req: any) {
     return {
-      data: await this.cashRegistersService.findOpenByOperatorId(
-        req.user.sub,
-      ),
+      data: await this.cashRegistersService.findOpenByOperatorId(req.user.sub),
     };
   }
 
@@ -247,7 +237,6 @@ export class CashRegistersController {
     );
 
     this.log(req, user, 'RECUPERAR', 'CÓDIGO DE ABERTURA');
-
     return result;
   }
 
@@ -312,8 +301,7 @@ export class CashRegistersController {
     meta?: Record<string, any>,
   ) {
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-  const message =
-      this.buildLogMessage(user, action, entity, meta);
+    const message = this.buildLogMessage(user, action, entity, meta);
 
     AccessLogHelper.logAccess(this.httpService, {
       descricao: message,
@@ -322,51 +310,48 @@ export class CashRegistersController {
     });
   }
 
-  private buildLogMessage (
-  user: any,
-  action: Action,
-  entity: string,
-  meta?: Record<string, any>,
-) {
-  const base = `UTILIZADOR ${user?.nome}`;
+  private buildLogMessage(
+    user: any,
+    action: Action,
+    entity: string,
+    meta?: Record<string, any>,
+  ) {
+    const base = `UTILIZADOR ${user?.nome}`;
 
-  switch (action) {
-    case 'CRIAR':
-      return `${base} CRIOU ${entity}${meta?.id ? ` (id: ${meta.id}, nome: ${meta.name})` : ''}`;
+    switch (action) {
+      case 'CRIAR':
+        return `${base} CRIOU ${entity}${meta?.id ? ` (id: ${meta.id}, nome: ${meta.name})` : ''}`;
 
-    case 'ATUALIZAR':
-      return `${base} ATUALIZOU ${entity}${meta?.id ? ` (id: ${meta.id}, nome: ${meta.name})` : ''}`;
+      case 'ATUALIZAR':
+        return `${base} ATUALIZOU ${entity}${meta?.id ? ` (id: ${meta.id}, nome: ${meta.name})` : ''}`;
 
-    case 'ELIMINAR':
-      return `${base} ELIMINOU ${entity}${meta?.id ? ` (id: ${meta.id})` : ''}`;
+      case 'ELIMINAR':
+        return `${base} ELIMINOU ${entity}${meta?.id ? ` (id: ${meta.id})` : ''}`;
 
-    case 'ABRIR':
-      return `${base} ABRIU ${entity}${
-        meta?.id ? ` (id: ${meta.id})` : ''
-      }${meta?.openingAmount ? ` (valor: ${meta.openingAmount})` : ''}`;
+      case 'ABRIR':
+        return `${base} ABRIU ${entity}${
+          meta?.id ? ` (id: ${meta.id})` : ''
+        }${meta?.openingAmount ? ` (valor: ${meta.openingAmount})` : ''}`;
 
-    case 'FECHAR':
-      return `${base} FECHOU ${entity}${meta?.id ? ` (id: ${meta.id})` : ''}`;
+      case 'FECHAR':
+        return `${base} FECHOU ${entity}${meta?.id ? ` (id: ${meta.id})` : ''}`;
 
-    case 'VALIDAR':
-      return `${base} VALIDOU ${entity}${
-        meta?.movementId ? ` (movement: ${meta.movementId})` : ''
-      }`;
+      case 'VALIDAR':
+        return `${base} VALIDOU ${entity}${
+          meta?.movementId ? ` (movement: ${meta.movementId})` : ''
+        }`;
 
-    case 'BLOQUEAR':
-      return `${base} BLOQUEOU ${entity}`;
+      case 'BLOQUEAR':
+        return `${base} BLOQUEOU ${entity}`;
 
-    case 'RECUPERAR':
-      return `${base} RECUPEROU ${entity}`;
+      case 'RECUPERAR':
+        return `${base} RECUPEROU ${entity}`;
 
-    case 'VERIFICAR':
-      return `${base} VERIFICOU ${entity}`;
+      case 'VERIFICAR':
+        return `${base} VERIFICOU ${entity}`;
 
-    default:
-      return `${base} EXECUTOU ${action} EM ${entity}`;
+      default:
+        return `${base} EXECUTOU ${action} EM ${entity}`;
+    }
   }
-};
 }
-
-
-

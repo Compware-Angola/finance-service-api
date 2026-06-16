@@ -614,7 +614,7 @@ export class PagamentosBolsaInstituicaoService {
       semestre: semestre ?? null,
       nome: nome ?? null,
       curso: curso ?? null,
-      statusBolseiro: statusBolseiro ?? null,
+      statusBolseiro: statusBolseiro ?? 1,
     };
 
     const whereClause = `

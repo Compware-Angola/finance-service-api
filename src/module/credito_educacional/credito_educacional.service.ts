@@ -645,31 +645,30 @@ export class CreditoEducacionalService {
   }
   async getInfoBolseiroDados(codigoMatricula: number) {
     const ano = await this.anoLectivoUtil.getAnoAtualId();
-    const semestre =
-      (await this.anoLectivoUtil.getSemestreAtual()).semestre ?? 1;
+    console.log(ano);
+    const semestreAtual = await this.anoLectivoUtil.getSemestreAtual();
+    const semestre = semestreAtual.semestre ?? 1;
     let data_inicio_bolsa: any = null,
       data_fim_bolsa: any = null;
 
     const result = await this.getBolseiroDados(codigoMatricula, ano, semestre);
 
     if (result) {
-      switch (semestre) {
-        case 3:
-          data_inicio_bolsa = (
-            await this.anoLectivoUtil.getSemestresConfigurados()
-          ).primeiroSemestre?.dataInicio;
-          data_fim_bolsa = (
-            await this.anoLectivoUtil.getSemestresConfigurados()
-          ).segundoSemestre?.dataFim;
-          break;
-        default:
-          data_inicio_bolsa = (await this.anoLectivoUtil.getSemestreAtual())
-            .dataInicio;
-          data_fim_bolsa = (await this.anoLectivoUtil.getSemestreAtual())
-            .dataFim;
-          break;
+      const semestresConfigurados =
+        await this.anoLectivoUtil.getSemestresConfigurados();
+
+      // Se o semestre ATUAL é 3 (anual) OU a bolsa foi registada como anual
+      if (semestre === 3 || result.semestre === 3) {
+        data_inicio_bolsa =
+          semestresConfigurados.primeiroSemestre?.dataInicio;
+        data_fim_bolsa =
+          semestresConfigurados.segundoSemestre?.dataFim;
+      } else {
+        data_inicio_bolsa = semestreAtual.dataInicio;
+        data_fim_bolsa = semestreAtual.dataFim;
       }
     }
+
     return {
       ...result,
       isBolseiro: Boolean(result),
@@ -702,9 +701,8 @@ export class CreditoEducacionalService {
       a.CREATED_AT,
       a.UPDATED_AT,
 
-      -- Instituição: tenta na estrutura antiga (via bolsa), fallback na nova (via bolseiro)
-      COALESCE(b_bolsa.CODIGO,       b_bolseiro.CODIGO)       AS CODIGO_INSTITUICAO,
-      COALESCE(b_bolsa.INSTITUICAO,  b_bolseiro.INSTITUICAO)  AS INSTITUICAO,
+      COALESCE(b_bolsa.CODIGO,      b_bolseiro.CODIGO)      AS CODIGO_INSTITUICAO,
+      COALESCE(b_bolsa.INSTITUICAO, b_bolseiro.INSTITUICAO) AS INSTITUICAO,
 
       a.CODIGO_ANOLECTIVO,
       c.DESIGNACAO                              AS ANO_LECTIVO,
@@ -732,14 +730,12 @@ export class CreditoEducacionalService {
 
     FROM FK2_TB_BOLSEIROS a
 
-    -- Estrutura ANTIGA: instituição vem através da bolsa (e.CODIGO_INSTITUICAO)
     LEFT JOIN FK2_TB_BOLSAS e
       ON e.CODIGO = a.CODIGO_BOLSA
 
     LEFT JOIN FK2_TB_INSTITUICAO b_bolsa
       ON b_bolsa.CODIGO = e.CODIGO_INSTITUICAO
 
-    -- Estrutura NOVA: instituição vem directamente do bolseiro (a.CODIGO_INSTITUICAO)
     LEFT JOIN FK2_TB_INSTITUICAO b_bolseiro
       ON b_bolseiro.CODIGO = a.CODIGO_INSTITUICAO
 
@@ -766,15 +762,28 @@ export class CreditoEducacionalService {
 
     WHERE a.CODIGO_MATRICULA  = :codigoMatricula
       AND a.CODIGO_ANOLECTIVO = :codigoAnoLectivo
-      AND a.SEMESTRE          = :semestre
+      AND a.STATUS_ = 1
+    ORDER BY a.SEMESTRE DESC
+    FETCH FIRST 1 ROW ONLY
   `;
 
     const [row] = await this.dataSource.query(sql, {
       codigoMatricula,
       codigoAnoLectivo,
-      semestre,
     } as any);
 
-    return toLowerCaseKeys(row);
+    if (!row) return null;
+
+    const bolseiro = toLowerCaseKeys(row);
+
+    // Semestre atual 3 (anual): qualquer registo do ano é válido
+    // Bolsa registada como 3 (anual): válida em qualquer semestre
+    // Caso contrário: semestre tem que bater
+    const semestreValido =
+      semestre === 3 ||
+      bolseiro.semestre === 3 ||
+      bolseiro.semestre === semestre;
+
+    return semestreValido ? bolseiro : null;
   }
 }

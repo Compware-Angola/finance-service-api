@@ -22,8 +22,27 @@ export class NegotiationService {
             codigo_matricula,
             codAnoLectivo
         } = paginationQuery;
-        console.log(codAnoLectivo);
 
+        // ====================== VERIFICAR CONFIRMAÇÃO ======================
+        if (codAnoLectivo) {
+            const confirmacao = await this.dataSource.query(
+                `SELECT COUNT(*) AS total 
+         FROM fk2_tb_confirmacoes cf
+         WHERE cf.codigo_matricula = :codigo_matricula
+           AND cf.CODIGO_ANO_LECTIVO = :codAnoLectivo`,
+                { codigo_matricula, codAnoLectivo } as any
+            );
+            console.log(confirmacao);
+
+
+            const total = Number(confirmacao[0]?.TOTAL ?? confirmacao[0]?.total ?? 0);
+
+            if (total === 0) {
+                throw new BadRequestException(
+                    `O estudante não possui confirmação de matrícula para o ano lectivo seleccionado.`
+                );
+            }
+        }
 
         if (!codigo_matricula) return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0 };
         const aluno = await this.obterDadosCompletosAluno(codigo_matricula);

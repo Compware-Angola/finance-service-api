@@ -340,61 +340,83 @@ export class PagamentosBolsaInstituicaoService {
   // RESUMO POR INSTITUIÇÃO  (conciliação — sem insights)
   // ─────────────────────────────────────────────────────────────
   async resumoPorInstituicao(anoLectivo: number, semestre?: number) {
-    if (!anoLectivo) throw new BadRequestException('O ano lectivo é obrigatório');
+    if (!anoLectivo) {
+      throw new BadRequestException('O ano lectivo é obrigatório');
+    }
 
-    // Busca dados base: bolsas, depósitos, tipo de desconto e
-    // mensalidade média dos bolseiros (necessária para DESC_PERC)
     const rows = await this.dataSource.query(
       `SELECT
-          i.CODIGO                                    AS CODIGO_INSTITUICAO,
-          i.INSTITUICAO,
-          COUNT(DISTINCT b.CODIGO)                    AS QTD_BOLSAS,
-          COUNT(DISTINCT bs.CODIGO)                   AS QTD_BOLSEIROS,
-          NVL(SUM(p.VALOR_DEPOSITADO), 0)             AS VALOR_DEPOSITADO,
+        i.CODIGO                                    AS CODIGO_INSTITUICAO,
+        i.INSTITUICAO,
 
-          -- Tipo de desconto da bolsa
-          MAX(td.SIGLA)                               AS TIPO_DESCONTO_SIGLA,
+        COUNT(DISTINCT b.CODIGO)                   AS QTD_BOLSAS,
+        COUNT(DISTINCT bs.CODIGO)                  AS QTD_BOLSEIROS,
 
-          -- Para DESC_FIX: soma directa do valor configurado na bolsa
-          NVL(SUM(b.VALOR_DESCONTO), 0)               AS SOMA_VALOR_DESCONTO,
+        NVL(p.VALOR_DEPOSITADO, 0)                 AS VALOR_DEPOSITADO,
 
-          -- Para DESC_PERC: percentagem (assumimos que todas da mesma inst. têm a mesma %)
-          MAX(b.VALOR_DESCONTO)                       AS PCT_DESCONTO,
+        MAX(td.SIGLA)                             AS TIPO_DESCONTO_SIGLA,
 
-          -- Mensalidade média dos bolseiros desta instituição no período
-          -- (média das propinas activas dos cursos dos bolseiros)
-          NVL(AVG(ts.PRECO), 0)                       AS MENSALIDADE_MEDIA,
+        NVL(SUM(b.VALOR_DESCONTO), 0)             AS SOMA_VALOR_DESCONTO,
 
-          -- Semestre pedido (para calcular nº de meses no lado JS/TS)
-          :semestre                                   AS SEMESTRE_FILTRO
+        MAX(b.VALOR_DESCONTO)                     AS PCT_DESCONTO,
 
-       FROM FK2_TB_INSTITUICAO i
-       INNER JOIN FK2_TB_BOLSAS b
-          ON b.CODIGO_INSTITUICAO = i.CODIGO
-       LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS td
-          ON td.CODIGO = b.CODIGO_TIPO_DESCONTO
-       LEFT JOIN FK2_TB_BOLSEIROS bs
-          ON bs.CODIGO_BOLSA      = b.CODIGO
-         AND bs.STATUS_           = 1
-         AND bs.CODIGO_ANOLECTIVO = :anoLectivo
-         AND (:semestre IS NULL OR bs.SEMESTRE = :semestre)
-       -- Mensalidade do curso do bolseiro no ano lectivo
-       LEFT JOIN FK2_TB_MATRICULAS m
-          ON m.CODIGO = bs.CODIGO_MATRICULA
-       LEFT JOIN FK2_TB_CURSOS c
-          ON c.CODIGO = m.CODIGO_CURSO
-       LEFT JOIN FK2_TB_TIPO_SERVICOS ts
-          ON ts.DESCRICAO LIKE 'Propina ' || c.DESIGNACAO || '%'
-         AND ts.CODIGO_ANO_LECTIVO = :anoLectivo
-         AND ts.ESTADO = 'Ativo'
-       LEFT JOIN FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO p
-          ON p.BOLSA_ID  = b.CODIGO
-         AND p.ANO_LECTIVO   = :anoLectivo
-         AND (:semestre IS NULL OR p.SEMESTRE = :semestre)
-         AND p.DELETED_AT IS NULL
-      
-       GROUP BY i.CODIGO, i.INSTITUICAO
-       ORDER BY i.INSTITUICAO ASC`,
+        NVL(ts_media.MENSALIDADE_MEDIA, 0)        AS MENSALIDADE_MEDIA,
+
+        :semestre                                 AS SEMESTRE_FILTRO
+
+     FROM FK2_TB_INSTITUICAO i
+
+     INNER JOIN FK2_TB_BOLSAS b
+        ON b.CODIGO_INSTITUICAO = i.CODIGO
+
+     LEFT JOIN FK2_TB_TIPO_DESCONTO_BOLSAS td
+        ON td.CODIGO = b.CODIGO_TIPO_DESCONTO
+
+     LEFT JOIN FK2_TB_BOLSEIROS bs
+        ON bs.CODIGO_BOLSA = b.CODIGO
+       AND bs.STATUS_ = 1
+       AND bs.CODIGO_ANOLECTIVO = :anoLectivo
+       AND (:semestre IS NULL OR bs.SEMESTRE = :semestre)
+
+     -- 🔥 MENSALIDADE FORA DE DUPLICAÇÃO (CORRETO)
+     LEFT JOIN (
+          SELECT
+              c2.CODIGO AS CURSO_ID,
+              MAX(ts.PRECO) AS MENSALIDADE_MEDIA
+          FROM FK2_TB_CURSOS c2
+          LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+              ON ts.DESCRICAO LIKE 'Propina ' || c2.DESIGNACAO || '%'
+             AND ts.CODIGO_ANO_LECTIVO = :anoLectivo
+             AND ts.ESTADO = 'Ativo'
+          GROUP BY c2.CODIGO
+     ) ts_media
+        ON ts_media.CURSO_ID = (
+            SELECT m.CODIGO_CURSO
+            FROM FK2_TB_MATRICULAS m
+            WHERE m.CODIGO = bs.CODIGO_MATRICULA
+            FETCH FIRST 1 ROWS ONLY
+        )
+
+     -- 🔥 PAGAMENTOS (OK)
+     LEFT JOIN (
+          SELECT
+              BOLSA_ID,
+              SUM(VALOR_DEPOSITADO) AS VALOR_DEPOSITADO
+          FROM FK2_TB_PAGAMENTOS_BOLSA_INSTITUICAO
+          WHERE ANO_LECTIVO = :anoLectivo
+            AND DELETED_AT IS NULL
+            AND (:semestre IS NULL OR SEMESTRE = :semestre)
+          GROUP BY BOLSA_ID
+     ) p
+        ON p.BOLSA_ID = b.CODIGO
+
+     GROUP BY
+        i.CODIGO,
+        i.INSTITUICAO,
+        p.VALOR_DEPOSITADO,
+        ts_media.MENSALIDADE_MEDIA
+
+     ORDER BY i.INSTITUICAO ASC`,
       { anoLectivo, semestre: semestre ?? null } as any,
     );
 
@@ -403,19 +425,25 @@ export class PagamentosBolsaInstituicaoService {
     const data = toLowerCaseKeys(rows).map((r: any) => {
       const valorEsperado = this.calcularValorEsperado(
         r.tipo_desconto_sigla ?? 'DESC_PERC',
-        r.tipo_desconto_sigla === 'DESC_FIX' ? r.soma_valor_desconto : r.pct_desconto,
+        r.tipo_desconto_sigla === 'DESC_FIX'
+          ? r.soma_valor_desconto
+          : r.pct_desconto,
         Number(r.qtd_bolseiros),
         Number(r.mensalidade_media),
         semestreEfetivo,
       );
 
-      const valorDepositado = Number(r.valor_depositado);
+      const valorDepositado = Number(r.valor_depositado || 0);
+
       const diferenca = valorDepositado - valorEsperado;
-      const pctDivergencia = valorEsperado > 0
-        ? +((diferenca / valorEsperado) * 100).toFixed(2)
-        : 0;
+
+      const pctDivergencia =
+        valorEsperado > 0
+          ? +((diferenca / valorEsperado) * 100).toFixed(2)
+          : 0;
 
       let statusConciliacao: string;
+
       if (valorDepositado === 0) {
         statusConciliacao = 'Sem pagamento';
       } else if (Math.abs(pctDivergencia) >= 5) {
@@ -429,6 +457,7 @@ export class PagamentosBolsaInstituicaoService {
       return {
         codigo_instituicao: r.codigo_instituicao,
         instituicao: r.instituicao,
+        bolsa: r.bolsa,
         qtd_bolsas: Number(r.qtd_bolsas),
         qtd_bolseiros: Number(r.qtd_bolseiros),
         tipo_desconto_sigla: r.tipo_desconto_sigla,
@@ -443,7 +472,6 @@ export class PagamentosBolsaInstituicaoService {
 
     return { data };
   }
-
   // ─────────────────────────────────────────────────────────────
   // INSIGHTS  (rota separada GET /conciliacao/insights)
   // ─────────────────────────────────────────────────────────────
@@ -614,7 +642,7 @@ export class PagamentosBolsaInstituicaoService {
       semestre: semestre ?? null,
       nome: nome ?? null,
       curso: curso ?? null,
-      statusBolseiro: statusBolseiro ?? null,
+      statusBolseiro: statusBolseiro ?? 1,
     };
 
     const whereClause = `

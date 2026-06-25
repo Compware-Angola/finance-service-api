@@ -328,32 +328,10 @@ export class CreditoEducacionalService {
       cursoDesignacao: cursoDesignacao ?? null,
     };
 
-    const whereClause = `
-    WHERE 1=1
-    AND e.codigo_instituicao      = b.CODIGO (+)
-    AND a.CODIGO_ANOLECTIVO       = c.CODIGO (+)
-    AND a.CODIGO_BOLSA            = e.CODIGO (+)
-    AND e.CODIGO_TIPO_CREDITO     = f.CODIGO (+)
-    AND e.CODIGO_TIPO_DESCONTO    = g.CODIGO (+)
-    AND a.CODIGO_MATRICULA        = h.CODIGO (+)
-    AND h.CODIGO_ALUNO            = i.CODIGO (+)
-    AND i.PRE_INCRICAO            = j.CODIGO (+)
-    AND h.CODIGO_CURSO            = k.CODIGO (+)
-    AND a.codigo_bolsa            = e.codigo (+)
-    AND (:codigoInstituicao  IS NULL OR a.codigo_instituicao      = :codigoInstituicao)
-    AND (:codigoAnoLectivo   IS NULL OR a.CODIGO_ANOLECTIVO       = :codigoAnoLectivo)
-    AND (:status             IS NULL OR a.STATUS_                 = :status)
-    AND (:codigoBolsa        IS NULL OR e.CODIGO                  = :codigoBolsa)
-    AND (:codigoTipoCredito  IS NULL OR e.CODIGO_TIPO_CREDITO     = :codigoTipoCredito)
-    AND (:codigoMatricula    IS NULL OR a.CODIGO_MATRICULA        = :codigoMatricula)
-    AND (:nome               IS NULL OR UPPER(j.NOME_COMPLETO)    LIKE '%' || UPPER(:nome)  || '%')
-    AND (:cursoId            IS NULL OR k.CODIGO                  = :cursoId)
-    AND (:cursoDesignacao    IS NULL OR UPPER(k.DESIGNACAO)       LIKE '%' || UPPER(:cursoDesignacao) || '%')
-  `;
-
     const fromClause = `
     FROM FK2_TB_BOLSEIROS            a
-       , FK2_TB_INSTITUICAO          b
+       , FK2_TB_INSTITUICAO          b_bolsa
+       , FK2_TB_INSTITUICAO          b_bolseiro
        , FK2_TB_ANO_LECTIVO          c
        , FK2_TB_BOLSAS               e
        , FK2_TB_TIPO_CREDITO         f
@@ -364,6 +342,34 @@ export class CreditoEducacionalService {
        , FK2_TB_CURSOS               k
   `;
 
+    const whereClause = `
+    WHERE 1=1
+
+    AND e.codigo_instituicao = b_bolsa.CODIGO (+)
+    AND a.codigo_instituicao = b_bolseiro.CODIGO (+)
+
+    AND a.CODIGO_ANOLECTIVO       = c.CODIGO (+)
+    AND a.CODIGO_BOLSA            = e.CODIGO (+)
+    AND e.CODIGO_TIPO_CREDITO     = f.CODIGO (+)
+    AND e.CODIGO_TIPO_DESCONTO    = g.CODIGO (+)
+    AND a.CODIGO_MATRICULA        = h.CODIGO (+)
+    AND h.CODIGO_ALUNO            = i.CODIGO (+)
+    AND i.PRE_INCRICAO            = j.CODIGO (+)
+    AND h.CODIGO_CURSO            = k.CODIGO (+)
+
+    AND (:codigoInstituicao IS NULL 
+        OR COALESCE(e.codigo_instituicao, a.codigo_instituicao) = :codigoInstituicao)
+
+    AND (:codigoAnoLectivo   IS NULL OR a.CODIGO_ANOLECTIVO       = :codigoAnoLectivo)
+    AND (:status             IS NULL OR a.STATUS_                 = :status)
+    AND (:codigoBolsa        IS NULL OR e.CODIGO                  = :codigoBolsa)
+    AND (:codigoTipoCredito  IS NULL OR e.CODIGO_TIPO_CREDITO     = :codigoTipoCredito)
+    AND (:codigoMatricula    IS NULL OR a.CODIGO_MATRICULA        = :codigoMatricula)
+    AND (:nome               IS NULL OR UPPER(j.NOME_COMPLETO)    LIKE '%' || UPPER(:nome) || '%')
+    AND (:cursoId            IS NULL OR k.CODIGO                  = :cursoId)
+    AND (:cursoDesignacao    IS NULL OR UPPER(k.DESIGNACAO)       LIKE '%' || UPPER(:cursoDesignacao) || '%')
+  `;
+
     const [dataResutl, total] = await Promise.all([
       this.dataSource.query(
         `
@@ -372,18 +378,20 @@ export class CreditoEducacionalService {
           a.CODIGO_MATRICULA,
           j.NOME_COMPLETO,
           j.BILHETE_IDENTIDADE,
-          k.DESIGNACAO                              AS CURSO,
-          c.DESIGNACAO                              AS TIPO_BOLSA,
+          k.DESIGNACAO AS CURSO,
+
+          COALESCE(b_bolsa.CODIGO, b_bolseiro.CODIGO) AS CODIGO_INSTITUICAO,
+          COALESCE(b_bolsa.INSTITUICAO, b_bolseiro.INSTITUICAO) AS INSTITUICAO,
+
+          c.DESIGNACAO AS ANO_LECTIVO,
+
           a.CODIGO_UTILIZADOR,
           a.CANAL,
           a.CREATED_AT,
           a.UPDATED_AT,
           a.DATA_INICIO_BOLSA,
           a.DATA_FIM_BOLSA,
-          b.CODIGO                                  AS CODIGO_INSTITUICAO,
-          b.INSTITUICAO,
-          a.CODIGO_ANOLECTIVO,
-          c.DESIGNACAO                              AS ANO_LECTIVO,
+
           a.OBSERVACAO,
           a.HISTORICO,
           a.STATUS_,
@@ -391,15 +399,18 @@ export class CreditoEducacionalService {
           a.ESTADOBOLSA,
           a.ISENTAR_MULTA,
           a.INSTITUICAO_PAGOU,
-         
+
           a.TIPO_ALUNO_ID,
-          NVL(e.VALOR_DESCONTO, a.DESCONTO)         AS VALOR_DESCONTO,
-          NVL(e.CODIGO_TIPO_DESCONTO, 1)            AS CODIGO_TIPO_DESCONTO,
-          NVL(g.DESIGNACAO, 'PERCENTUAL')           AS TIPO_DESCONTO,
+
+          NVL(e.VALOR_DESCONTO, a.DESCONTO) AS VALOR_DESCONTO,
+          NVL(e.CODIGO_TIPO_DESCONTO, 1)    AS CODIGO_TIPO_DESCONTO,
+          NVL(g.DESIGNACAO, 'PERCENTUAL')   AS TIPO_DESCONTO,
+
           e.CODIGO_TIPO_CREDITO,
-          f.DESIGNACAO                              AS TIPO_CREDITO,
+          f.DESIGNACAO AS TIPO_CREDITO,
+
           a.CODIGO_BOLSA,
-          e.DESIGNACAO                              AS BOLSA
+          e.DESIGNACAO AS BOLSA
       ${fromClause}
       ${whereClause}
       ORDER BY a.CODIGO DESC

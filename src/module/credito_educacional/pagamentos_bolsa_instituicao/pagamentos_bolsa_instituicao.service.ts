@@ -606,6 +606,40 @@ export class PagamentosBolsaInstituicaoService {
 
     return { data: toLowerCaseKeys(rows), total: rows.length };
   }
+  async instituicoesSemBolsas(anoLectivo: number, semestre?: number) {
+    if (!anoLectivo) {
+      throw new BadRequestException('O ano lectivo é obrigatório');
+    }
+
+    const rows = await this.dataSource.query(
+      `SELECT
+          i.CODIGO          AS CODIGO_INSTITUICAO,
+          i.INSTITUICAO,
+          COUNT(DISTINCT b.CODIGO)    AS QTD_BOLSAS,
+          COUNT(DISTINCT bs.CODIGO)   AS QTD_BOLSEIROS
+       FROM FK2_TB_INSTITUICAO i
+       INNER JOIN FK2_TB_BOLSAS b
+          ON b.CODIGO_INSTITUICAO = i.CODIGO
+       LEFT JOIN FK2_TB_BOLSEIROS bs
+          ON bs.CODIGO_BOLSA      = b.CODIGO
+         AND bs.STATUS_           = 1
+         AND bs.CODIGO_ANOLECTIVO = :anoLectivo
+         AND (:semestre IS NULL OR bs.SEMESTRE = :semestre)
+       
+         AND NOT EXISTS (
+           SELECT 1 FROM FK2_TB_BOLSAS bs
+           WHERE bs.CODIGO = b.CODIGO
+             AND bs.CODIGO_ANOLECTIVO  = :anoLectivo
+             AND (:semestre IS NULL OR bs.SEMESTRE = :semestre)
+             AND bs.STATUS_ = 1
+         )
+       GROUP BY i.CODIGO, i.INSTITUICAO
+       ORDER BY i.INSTITUICAO ASC`,
+      { anoLectivo, semestre: semestre ?? null } as any,
+    );
+
+    return { data: toLowerCaseKeys(rows), total: rows.length };
+  }
 
   // ─────────────────────────────────────────────────────────────
   // ESTUDANTES POR BOLSA

@@ -1,4 +1,18 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Req, UseGuards, Put, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Req,
+  UseGuards,
+  Put,
+  Query,
+  Res,
+} from '@nestjs/common';
+import { Response } from 'express';
 import { CreditoEducacionalService } from './credito_educacional.service';
 import { CreateCreditoEducacionalDto } from './dto/create-credito_educacional.dto';
 
@@ -7,6 +21,7 @@ import { PermissionsGuard } from 'src/common/secret/permissions.guard';
 import { UpdateCreditoEducacionalDto } from './dto/update-credito_educacional.dto';
 import { FindCreditoEducacionalDto } from './dto/find-credito-educacional.dto';
 import { ValidarEstudanteCreditoDto } from './dto/validar-estudante-credito.dto';
+import { HttpExportHelper } from 'src/common/helpers/export/http-export.helper';
 
 @Controller('credito-educacional')
 export class CreditoEducacionalController {
@@ -22,6 +37,37 @@ export class CreditoEducacionalController {
   findAll(@Query() findCreditoEducacionalDto: FindCreditoEducacionalDto) {
     return this.creditoEducacionalService.findAll(findCreditoEducacionalDto);
   }
+
+  @Get('export')
+  async exportCreditoEducacional(
+    @Query() findCreditoEducacionalDto: FindCreditoEducacionalDto,
+    @Res() response: Response,
+  ) {
+    await HttpExportHelper.streamCsv(
+      response,
+      'estudantes-credito-educacional',
+      this.creditoEducacionalService.exportCreditoEducacional(
+        findCreditoEducacionalDto,
+      ),
+    );
+  }
+
+  @Get('export/pdf')
+  async exportCreditoEducacionalPdf(
+    @Query() findCreditoEducacionalDto: FindCreditoEducacionalDto,
+    @Res() response: Response,
+  ) {
+    await HttpExportHelper.streamPdf(
+      response,
+      'estudantes-credito-educacional',
+      (document) =>
+        this.creditoEducacionalService.writeCreditoEducacionalPdf(
+          findCreditoEducacionalDto,
+          document,
+        ),
+    );
+  }
+
   @Get('estudante/validar')
   validarEstudante(@Query() query: ValidarEstudanteCreditoDto) {
     return this.creditoEducacionalService.validarEstudanteParaCredito(query);

@@ -11,6 +11,37 @@ import { ValidarEstudanteCreditoDto } from './dto/validar-estudante-credito.dto'
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { PaymentService } from '../payment/payment.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
+import { CsvExportHelper } from 'src/common/helpers/export/csv-export.helper';
+import { PdfExportHelper } from 'src/common/helpers/export/pdf-export.helper';
+
+type CreditoEducacionalExportRow = Record<string, unknown> & {
+  codigo_matricula?: number;
+  nome_completo?: string;
+  curso?: string;
+  instituicao?: string;
+  ano_lectivo?: string;
+  semestre?: number | string;
+  valor_desconto?: number;
+  tipo_desconto?: string;
+  tipo_credito?: string;
+  bolsa?: string;
+  status_?: number;
+  desconto_formatado?: string;
+  estado_bolsa?: string;
+};
+
+const CREDITO_EDUCACIONAL_EXPORT_HEADERS = [
+  'Matricula',
+  'Nome',
+  'Curso',
+  'Instituicao',
+  'Ano Letivo',
+  'Semestre',
+  'Desconto',
+  'Tipo Credito',
+  'Credito Educacional',
+  'Estado da Bolsa',
+];
 
 @Injectable()
 export class CreditoEducacionalService {
@@ -441,6 +472,117 @@ export class CreditoEducacionalService {
       },
     };
   }
+
+  async *exportCreditoEducacional(
+    query: FindCreditoEducacionalDto,
+  ): AsyncGenerator<string> {
+    yield* CsvExportHelper.generate(
+      CREDITO_EDUCACIONAL_EXPORT_HEADERS,
+      this.iterateCreditoEducacionalRows(query),
+      (row) => this.mapCreditoEducacionalExportRow(row),
+    );
+  }
+
+  async writeCreditoEducacionalPdf(
+    query: FindCreditoEducacionalDto,
+    document: PDFKit.PDFDocument,
+  ): Promise<void> {
+    await PdfExportHelper.writeTable(
+      document,
+      this.iterateCreditoEducacionalRows(query),
+      {
+        title: 'Estudantes com Credito Educacional',
+        columns: [
+          { label: 'Matricula', key: 'codigo_matricula', width: 55 },
+          { label: 'Nome', key: 'nome_completo', width: 130 },
+          { label: 'Curso', key: 'curso', width: 105 },
+          { label: 'Instituicao', key: 'instituicao', width: 100 },
+          { label: 'Ano', key: 'ano_lectivo', width: 55 },
+          { label: 'Sem.', key: 'semestre', width: 50 },
+          { label: 'Desconto', key: 'desconto_formatado', width: 55 },
+          { label: 'Tipo Credito', key: 'tipo_credito', width: 85 },
+          { label: 'Bolsa', key: 'bolsa', width: 105 },
+          { label: 'Estado', key: 'estado_bolsa', width: 50 },
+        ],
+      },
+    );
+  }
+
+  private async *iterateCreditoEducacionalRows(
+    query: FindCreditoEducacionalDto,
+  ): AsyncGenerator<CreditoEducacionalExportRow[]> {
+    const batchSize = 500;
+    let page = 1;
+
+    while (true) {
+      const response = await this.findAll({
+        ...query,
+        page,
+        limit: batchSize,
+      });
+      const rows = response.data as CreditoEducacionalExportRow[];
+
+      if (!rows.length) break;
+
+      yield rows.map((row) => this.normalizeCreditoEducacionalExportRow(row));
+
+      if (rows.length < batchSize || page * batchSize >= response.meta.total) {
+        break;
+      }
+
+      page += 1;
+    }
+  }
+
+  private normalizeCreditoEducacionalExportRow(
+    row: CreditoEducacionalExportRow,
+  ): CreditoEducacionalExportRow {
+    return {
+      ...row,
+      semestre: this.formatSemestre(row.semestre),
+      desconto_formatado: this.formatDesconto(
+        row.valor_desconto,
+        row.tipo_desconto,
+      ),
+      estado_bolsa: row.status_ === 1 ? 'Ativo' : 'Inativo',
+    };
+  }
+
+  private mapCreditoEducacionalExportRow(
+    row: CreditoEducacionalExportRow,
+  ): unknown[] {
+    return [
+      row.codigo_matricula,
+      row.nome_completo,
+      row.curso,
+      row.instituicao,
+      row.ano_lectivo,
+      row.semestre,
+      row.desconto_formatado,
+      row.tipo_credito,
+      row.bolsa,
+      row.estado_bolsa,
+    ];
+  }
+
+  private formatDesconto(valor?: number, tipo?: string): string {
+    if (valor === null || valor === undefined) return '';
+
+    return tipo === 'PERCENTUAL'
+      ? `${valor}%`
+      : new Intl.NumberFormat('pt-AO', {
+          style: 'currency',
+          currency: 'AOA',
+        }).format(valor);
+  }
+
+  private formatSemestre(semestre?: number | string): string {
+    if (semestre === null || semestre === undefined) return '';
+    if (Number(semestre) === 3) return 'Anual';
+
+    return `${semestre} semestre`;
+  }
+
   async validarEstudanteParaCredito(query: ValidarEstudanteCreditoDto) {
     const { codigoMatricula, codigoAnoLectivo, semestre } = query;
 

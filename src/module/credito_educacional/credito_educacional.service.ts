@@ -13,6 +13,7 @@ import { PaymentService } from '../payment/payment.service';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { CsvExportHelper } from 'src/common/helpers/export/csv-export.helper';
 import { PdfExportHelper } from 'src/common/helpers/export/pdf-export.helper';
+import { ExcelExportHelper } from 'src/common/helpers/export/excel-export.helper';
 
 type CreditoEducacionalExportRow = Record<string, unknown> & {
   codigo_matricula?: number;
@@ -503,6 +504,30 @@ export class CreditoEducacionalService {
           { label: 'Tipo Credito', key: 'tipo_credito', width: 85 },
           { label: 'Bolsa', key: 'bolsa', width: 105 },
           { label: 'Estado', key: 'estado_bolsa', width: 50 },
+        ],
+      },
+    );
+  }
+
+  async writeCreditoEducacionalExcel(
+    query: FindCreditoEducacionalDto,
+  ): Promise<Buffer> {
+    return ExcelExportHelper.buildWorkbookBuffer(
+      this.iterateCreditoEducacionalRows(query),
+      {
+        title: 'Estudantes com Credito Educacional',
+        sheetName: 'Credito Educacional',
+        columns: [
+          { label: 'Matricula', key: 'codigo_matricula', width: 16 },
+          { label: 'Nome', key: 'nome_completo', width: 35 },
+          { label: 'Curso', key: 'curso', width: 32 },
+          { label: 'Instituicao', key: 'instituicao', width: 28 },
+          { label: 'Ano Letivo', key: 'ano_lectivo', width: 16 },
+          { label: 'Semestre', key: 'semestre', width: 16 },
+          { label: 'Desconto', key: 'desconto_formatado', width: 18 },
+          { label: 'Tipo Credito', key: 'tipo_credito', width: 22 },
+          { label: 'Credito Educacional', key: 'bolsa', width: 30 },
+          { label: 'Estado da Bolsa', key: 'estado_bolsa', width: 18 },
         ],
       },
     );

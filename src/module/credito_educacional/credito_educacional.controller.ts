@@ -68,6 +68,21 @@ export class CreditoEducacionalController {
     );
   }
 
+  @Get('export/excel')
+  async exportCreditoEducacionalExcel(
+    @Query() findCreditoEducacionalDto: FindCreditoEducacionalDto,
+    @Res() response: Response,
+  ) {
+    await HttpExportHelper.streamExcel(
+      response,
+      'estudantes-credito-educacional',
+      () =>
+        this.creditoEducacionalService.writeCreditoEducacionalExcel(
+          findCreditoEducacionalDto,
+        ),
+    );
+  }
+
   @Get('estudante/validar')
   validarEstudante(@Query() query: ValidarEstudanteCreditoDto) {
     return this.creditoEducacionalService.validarEstudanteParaCredito(query);

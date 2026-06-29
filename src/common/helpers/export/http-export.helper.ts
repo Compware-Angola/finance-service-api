@@ -9,59 +9,87 @@ export type PdfDocumentOptions = ConstructorParameters<typeof PDFDocument>[0];
  * (CSV streaming e PDF via PDFKit) nos controllers NestJS.
  */
 export class HttpExportHelper {
-    // ── CSV ─────────────────────────────────────────────────────────────────────
+  // ── CSV ─────────────────────────────────────────────────────────────────────
 
-    static async streamCsv(
-        response: Response,
-        fileBaseName: string,
-        chunks: AsyncGenerator<string>,
-    ): Promise<void> {
-        const fileName = HttpExportHelper.buildFileName(fileBaseName, 'csv');
+  static async streamCsv(
+    response: Response,
+    fileBaseName: string,
+    chunks: AsyncGenerator<string>,
+  ): Promise<void> {
+    const fileName = HttpExportHelper.buildFileName(fileBaseName, 'csv');
 
-        response.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        response.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"`,
+    );
+    response.setHeader('Cache-Control', 'no-store');
 
-        for await (const chunk of chunks) {
-            if (!response.write(chunk)) {
-                await new Promise<void>((resolve) => response.once('drain', resolve));
-            }
-        }
-
-        response.end();
+    for await (const chunk of chunks) {
+      if (!response.write(chunk)) {
+        await new Promise<void>((resolve) => response.once('drain', resolve));
+      }
     }
 
-    // ── PDF ─────────────────────────────────────────────────────────────────────
+    response.end();
+  }
 
-    static async streamPdf(
-        response: Response,
-        fileBaseName: string,
-        writer: (document: PDFKit.PDFDocument) => Promise<void>,  // Tipo correto
-        pdfOptions: PdfDocumentOptions = {},
-    ): Promise<void> {
-        const fileName = HttpExportHelper.buildFileName(fileBaseName, 'pdf');
+  // ── PDF ─────────────────────────────────────────────────────────────────────
 
-        response.setHeader('Content-Type', 'application/pdf');
-        response.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        response.setHeader('Cache-Control', 'no-store');
+  static async streamPdf(
+    response: Response,
+    fileBaseName: string,
+    writer: (document: PDFKit.PDFDocument) => Promise<void>, // Tipo correto
+    pdfOptions: PdfDocumentOptions = {},
+  ): Promise<void> {
+    const fileName = HttpExportHelper.buildFileName(fileBaseName, 'pdf');
 
-        const document = new PDFDocument({
-            size: 'A4',
-            layout: 'landscape',
-            margin: 24,
-            bufferPages: false,
-            ...pdfOptions,
-        });
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"`,
+    );
+    response.setHeader('Cache-Control', 'no-store');
 
-        document.pipe(response);
-        await writer(document);
-        document.end();
-    }
+    const document = new PDFDocument({
+      size: 'A4',
+      layout: 'landscape',
+      margin: 24,
+      bufferPages: false,
+      ...pdfOptions,
+    });
 
-    // ── Util ─────────────────────────────────────────────────────────────────────
+    document.pipe(response);
+    await writer(document);
+    document.end();
+  }
 
-    private static buildFileName(base: string, ext: string): string {
-        const date = new Date().toISOString().slice(0, 10);
-        return `${base}-${date}.${ext}`;
-    }
+  // ── Excel ───────────────────────────────────────────────────────────────────
+
+  static async streamExcel(
+    response: Response,
+    fileBaseName: string,
+    writer: () => Promise<Buffer>,
+  ): Promise<void> {
+    const fileName = HttpExportHelper.buildFileName(fileBaseName, 'xlsx');
+    const buffer = await writer();
+
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"`,
+    );
+    response.setHeader('Cache-Control', 'no-store');
+    response.end(buffer);
+  }
+
+  // ── Util ─────────────────────────────────────────────────────────────────────
+
+  private static buildFileName(base: string, ext: string): string {
+    const date = new Date().toISOString().slice(0, 10);
+    return `${base}-${date}.${ext}`;
+  }
 }

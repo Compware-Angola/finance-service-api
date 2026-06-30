@@ -384,6 +384,7 @@ export class CreditoEducacionalService {
           COALESCE(b_bolsa.INSTITUICAO, b_bolseiro.INSTITUICAO) AS INSTITUICAO,
 
           c.DESIGNACAO AS ANO_LECTIVO,
+          c.CODIGO AS codigo_anolectivo,
 
           a.CODIGO_UTILIZADOR,
           a.CANAL,

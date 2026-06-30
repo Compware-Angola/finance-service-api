@@ -34,18 +34,22 @@ import { VoidPaymentService } from './void-payments.service';
 import { VoidPaymentDTO } from './dto/void-payment.dto';
 import { VoidPaymentTaxService } from './void-payments-tax.service';
 import { ExportPaymentMonthlyDTO } from './dto/export-payment-monthly.dto';
-import PDFDocument = require('pdfkit');
+import { HttpExportHelper } from '../../common/helpers/export/http-export.helper';
+
 
 @ApiTags('payment')
 @Controller('payment')
 export class PaymentController {
   constructor(
     private readonly paymentService: PaymentService,
-    private httpService: HttpService,
+    private readonly httpService: HttpService,
     private readonly estatisticasService: EstatisticasService,
     private readonly voidPaymentService: VoidPaymentService,
     private readonly voidPaymentServiceTax: VoidPaymentTaxService,
-  ) {}
+  ) { }
+
+  // ── Criação ────────────────────────────────────────────────────────────────
+
   @Post('create')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.LIQUIDAR_NOTA_PAGAMENTO.sigla)
@@ -58,27 +62,23 @@ export class PaymentController {
     const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
 
-    const payment = await this.paymentService.createPayment(
-      createPaymentDto,
-      user,
-    );
+    const payment = await this.paymentService.createPayment(createPaymentDto, user);
+
     AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} criou um pagamento com código de fatura ${createPaymentDto.codigoFactura}`,
       fkUtilizadorResponsavel: user?.sub,
       fkOperacaoLog: 7,
-      ip: ip,
+      ip,
     });
+
     return payment;
   }
+
+  // ── Consultas ──────────────────────────────────────────────────────────────
+
   @Get('get/:academicYear/:preInscritionCode')
-  @ApiOperation({
-    summary:
-      'Lista pagamentos por Ano Lectivo e Código de Pré-Inscrição, "com" paginação.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Lista de pagamentos filtrada e paginada.',
-  })
+  @ApiOperation({ summary: 'Lista pagamentos por Ano Lectivo e Código de Pré-Inscrição, com paginação.' })
+  @ApiResponse({ status: 200, description: 'Lista de pagamentos filtrada e paginada.' })
   async findByAnoLectivoAndPreInscricao(
     @Param('academicYear', ParseIntPipe) academicYear: string,
     @Param('preInscritionCode', ParseIntPipe) preInscritionCode: string,
@@ -90,139 +90,84 @@ export class PaymentController {
       paginationQuery,
     );
   }
+
   @Get('servicos-pagos-aluno')
   @ApiQuery({ name: 'anoLectivo', required: true, type: Number, example: 23 })
-  @ApiQuery({
-    name: 'codigoMatricula',
-    required: true,
-    type: Number,
-    example: 40014,
-  })
-  @ApiQuery({
-    name: 'tipo',
-    required: false,
-    enum: ['TODOS', 'MENSALIDADES', 'SERVICOS'],
-    example: 'TODOS',
-  })
+  @ApiQuery({ name: 'codigoMatricula', required: true, type: Number, example: 40014 })
+  @ApiQuery({ name: 'tipo', required: false, enum: ['TODOS', 'MENSALIDADES', 'SERVICOS'], example: 'TODOS' })
   async listarServicosPagosAluno(@Query() filter: ListarServicosPagosAlunoDto) {
     return this.paymentService.listarServicosPagosAluno(filter);
   }
+
   @Get('student-payments')
   @ApiOperation({ summary: 'Listar pagamentos do aluno' })
-  @ApiResponse({
-    status: 200,
-    description: 'Lista de pagamentos do aluno.',
-  })
+  @ApiResponse({ status: 200, description: 'Lista de pagamentos do aluno.' })
   async getStudentPayments(@Query() query: StudentPaymentsQueryDto) {
     return this.paymentService.studentPayments(query);
   }
+
   @Get('list-payments')
   @ApiOperation({ summary: 'Listar pagamentos realizados' })
-  @ApiResponse({
-    status: 200,
-    description: 'Lista de pagamentos realizados.',
-  })
+  @ApiResponse({ status: 200, description: 'Lista de pagamentos realizados.' })
   async getPayments(@Query() query: ListPaymentDTO) {
     return this.paymentService.findPayments(query);
   }
 
   @Get('student-payments/:facturaCode/details')
   @ApiOperation({ summary: 'Detalhe completo de uma fatura do aluno' })
-  @ApiResponse({
-    status: 200,
-    description: 'Itens detalhados da fatura.',
-    isArray: true,
-  })
+  @ApiResponse({ status: 200, description: 'Itens detalhados da fatura.', isArray: true })
   async getStudentPaymentDetails(
     @Param('facturaCode', ParseIntPipe) facturaCode: number,
   ) {
     return this.paymentService.studentPaymentsDetails(facturaCode);
   }
+
   @Get('monthly')
   @ApiOperation({ summary: 'Lista de pagamentos por mensalidades' })
-  @ApiResponse({
-    status: 200,
-    description: 'Lista de pagamentos por mensalidades.',
-  })
+  @ApiResponse({ status: 200, description: 'Lista de pagamentos por mensalidades.' })
   async findPaymentMonthly(@Query() query: FindPaymentMonthlyDTO) {
     return this.paymentService.findPaymentMonthly(query);
   }
 
+  // ── Exportações ────────────────────────────────────────────────────────────
+
   @Get('monthly/export')
-  @ApiOperation({
-    summary: 'Exporta todos os pagamentos por mensalidades em CSV',
-  })
-  @ApiResponse({
-    status: 200,
-    description:
-      'Ficheiro CSV completo, compatível com Excel, conforme os filtros informados.',
-  })
+  @ApiOperation({ summary: 'Exporta todos os pagamentos por mensalidades em CSV' })
+  @ApiResponse({ status: 200, description: 'Ficheiro CSV compatível com Excel.' })
   async exportPaymentMonthly(
     @Query() query: ExportPaymentMonthlyDTO,
     @Res() response: Response,
   ) {
-    const fileName = `mensalidades-pagas-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    response.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${fileName}"`,
+    await HttpExportHelper.streamCsv(
+      response,
+      'mensalidades-pagas',
+      this.paymentService.exportPaymentMonthly(query),
     );
-    response.setHeader('Cache-Control', 'no-store');
-
-    for await (const chunk of this.paymentService.exportPaymentMonthly(query)) {
-      if (!response.write(chunk)) {
-        await new Promise<void>((resolve) =>
-          response.once('drain', () => resolve()),
-        );
-      }
-    }
-
-    response.end();
   }
 
   @Get('monthly/export/pdf')
-  @ApiOperation({
-    summary: 'Exporta todos os pagamentos por mensalidades em PDF',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Ficheiro PDF completo conforme os filtros informados.',
-  })
+  @ApiOperation({ summary: 'Exporta todos os pagamentos por mensalidades em PDF' })
+  @ApiResponse({ status: 200, description: 'Ficheiro PDF completo conforme os filtros.' })
   async exportPaymentMonthlyPdf(
     @Query() query: ExportPaymentMonthlyDTO,
     @Res() response: Response,
   ) {
-    const fileName = `mensalidades-pagas-${new Date()
-      .toISOString()
-      .slice(0, 10)}.pdf`;
-
-    response.setHeader('Content-Type', 'application/pdf');
-    response.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${fileName}"`,
+    await HttpExportHelper.streamPdf(
+      response,
+      'mensalidades-pagas',
+      (doc) => this.paymentService.writePaymentMonthlyPdf(query, doc),
     );
-    response.setHeader('Cache-Control', 'no-store');
-
-    const document = new PDFDocument({
-      size: 'A4',
-      layout: 'landscape',
-      margin: 24,
-      bufferPages: false,
-    });
-
-    document.pipe(response);
-    await this.paymentService.writePaymentMonthlyPdf(query, document);
-    document.end();
   }
+
+  // ── Estatísticas ───────────────────────────────────────────────────────────
 
   @Get('estatisticas')
   @UsePipes(new ValidationPipe({ transform: true }))
   async getEstatisticasAgrupado(@Query() query: EstatisticasQueryDto) {
     return this.estatisticasService.getAgrupado(query);
   }
+
+  // ── Anulações ──────────────────────────────────────────────────────────────
 
   @Post('void-payment')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
@@ -231,38 +176,37 @@ export class PaymentController {
   async voidPayment(
     @Body() dto: VoidPaymentDTO,
     @Req() req: any,
-  ): Promise<Payment | any> {
+  ): Promise<void> {
     const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
 
     await this.voidPaymentService.anularPagamento(dto, user?.sub);
+
     AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} anulou um pagamento com código de pagamento ${dto.codigoPagamento}`,
       fkUtilizadorResponsavel: user?.sub,
       fkOperacaoLog: 7,
-      ip: ip,
+      ip,
     });
   }
 
   @Post('void-payment-tax')
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @ApiOperation({ summary: 'Anular multa de Pagamento.' })
-  @ApiResponse({
-    status: 201,
-    description: 'Anulado multa de Pagamento  com sucesso.',
-  })
+  @ApiResponse({ status: 201, description: 'Multa de Pagamento anulada com sucesso.' })
   async voidPaymentTax(
     @Body() dto: VoidPaymentDTO,
     @Req() req: any,
-  ): Promise<Payment | any> {
+  ): Promise<void> {
     const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
 
     await this.voidPaymentServiceTax.anularMulta(dto, user?.sub);
+
     AccessLogHelper.logAccess(this.httpService, {
       descricao: `Utilizador ${user?.nome} anulou a multa com código de pagamento ${dto.codigoPagamento}`,
       fkUtilizadorResponsavel: user?.sub,
-      ip: ip,
+      ip,
     });
   }
 }

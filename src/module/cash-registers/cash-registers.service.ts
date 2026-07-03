@@ -500,7 +500,7 @@ export class CashRegistersService {
     `,
       [params.operatorId, params.cashRegisterId, params.createdAt],
     );
-    console.log(result);
+
     return {
       totalCash: Number(result[0]?.TOTAL_CASH || 0),
       totalCard: Number(result[0]?.TOTAL_CARD || 0),

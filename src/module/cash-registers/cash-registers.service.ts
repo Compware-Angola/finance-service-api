@@ -24,7 +24,7 @@ import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
 import { formatTime } from '../util/formatTime';
 import { HttpService } from '@nestjs/axios';
 import { HashHelper } from 'src/common/helpers/hash-helper';
- import { EmailHelper } from 'src/common/helpers/email.helper';
+import { EmailHelper } from 'src/common/helpers/email.helper';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
 
@@ -43,7 +43,7 @@ export class CashRegistersService {
     private readonly cashRegisterMovementRepository: Repository<CashRegisterMovement>,
     private readonly httpService: HttpService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   async findAll(filters?: ListCashRegistersDto) {
     const { page = 1, limit = 10 } = filters || {};
@@ -728,20 +728,20 @@ export class CashRegistersService {
     }
     return toLowerCaseKeys(data) as { email: string; nome: string };
   }
-   private returnCashRegisterObj(cashRegister: CashRegister | null) {
-   return cashRegister ? {
-    id: cashRegister.id,
-    name: cashRegister.name,
-    status: cashRegister.status,
-    blocked: cashRegister.blocked,
-    operatorId: cashRegister.operatorId,
-    createdBy: cashRegister.createdBy,
-    updatedBy: cashRegister.updatedBy,
-    deletedBy: cashRegister.deletedBy,
-    createdAt: cashRegister.createdAt,
-    updatedAt: cashRegister.updatedAt,
-    deletedAt: cashRegister.deletedAt,
-   } : null;
+  private returnCashRegisterObj(cashRegister: CashRegister | null) {
+    return cashRegister ? {
+      id: cashRegister.id,
+      name: cashRegister.name,
+      status: cashRegister.status,
+      blocked: cashRegister.blocked,
+      operatorId: cashRegister.operatorId,
+      createdBy: cashRegister.createdBy,
+      updatedBy: cashRegister.updatedBy,
+      deletedBy: cashRegister.deletedBy,
+      createdAt: cashRegister.createdAt,
+      updatedAt: cashRegister.updatedAt,
+      deletedAt: cashRegister.deletedAt,
+    } : null;
   }
 }
 

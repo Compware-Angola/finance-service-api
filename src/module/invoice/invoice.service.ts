@@ -618,6 +618,13 @@ FROM (
         f.totaliva                        AS total_iva,
         f.TOTAL_INCIDENCIA                AS total_incidencia,
         pg.DATA_PAGAMENTO                 AS data_pagamento,
+        pg.N_OPERACAO_BANCARIA            AS n_operacao_bancaria,
+        pg.N_OPERACAO_BANCARIA2           AS n_operacao_bancaria2,
+        pg.FORMA_PAGAMENTO                AS forma_pagamento,
+        pg.CAIXA_NOME                     AS caixa,
+        pg.TIPO_PAGAMENTO                 AS tipo_pagamento,
+        pg.DATABANCO                      AS data_banco,
+        pg.NOME_UTILIZADOR_PAGAMENTO      AS nome_utilizador_pagamento,   -- NOVO
 
         -- MOTIVO ANULAÇÃO
         haf.MOTIVO_ANULACAO               AS motivo_anulacao,
@@ -639,6 +646,25 @@ FROM (
             WITHIN GROUP (ORDER BY ts.Codigo) AS codigos_servicos,
 
         COUNT(fi.Codigo) AS qtd_itens,
+
+        CASE
+            WHEN MAX(CASE WHEN ts.Sigla IN ('IaEdRurso') THEN 1 ELSE 0 END) = 1
+              OR MAX(CASE WHEN ts.Sigla IN ('IeEEF') THEN 1 ELSE 0 END) = 1
+            THEN (
+                SELECT LISTAGG(d.DESIGNACAO, ' , ')
+                       WITHIN GROUP (ORDER BY d.DESIGNACAO)
+                FROM FK2_TB_HISTORICO_INSCRICOES_AVALIACOES hia
+                LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO gca
+                       ON gca.CODIGO = hia.CODIGO_GRADE_ALUNO
+                LEFT JOIN FK2_TB_GRADE_CURRICULAR gc
+                       ON gc.CODIGO = gca.CODIGO_GRADE_CURRICULAR
+                LEFT JOIN FK2_TB_DISCIPLINAS d
+                       ON d.CODIGO = gc.CODIGO_DISCIPLINA
+                WHERE hia.CODIGO_FACTURA = f.Codigo
+                  AND hia.CODIGO_TIPO_AVALIACAO IN (7, 11)
+            )
+            ELSE NULL
+        END AS cadeiras_recurso_epoca_especial,
 
         ROW_NUMBER() OVER (ORDER BY f.Codigo DESC) AS rn
 
@@ -673,67 +699,78 @@ FROM (
 
     LEFT JOIN (
         SELECT
-            CODIGO_FACTURA,
+            p.CODIGO_FACTURA,
+            MAX(p.N_OPERACAO_BANCARIA) AS N_OPERACAO_BANCARIA,
+            MAX(p.N_OPERACAO_BANCARIA2) AS N_OPERACAO_BANCARIA2,
+            MAX(cai.NOME) AS CAIXA_NOME,
+            MAX(p.TIPO_PAGAMENTO) AS TIPO_PAGAMENTO,
+            MAX(p.FORMA_PAGAMENTO) AS FORMA_PAGAMENTO,
+            MAX(p.DATABANCO) AS DATABANCO,
+            MAX(ut.Nome) AS NOME_UTILIZADOR_PAGAMENTO,          -- NOVO
             MAX(
                 CASE
                     WHEN REGEXP_LIKE(
-                        TRIM(DATA),
+                        TRIM(p.DATA),
                         '^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}$'
                     ) THEN TO_DATE(
-                        REGEXP_SUBSTR(TRIM(DATA), '[0-9]+', 1, 1)
+                        REGEXP_SUBSTR(TRIM(p.DATA), '[0-9]+', 1, 1)
                         || '-' ||
-                        LPAD(REGEXP_SUBSTR(TRIM(DATA), '[0-9]+', 1, 2), 2, '0')
+                        LPAD(REGEXP_SUBSTR(TRIM(p.DATA), '[0-9]+', 1, 2), 2, '0')
                         || '-' ||
-                        LPAD(REGEXP_SUBSTR(TRIM(DATA), '[0-9]+', 1, 3), 2, '0')
+                        LPAD(REGEXP_SUBSTR(TRIM(p.DATA), '[0-9]+', 1, 3), 2, '0')
                         DEFAULT NULL ON CONVERSION ERROR,
                         'YYYY-MM-DD'
                     )
                     WHEN REGEXP_LIKE(
-                        TRIM(DATA),
+                        TRIM(p.DATA),
                         '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2}$'
                     ) THEN TO_DATE(
-                        TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                        TRIM(p.DATA) DEFAULT NULL ON CONVERSION ERROR,
                         'DD/MM/YYYY HH24:MI:SS'
                     )
                     WHEN REGEXP_LIKE(
-                        TRIM(DATA),
+                        TRIM(p.DATA),
                         '^[0-9]{2}-[0-9]{2}-[0-9]{4}$'
                     ) THEN TO_DATE(
-                        TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                        TRIM(p.DATA) DEFAULT NULL ON CONVERSION ERROR,
                         'DD-MM-YYYY'
                     )
                     WHEN REGEXP_LIKE(
-                        TRIM(DATA),
+                        TRIM(p.DATA),
                         '^[0-9]{2}-[[:alpha:]]{3}-[0-9]{2}$'
                     ) THEN TO_DATE(
-                        TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                        TRIM(p.DATA) DEFAULT NULL ON CONVERSION ERROR,
                         'DD-MON-RR',
                         'NLS_DATE_LANGUAGE=ENGLISH'
                     )
                     WHEN REGEXP_LIKE(
-                        TRIM(DATA),
+                        TRIM(p.DATA),
                         '^[0-9]{2}-[[:alpha:]]{3}-[0-9]{2}[[:space:]]'
                     ) THEN CAST(
                         TO_TIMESTAMP(
-                            TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                            TRIM(p.DATA) DEFAULT NULL ON CONVERSION ERROR,
                             'DD-MON-RR HH.MI.SS.FF AM',
                             'NLS_DATE_LANGUAGE=ENGLISH'
                         ) AS DATE
                     )
                     WHEN REGEXP_LIKE(
-                        TRIM(DATA),
+                        TRIM(p.DATA),
                         '^[0-9]{2}/[0-9]{2}/[0-9]{4}$'
                     ) THEN TO_DATE(
-                        TRIM(DATA) DEFAULT NULL ON CONVERSION ERROR,
+                        TRIM(p.DATA) DEFAULT NULL ON CONVERSION ERROR,
                         'MM/DD/YYYY'
                     )
                     ELSE NULL
                 END
             ) AS DATA_PAGAMENTO
-        FROM FK2_TB_PAGAMENTOS
-        WHERE ESTADO IN (1, 2)
-          AND CODIGO_FACTURA IS NOT NULL
-        GROUP BY CODIGO_FACTURA
+        FROM FK2_TB_PAGAMENTOS p
+        LEFT JOIN FK2_TB_CAIXAS cai
+               ON cai.Codigo = p.CAIXA_ID
+        LEFT JOIN FK2_MCA_TB_UTILIZADOR ut                       -- NOVO
+               ON ut.PK_UTILIZADOR = p.FK_UTILIZADOR             -- NOVO
+        WHERE p.ESTADO IN (1, 2)
+          AND p.CODIGO_FACTURA IS NOT NULL
+        GROUP BY p.CODIGO_FACTURA
     ) pg
            ON pg.CODIGO_FACTURA = f.Codigo
 
@@ -755,6 +792,13 @@ FROM (
         f.totaliva,
         f.TOTAL_INCIDENCIA,
         pg.DATA_PAGAMENTO,
+        pg.N_OPERACAO_BANCARIA,
+        pg.N_OPERACAO_BANCARIA2,
+        pg.CAIXA_NOME,
+        pg.TIPO_PAGAMENTO,
+        pg.FORMA_PAGAMENTO,
+        pg.DATABANCO,
+        pg.NOME_UTILIZADOR_PAGAMENTO,      -- NOVO
         f.CodigoMatricula,
         f.Referencia,
         f.Descricao,
@@ -766,6 +810,7 @@ FROM (
         po.designacao,
         ano.Designacao,
         ano.codigo,
+        f.ano_lectivo,
         haf.MOTIVO_ANULACAO,
         haf.CREATED_AT,
         usr.nome

@@ -275,14 +275,7 @@ export class MonthlyFeesDiscountUtilService {
     });
     if (bolseiro.bolseiro) return bolseiro.desconto;
 
-    // 2. Desconto Especial
-    const descontoEspecial = await this.obterDescontoEspecial(
-      codigoMatricula,
-      mesTemp.data_limite,
-    );
-    if (descontoEspecial.temDesconto) return descontoEspecial.desconto;
-
-    // 3. Desconto Normal
+    // 2. Desconto Normal
     const descontoNormal = await this.obterDescontoNormal({
       anoLectivo,
       codigoMatricula,
@@ -290,6 +283,13 @@ export class MonthlyFeesDiscountUtilService {
       dataLimite: mesTemp.data_limite,
     });
     if (descontoNormal.temDesconto) return descontoNormal.desconto;
+
+    // 3. Desconto Especial
+    const descontoEspecial = await this.obterDescontoEspecial(
+      codigoMatricula,
+      mesTemp.data_limite,
+    );
+    if (descontoEspecial.temDesconto) return descontoEspecial.desconto;
 
     // 4. Desconto Finalista
     /*

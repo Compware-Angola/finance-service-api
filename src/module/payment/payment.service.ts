@@ -26,7 +26,6 @@ import { ExportPaymentMonthlyDTO } from './dto/export-payment-monthly.dto';
 import { CsvExportHelper } from 'src/common/helpers/export/csv-export.helper';
 import { PdfExportHelper } from 'src/common/helpers/export/pdf-export.helper';
 
-
 // ── Tipos internos ────────────────────────────────────────────────────────────
 
 export enum PaymentStatus {
@@ -94,12 +93,22 @@ export class PaymentService {
     const baseQuery = this.paymentRepository
       .createQueryBuilder('p')
       .innerJoin('UMA_FACTURA', 'f', '"p"."codigo_factura" = "f"."Codigo"')
-      .innerJoin('UMA_FACTURA_ITEMS', 'fi', '"f"."Codigo" = "fi"."CodigoFactura"')
-      .innerJoin('UMA_TB_TIPO_SERVICOS', 'tp', '"fi"."CodigoProduto" = "tp"."Codigo"')
+      .innerJoin(
+        'UMA_FACTURA_ITEMS',
+        'fi',
+        '"f"."Codigo" = "fi"."CodigoFactura"',
+      )
+      .innerJoin(
+        'UMA_TB_TIPO_SERVICOS',
+        'tp',
+        '"fi"."CodigoProduto" = "tp"."Codigo"',
+      )
       .where('REGEXP_LIKE(TRIM("p"."AnoLectivo"), \'^[0-9]+$\')')
       .andWhere('REGEXP_LIKE(TRIM("p"."Codigo_PreInscricao"), \'^[0-9]+$\')')
       .andWhere('TRIM("p"."AnoLectivo") = :anoLectivo', { anoLectivo })
-      .andWhere('TRIM("p"."Codigo_PreInscricao") = :codigoPreInscricao', { codigoPreInscricao })
+      .andWhere('TRIM("p"."Codigo_PreInscricao") = :codigoPreInscricao', {
+        codigoPreInscricao,
+      })
       .andWhere('"f"."estado" = :status', { status: 1 });
 
     const totalResult = await baseQuery
@@ -203,7 +212,10 @@ export class PaymentService {
       ORDER BY p.DATA, p.CODIGO_FACTURA ASC
     `;
 
-    const result = await this.dataSource.query(sql, [anoLectivo, codigoPreinscricao]);
+    const result = await this.dataSource.query(sql, [
+      anoLectivo,
+      codigoPreinscricao,
+    ]);
 
     return result.map((row: any) => ({
       codigo: row.CODIGO,
@@ -368,7 +380,9 @@ export class PaymentService {
       params.nOperacaoBancaria2 = n_operacao_bancaria2;
     }
     if (dataInicio) {
-      conditions.push(`pg.dataregisto >= TO_DATE(:dataInicio, '${dateFormat}')`);
+      conditions.push(
+        `pg.dataregisto >= TO_DATE(:dataInicio, '${dateFormat}')`,
+      );
       params.dataInicio = dataInicio;
     }
     if (dataFim) {
@@ -402,32 +416,40 @@ export class PaymentService {
 
     const sql = `
       SELECT
-        pg.codigo                                                    AS codigo_pagamento,
-        to_char(pg.dataregisto, 'YYYY-MM-DD"T"HH24:MI:SS')          AS data_registro,
-        pg.N_OPERACAO_BANCARIA                                       AS operacao_bancaria,
-        pg.N_OPERACAO_BANCARIA2                                      AS seg_operacao_bancaria,
-        pg.anolectivo,
-        pg.totalgeral,
-        pg.databanco,
-        COALESCE(fp.descricao, pg.forma_pagamento)                   AS forma_pagamento,
-        pg.valor_depositado,
-        pg.contamovimentada                                          AS conta_movimentada,
-        pg.estado                                                    AS estado_pagamento,
-        pg.tipo_pagamento,
-        pg.status_pagamento,
-        pg.updated_at                                                AS data_actualizacao,
-        pg.data_operacao,
-        cai.nome                                                     AS caixa,
-        pre.nome_completo,
-        mac.codigo                                                   AS codigo_matricula,
-        cur.designacao                                               AS curso,
-        fac.codigo                                                   AS codigo_factura,
-        ut.Nome                                                      AS nome_operador,
-        can.designacao                                               AS canal
-      ${joins}
-      WHERE ${whereClause}
-      ORDER BY pg.codigo DESC
-      OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+  pg.codigo                                                    AS codigo_pagamento,
+  to_char(pg.dataregisto, 'YYYY-MM-DD"T"HH24:MI:SS')          AS data_registro,
+  pg.N_OPERACAO_BANCARIA                                       AS operacao_bancaria,
+  pg.N_OPERACAO_BANCARIA2                                      AS seg_operacao_bancaria,
+  pg.anolectivo,
+  pg.totalgeral,
+  pg.databanco,
+  COALESCE(fp.descricao, pg.forma_pagamento)                   AS forma_pagamento,
+  pg.valor_depositado,
+  pg.contamovimentada                                          AS conta_movimentada,
+  pg.estado                                                    AS estado_pagamento,
+  pg.tipo_pagamento,
+  pg.status_pagamento,
+  pg.updated_at                                                AS data_actualizacao,
+  pg.data_operacao,
+  cai.nome                                                     AS caixa,
+  pre.nome_completo,
+  mac.codigo                                                   AS codigo_matricula,
+  cur.designacao                                               AS curso,
+  fac.codigo                                                   AS codigo_factura,
+  ut.Nome                                                      AS nome_operador,
+  can.designacao                                               AS canal,
+  (
+    SELECT LISTAGG(ts.Descricao, ' • ')
+           WITHIN GROUP (ORDER BY ts.Descricao)
+    FROM FK2_FACTURA_ITEMS fi
+    LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+           ON ts.Codigo = fi.CodigoProduto
+    WHERE fi.CodigoFactura = fac.codigo
+  ) AS servicos
+${joins}
+WHERE ${whereClause}
+ORDER BY pg.codigo DESC
+OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     `;
 
     const sqlCount = `
@@ -476,13 +498,34 @@ export class PaymentService {
     const conditions: string[] = ['fac.ESTADO = 1'];
     const params: any = {};
 
-    if (codigoPagamento) { conditions.push(`pag.CODIGO = :codigoPagamento`); params.codigoPagamento = codigoPagamento; }
-    if (codigoCurso) { conditions.push(`cur.CODIGO = :codigoCurso`); params.codigoCurso = codigoCurso; }
-    if (codigoAnoLectivo) { conditions.push(`al.CODIGO  = :codigoAnoLectivo`); params.codigoAnoLectivo = codigoAnoLectivo; }
-    if (codigoFaculdade) { conditions.push(`fab.CODIGO = :codigoFaculdade`); params.codigoFaculdade = codigoFaculdade; }
-    if (codigoMatricula) { conditions.push(`tm.CODIGO  = :codigoMatricula`); params.codigoMatricula = codigoMatricula; }
-    if (codigoPeriodo) { conditions.push(`per.CODIGO = :codigoPeriodo`); params.codigoPeriodo = codigoPeriodo; }
-    if (mesId) { conditions.push(`mes.ID     = :mesId`); params.mesId = mesId; }
+    if (codigoPagamento) {
+      conditions.push(`pag.CODIGO = :codigoPagamento`);
+      params.codigoPagamento = codigoPagamento;
+    }
+    if (codigoCurso) {
+      conditions.push(`cur.CODIGO = :codigoCurso`);
+      params.codigoCurso = codigoCurso;
+    }
+    if (codigoAnoLectivo) {
+      conditions.push(`al.CODIGO  = :codigoAnoLectivo`);
+      params.codigoAnoLectivo = codigoAnoLectivo;
+    }
+    if (codigoFaculdade) {
+      conditions.push(`fab.CODIGO = :codigoFaculdade`);
+      params.codigoFaculdade = codigoFaculdade;
+    }
+    if (codigoMatricula) {
+      conditions.push(`tm.CODIGO  = :codigoMatricula`);
+      params.codigoMatricula = codigoMatricula;
+    }
+    if (codigoPeriodo) {
+      conditions.push(`per.CODIGO = :codigoPeriodo`);
+      params.codigoPeriodo = codigoPeriodo;
+    }
+    if (mesId) {
+      conditions.push(`mes.ID     = :mesId`);
+      params.mesId = mesId;
+    }
     if (nome) {
       conditions.push(`
         fn_remove_acentos(UPPER(pre.NOME_COMPLETO))
@@ -622,19 +665,27 @@ export class PaymentService {
 
   async createPayment(dto: CreatePaymentDto, user: DecodedUserPayload) {
     const cashRegister =
-      await this.cashRegistersService.validateOperatorOpenCashRegister(user.sub);
+      await this.cashRegistersService.validateOperatorOpenCashRegister(
+        user.sub,
+      );
 
     if (!cashRegister) {
       throw new BadRequestException('Você não tem uma caixa aberta');
     }
     if (cashRegister.blocked === YesNo.YES) {
-      throw new BadRequestException('Caixa bloqueado, desative para prosseguir');
+      throw new BadRequestException(
+        'Caixa bloqueado, desative para prosseguir',
+      );
     }
     if (!dto.caixaId) {
-      throw new BadRequestException('Precisa de uma caixa para criar um pagamento');
+      throw new BadRequestException(
+        'Precisa de uma caixa para criar um pagamento',
+      );
     }
     if (!dto.codigoFactura) {
-      throw new BadRequestException('Precisa de uma fatura para criar um pagamento');
+      throw new BadRequestException(
+        'Precisa de uma fatura para criar um pagamento',
+      );
     }
 
     const anoCorrente = this.anoAtualPrincipal;
@@ -643,7 +694,9 @@ export class PaymentService {
     const cleanNOperacaoBancaria = cleanText(nOperacaoBancaria);
 
     if (cleanNOperacaoBancaria) {
-      const n_op = await this.findPaymentByN_Operacao_Bancaria(cleanNOperacaoBancaria);
+      const n_op = await this.findPaymentByN_Operacao_Bancaria(
+        cleanNOperacaoBancaria,
+      );
       if (n_op) {
         throw new BadRequestException(
           `Este Número de Operação Bancária já existe: ${nOperacaoBancaria}`,
@@ -661,8 +714,11 @@ export class PaymentService {
       { codigoFactura: dto.codigoFactura } as any,
     );
 
-    const existingPayment = await this.findPaymentByCodigoFactura(dto.codigoFactura);
-    const valorDepositado = dto.valorDepositado || existingPayment?.valorDepositado || 0;
+    const existingPayment = await this.findPaymentByCodigoFactura(
+      dto.codigoFactura,
+    );
+    const valorDepositado =
+      dto.valorDepositado || existingPayment?.valorDepositado || 0;
     const estados = invoice.ValorAPagar > valorDepositado ? 2 : 1;
 
     const itens = await this.dataSource.query(
@@ -686,7 +742,10 @@ export class PaymentService {
       student = await this.findAluno(invoice.CodigoMatricula, 'matricula');
     }
     if (invoice.codigoPreinscricao) {
-      student = await this.findAluno(invoice.codigoPreinscricao, 'preinscricao');
+      student = await this.findAluno(
+        invoice.codigoPreinscricao,
+        'preinscricao',
+      );
     }
 
     const finalPayload = {
@@ -694,13 +753,18 @@ export class PaymentService {
       totalGeral: invoice.TotalPreco || 0,
       anoLectivo: anoLectivo ?? anoCorrente,
       codigoFactura: dto.codigoFactura,
-      codigoPreInscricao: student?.codigo_preinscricao ?? dto.codigoPreInscricao ?? invoice.codigoPreinscricao ?? undefined,
+      codigoPreInscricao:
+        student?.codigo_preinscricao ??
+        dto.codigoPreInscricao ??
+        invoice.codigoPreinscricao ??
+        undefined,
       instituicaoId: undefined,
       nOperacaoBancaria: cleanNOperacaoBancaria,
       nOperacaoBancaria2: undefined,
       fkUtilizador: user?.sub,
       utilizador: user?.sub,
-      statusPagamento: estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
+      statusPagamento:
+        estados === 1 ? PaymentStatus.CONCLUIDO : PaymentStatus.PENDENTE,
       estado: estados === 1 ? 2 : 1,
       createdAt: new Date(),
     };
@@ -716,7 +780,11 @@ export class PaymentService {
           const item_formated = toLowerCaseKeys(item);
           await queryRunner.query(
             `UPDATE FK2_FACTURA_ITEMS SET estado = :estado, VALOR_PAGO = :valor WHERE CODIGO = :codigo`,
-            { estado: estados, codigo: item_formated.codigo_fi, valor: item_formated.precoproduto } as any,
+            {
+              estado: estados,
+              codigo: item_formated.codigo_fi,
+              valor: item_formated.precoproduto,
+            } as any,
           );
         }
       }
@@ -733,7 +801,9 @@ export class PaymentService {
       }
 
       // 4. Siglas semestrais
-      if (this.hasMatchingSigla(itens, ['SEMESTRAL'], { caseSensitive: true })) {
+      if (
+        this.hasMatchingSigla(itens, ['SEMESTRAL'], { caseSensitive: true })
+      ) {
         await this.handleSemestral(queryRunner, invoice);
       }
 
@@ -754,7 +824,8 @@ export class PaymentService {
           {
             statusPagamento: PaymentStatus.CONCLUIDO,
             nOperacaoBancaria2: cleanNOperacaoBancaria,
-            valorDepositado: existingPayment.valorDepositado + (dto.valorDepositado || 0),
+            valorDepositado:
+              existingPayment.valorDepositado + (dto.valorDepositado || 0),
             formaPagamento: dto.formaPagamento,
             fkUtilizador: user?.sub,
             utilizador: user?.sub,
@@ -765,7 +836,10 @@ export class PaymentService {
 
       // 7. Atualizar negociação de dívidas se existir
       if (negotation?.length > 0) {
-        const valoRestante = Math.max(0, negotation[0].VALOR_DIVIDA - valorDepositado);
+        const valoRestante = Math.max(
+          0,
+          negotation[0].VALOR_DIVIDA - valorDepositado,
+        );
         await queryRunner.query(
           `UPDATE FK2_NEGOCIACAO_DIVIDAS SET VALORRESTANTE = :valoRestante WHERE CODIGO_FATURA = :codigo`,
           { valoRestante, codigo: dto.codigoFactura } as any,
@@ -775,10 +849,13 @@ export class PaymentService {
       await queryRunner.commitTransaction();
 
       return {
-        message: existingPayment ? 'Pagamento atualizado com sucesso' : 'Pagamento criado com sucesso',
-        tda: tdaResult && !tdaResult.success
-          ? { error: true, message: tdaResult.message }
-          : { error: false },
+        message: existingPayment
+          ? 'Pagamento atualizado com sucesso'
+          : 'Pagamento criado com sucesso',
+        tda:
+          tdaResult && !tdaResult.success
+            ? { error: true, message: tdaResult.message }
+            : { error: false },
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -821,7 +898,13 @@ export class PaymentService {
              SALDO_RESET      = :saldo_reset_final,
              SALDO_RESET_ANTER = :saldo_reset_atual
          WHERE CODIGO = :codigo`,
-        { saldo_final, saldo_atual, saldo_reset_final, saldo_reset_atual, codigo: preinscricao } as any,
+        {
+          saldo_final,
+          saldo_atual,
+          saldo_reset_final,
+          saldo_reset_atual,
+          codigo: preinscricao,
+        } as any,
       );
 
       await queryRunner.commitTransaction();
@@ -835,21 +918,31 @@ export class PaymentService {
 
   // ── Queries auxiliares públicas ─────────────────────────────────────────────
 
-  async findPaymentByN_Operacao_Bancaria(nOperacaoBancaria: string): Promise<Payment2 | null> {
+  async findPaymentByN_Operacao_Bancaria(
+    nOperacaoBancaria: string,
+  ): Promise<Payment2 | null> {
     return this.paymentRepository
       .createQueryBuilder('payment')
-      .where('TRIM(UPPER(payment.nOperacaoBancaria)) = TRIM(UPPER(:value))', { value: nOperacaoBancaria })
+      .where('TRIM(UPPER(payment.nOperacaoBancaria)) = TRIM(UPPER(:value))', {
+        value: nOperacaoBancaria,
+      })
       .getOne();
   }
 
-  async findPaymentByCodigoFactura(codigoFactura: number): Promise<Payment2 | null> {
+  async findPaymentByCodigoFactura(
+    codigoFactura: number,
+  ): Promise<Payment2 | null> {
     return this.paymentRepository.findOne({ where: { codigoFactura } });
   }
 
-  async findPaymentByN_Operacao_Bancaria2(nOperacaoBancaria2: string): Promise<Payment2 | null> {
+  async findPaymentByN_Operacao_Bancaria2(
+    nOperacaoBancaria2: string,
+  ): Promise<Payment2 | null> {
     return this.paymentRepository
       .createQueryBuilder('payment')
-      .where('TRIM(UPPER(payment.nOperacaoBancaria2)) = TRIM(UPPER(:value))', { value: nOperacaoBancaria2 })
+      .where('TRIM(UPPER(payment.nOperacaoBancaria2)) = TRIM(UPPER(:value))', {
+        value: nOperacaoBancaria2,
+      })
       .getOne();
   }
 
@@ -866,18 +959,27 @@ export class PaymentService {
     return itens.some((item) => {
       const siglaItem: string = item[field] ?? item.SIGLAPRODUTO ?? '';
       return siglas.some((s) =>
-        caseSensitive ? siglaItem === s : siglaItem.toLowerCase() === s.toLowerCase(),
+        caseSensitive
+          ? siglaItem === s
+          : siglaItem.toLowerCase() === s.toLowerCase(),
       );
     });
   }
 
-  private async handleAnual(queryRunner: QueryRunner, invoice: InvoiceContext): Promise<void> {
+  private async handleAnual(
+    queryRunner: QueryRunner,
+    invoice: InvoiceContext,
+  ): Promise<void> {
     await queryRunner.query(
       `UPDATE FK2_TB_CONFIRMACOES
        SET estado = :estado
        WHERE codigo_matricula = :codMatricula
        AND codigo_ano_lectivo = :anoLectivo`,
-      { estado: 1, anoLectivo: invoice.anoLectivo, codMatricula: invoice.CodigoMatricula } as any,
+      {
+        estado: 1,
+        anoLectivo: invoice.anoLectivo,
+        codMatricula: invoice.CodigoMatricula,
+      } as any,
     );
 
     await queryRunner.query(
@@ -885,7 +987,11 @@ export class PaymentService {
        SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
        WHERE codigo_matricula = :codMatricula
        AND codigo_ano_lectivo = :anoLectivo`,
-      { estado: 2, codMatricula: invoice.CodigoMatricula, anoLectivo: invoice.anoLectivo } as any,
+      {
+        estado: 2,
+        codMatricula: invoice.CodigoMatricula,
+        anoLectivo: invoice.anoLectivo,
+      } as any,
     );
 
     await queryRunner.query(
@@ -894,13 +1000,20 @@ export class PaymentService {
     );
   }
 
-  private async handleSemestral(queryRunner: QueryRunner, invoice: InvoiceContext): Promise<void> {
+  private async handleSemestral(
+    queryRunner: QueryRunner,
+    invoice: InvoiceContext,
+  ): Promise<void> {
     await queryRunner.query(
       `UPDATE FK2_TB_CONFIRMACOES
        SET estado = :estado
        WHERE codigo_matricula = :codMatricula
        AND codigo_ano_lectivo = :anoLectivo`,
-      { estado: 1, anoLectivo: invoice.anoLectivo, codMatricula: invoice.CodigoMatricula } as any,
+      {
+        estado: 1,
+        anoLectivo: invoice.anoLectivo,
+        codMatricula: invoice.CodigoMatricula,
+      } as any,
     );
 
     await queryRunner.query(
@@ -917,7 +1030,10 @@ export class PaymentService {
       ORDER BY CODIGO DESC
       FETCH FIRST 1 ROWS ONLY
     `,
-      { codMatricula: invoice.CodigoMatricula, anoLectivo: invoice.anoLectivo } as any,
+      {
+        codMatricula: invoice.CodigoMatricula,
+        anoLectivo: invoice.anoLectivo,
+      } as any,
     );
 
     await queryRunner.query(
@@ -950,7 +1066,8 @@ export class PaymentService {
       if (error instanceof AxiosError) {
         return {
           success: false,
-          message: error.response?.data?.message || 'Serviço de exames indisponível',
+          message:
+            error.response?.data?.message || 'Serviço de exames indisponível',
         };
       }
       return { success: false, message: 'Erro inesperado ao atribuir prova' };
@@ -958,7 +1075,8 @@ export class PaymentService {
   }
 
   private async findAluno(codigo: number | string, by: FindAlunoBy) {
-    const whereClause = by === 'matricula' ? `m.codigo = ${codigo}` : `p.codigo = ${codigo}`;
+    const whereClause =
+      by === 'matricula' ? `m.codigo = ${codigo}` : `p.codigo = ${codigo}`;
 
     const sql = `
       SELECT p.codigo AS codigo_preinscricao, m.codigo AS codigo_matricula
@@ -990,13 +1108,34 @@ export class PaymentService {
     const conditions: string[] = ['fac.ESTADO = 1'];
     const params: Record<string, string | number> = {};
 
-    if (codigoPagamento) { conditions.push('pag.CODIGO = :codigoPagamento'); params.codigoPagamento = codigoPagamento; }
-    if (codigoCurso) { conditions.push('cur.CODIGO = :codigoCurso'); params.codigoCurso = codigoCurso; }
-    if (codigoAnoLectivo) { conditions.push('al.CODIGO  = :codigoAnoLectivo'); params.codigoAnoLectivo = codigoAnoLectivo; }
-    if (codigoFaculdade) { conditions.push('fab.CODIGO = :codigoFaculdade'); params.codigoFaculdade = codigoFaculdade; }
-    if (codigoMatricula) { conditions.push('tm.CODIGO  = :codigoMatricula'); params.codigoMatricula = codigoMatricula; }
-    if (codigoPeriodo) { conditions.push('per.CODIGO = :codigoPeriodo'); params.codigoPeriodo = codigoPeriodo; }
-    if (mesId) { conditions.push('mes.ID     = :mesId'); params.mesId = mesId; }
+    if (codigoPagamento) {
+      conditions.push('pag.CODIGO = :codigoPagamento');
+      params.codigoPagamento = codigoPagamento;
+    }
+    if (codigoCurso) {
+      conditions.push('cur.CODIGO = :codigoCurso');
+      params.codigoCurso = codigoCurso;
+    }
+    if (codigoAnoLectivo) {
+      conditions.push('al.CODIGO  = :codigoAnoLectivo');
+      params.codigoAnoLectivo = codigoAnoLectivo;
+    }
+    if (codigoFaculdade) {
+      conditions.push('fab.CODIGO = :codigoFaculdade');
+      params.codigoFaculdade = codigoFaculdade;
+    }
+    if (codigoMatricula) {
+      conditions.push('tm.CODIGO  = :codigoMatricula');
+      params.codigoMatricula = codigoMatricula;
+    }
+    if (codigoPeriodo) {
+      conditions.push('per.CODIGO = :codigoPeriodo');
+      params.codigoPeriodo = codigoPeriodo;
+    }
+    if (mesId) {
+      conditions.push('mes.ID     = :mesId');
+      params.mesId = mesId;
+    }
     if (nome) {
       conditions.push(`
         fn_remove_acentos(UPPER(pre.NOME_COMPLETO))

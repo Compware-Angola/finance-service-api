@@ -184,6 +184,17 @@ export class CashRegistersService {
     return this.dataSource.transaction(async (manager) => {
       const cashRegisterRepository = manager.getRepository(CashRegister);
       const movementRepository = manager.getRepository(CashRegisterMovement);
+
+      const unvalidatedCashRegister = await movementRepository.findOne({
+        where: {
+          operatorId,
+          adminStatus: AdminStatus.PENDING
+
+        },
+      });
+      if (unvalidatedCashRegister) {
+        throw new BadRequestException('Antes de atribuir um novo caixa ao operador, é necessário validar o movimento do ultimo caixa');
+      }
       const operatorCashRegister = await cashRegisterRepository.findOne({
         where: {
           operatorId,
@@ -228,8 +239,8 @@ export class CashRegistersService {
         collectedTpaAmount: 0,
         createdBy: adminId,
         status: CashRegisterStatus.OPEN,
-        finalStatus: 'pendente',
-        adminStatus: 'pendente',
+        finalStatus: FinalStatus.PENDING,
+        adminStatus: AdminStatus.PENDING,
         dateAt: new Date(),
         createdAt: new Date(),
         startTime: formatTime(new Date()),
@@ -333,8 +344,8 @@ export class CashRegistersService {
       const closingDate = new Date();
 
       movement.status = CashRegisterStatus.CLOSED;
-      movement.finalStatus = 'fechado';
-      movement.adminStatus = 'pendente';
+      movement.finalStatus = FinalStatus.CLOSED;
+      movement.adminStatus = AdminStatus.PENDING;
       movement.closingDate = closingDate;
       movement.closingTime = formatTime(new Date());
       movement.collectedPaymentAmount = totalCash;

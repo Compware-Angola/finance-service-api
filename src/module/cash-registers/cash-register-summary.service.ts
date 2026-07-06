@@ -7,6 +7,7 @@ import { CashRegisterMovement } from './entities/cash-register-movement.entity';
 import { CashRegisterStatus } from './enums/cash-register-status.enum';
 import { buildPaymentReportCountQuery, buildPaymentReportQuery, buildPaymentReportWhereClause } from './query-builder/payment-report.query-builder';
 import { PaymentReportDto } from './dto/payment-report.dto';
+import { PaymentAnalyticsService } from './payment-analytics.service';
 
 @Injectable()
 export class CashRegisterSummaryService {
@@ -15,6 +16,7 @@ export class CashRegisterSummaryService {
     private readonly cashRegistersService: CashRegistersService,
     @InjectRepository(CashRegisterMovement)
     private readonly movementRepository: Repository<CashRegisterMovement>,
+    private readonly paymentAnalyticsService: PaymentAnalyticsService,
   ) { }
 
   async getPaymentMethodSummary(params: {
@@ -34,28 +36,11 @@ export class CashRegisterSummaryService {
     if (!cashRegister) {
       throw new BadRequestException('Caixa não encontrado');
     }
-
-    const paymentSummary = await this.dataSource.query(
-      `SELECT
-    forma_pagamento.CODIGO    AS forma_pagamento_codigo,
-    forma_pagamento.DESCRICAO AS forma_pagamento,
-    SUM(pagamentos.VALOR_DEPOSITADO) AS total
-  FROM FK2_TB_PAGAMENTOS pagamentos
-  INNER JOIN FK2_TB_FORMA_PAGAMENTO forma_pagamento
-    ON forma_pagamento.CODIGO = pagamentos.FORMA_PAGAMENTO
-  WHERE pagamentos.FK_UTILIZADOR = :1
-    AND pagamentos.CAIXA_ID      = :2
-    AND pagamentos.STATUS_PAGAMENTO   = 'concluido'
-    AND pagamentos.CREATED_AT   >= :3
-  GROUP BY
-    forma_pagamento.CODIGO,
-    forma_pagamento.DESCRICAO
-  ORDER BY forma_pagamento.DESCRICAO
-  `,
-      [operatorId, cashRegisterId, cashRegister.createdAt],
-    );
-
-    const summary = toLowerCaseKeys(paymentSummary);
+    const summary = await this.paymentAnalyticsService.getDailySummary({
+      operatorId,
+      cashRegisterId,
+      date: cashRegister.createdAt,
+    });
 
     return {
       summary,

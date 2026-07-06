@@ -7,6 +7,7 @@ import { CashRegistersService } from './cash-registers.service';
 import { HttpModule } from '@nestjs/axios';
 import { CashRegisterMovement } from './entities/cash-register-movement.entity';
 import { CashRegisterSummaryService } from './cash-register-summary.service';
+import { PaymentAnalyticsService } from './payment-analytics.service';
 
 @Module({
   imports: [
@@ -17,7 +18,10 @@ import { CashRegisterSummaryService } from './cash-register-summary.service';
     TypeOrmModule.forFeature([CashRegister, CashRegisterMovement]),
   ],
   controllers: [CashRegistersController],
-  providers: [CashRegistersService, CashRegisterSummaryService],
+  providers: [
+    CashRegistersService,
+    CashRegisterSummaryService,
+    PaymentAnalyticsService],
   exports: [],
 })
-export class CashRegistersModule {}
+export class CashRegistersModule { }

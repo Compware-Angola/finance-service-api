@@ -222,9 +222,7 @@ export class CashRegistersController {
 
   @Get('me/summary')
   async getMySummary(@Req() req: any) {
-    return {
-      data: await this.summaryService.getMySummary(req.user.sub),
-    };
+    return this.summaryService.getMySummary(req.user.sub);
   }
 
   // =====================================================

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, IsNull, Repository } from 'typeorm';
+import { Between, Brackets, DataSource, IsNull, Repository } from 'typeorm';
 import { CashRegister } from './entities/cash-register.entity';
 import { CashRegisterMovement } from './entities/cash-register-movement.entity';
 import { ListCashRegistersDto } from './dto/list-cash-registers.dto';
@@ -24,9 +24,10 @@ import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
 import { formatTime } from '../util/formatTime';
 import { HttpService } from '@nestjs/axios';
 import { HashHelper } from 'src/common/helpers/hash-helper';
- import { EmailHelper } from 'src/common/helpers/email.helper';
+import { EmailHelper } from 'src/common/helpers/email.helper';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
+import { PaymentAnalyticsService } from './payment-analytics.service';
 
 type ValidateMovementParams = {
   id: number;
@@ -43,7 +44,8 @@ export class CashRegistersService {
     private readonly cashRegisterMovementRepository: Repository<CashRegisterMovement>,
     private readonly httpService: HttpService,
     private readonly dataSource: DataSource,
-  ) {}
+    private readonly paymentAnalyticsService: PaymentAnalyticsService,
+  ) { }
 
   async findAll(filters?: ListCashRegistersDto) {
     const { page = 1, limit = 10 } = filters || {};
@@ -184,6 +186,17 @@ export class CashRegistersService {
     return this.dataSource.transaction(async (manager) => {
       const cashRegisterRepository = manager.getRepository(CashRegister);
       const movementRepository = manager.getRepository(CashRegisterMovement);
+
+      const unvalidatedCashRegister = await movementRepository.findOne({
+        where: {
+          operatorId,
+          adminStatus: AdminStatus.PENDING
+
+        },
+      });
+      if (unvalidatedCashRegister) {
+        throw new BadRequestException('Antes de atribuir um novo caixa ao operador, é necessário validar o movimento do ultimo caixa');
+      }
       const operatorCashRegister = await cashRegisterRepository.findOne({
         where: {
           operatorId,
@@ -193,6 +206,25 @@ export class CashRegistersService {
       });
       if (operatorCashRegister) {
         throw new BadRequestException('Operador já possui um caixa aberto');
+      }
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date();
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const todayCashRegister = await cashRegisterRepository.findOne({
+        where: {
+          operatorId,
+          createdAt: Between(startOfDay, endOfDay),
+          deletedAt: IsNull(),
+        },
+      });
+
+      if (todayCashRegister) {
+        throw new BadRequestException(
+          'Já existe uma abertura de caixa registada para este operador no dia de hoje. A atribuição de um novo caixa só será possível a partir de amanhã.',
+        );
       }
       const cashRegister = await cashRegisterRepository.findOne({
         where: {
@@ -228,8 +260,8 @@ export class CashRegistersService {
         collectedTpaAmount: 0,
         createdBy: adminId,
         status: CashRegisterStatus.OPEN,
-        finalStatus: 'pendente',
-        adminStatus: 'pendente',
+        finalStatus: FinalStatus.PENDING,
+        adminStatus: AdminStatus.PENDING,
         dateAt: new Date(),
         createdAt: new Date(),
         startTime: formatTime(new Date()),
@@ -325,22 +357,21 @@ export class CashRegistersService {
           'Movimento de caixa em aberto não encontrado',
         );
       }
-      const { totalCash, totalCard } = await this.calculateCashRegisterSummary({
+      const summary = await this.paymentAnalyticsService.getDailySummary({
         operatorId,
         cashRegisterId: cashRegister.id,
-        createdAt: movement.createdAt,
+        date: movement.createdAt,
       });
       const closingDate = new Date();
-
       movement.status = CashRegisterStatus.CLOSED;
-      movement.finalStatus = 'fechado';
-      movement.adminStatus = 'pendente';
+      movement.finalStatus = FinalStatus.CLOSED;
+      movement.adminStatus = AdminStatus.PENDING;
       movement.closingDate = closingDate;
       movement.closingTime = formatTime(new Date());
-      movement.collectedPaymentAmount = totalCash;
-      movement.collectedTpaAmount = totalCard;
+      movement.collectedPaymentAmount = summary.cash;
+      movement.collectedTpaAmount = summary.card;
       movement.totalCollectedAmount =
-        Number(movement.openingAmount ?? 0) + totalCash + totalCard;
+        Number(movement.openingAmount ?? 0) + summary.cash + summary.card;
 
       operatorCashRegister.status = CashRegisterStatus.CLOSED;
       operatorCashRegister.operatorId = null as any;
@@ -468,43 +499,6 @@ export class CashRegistersService {
     if (cashRegister.status === CashRegisterStatus.OPEN) {
       throw new BadRequestException('Caixa já está aberto');
     }
-  }
-  private async calculateCashRegisterSummary(params: {
-    operatorId: number;
-    cashRegisterId: number;
-    createdAt: Date;
-  }) {
-    const result = await this.dataSource.query(
-      `
-    SELECT
-      SUM(
-        CASE
-          WHEN pagamentos.FORMA_PAGAMENTO = ${PaymentMethod.CASH}
-          THEN pagamentos.VALOR_DEPOSITADO
-          ELSE 0
-        END
-      ) AS total_cash,
-
-      SUM(
-        CASE
-          WHEN pagamentos.FORMA_PAGAMENTO =${PaymentMethod.CARD}
-          THEN pagamentos.VALOR_DEPOSITADO
-          ELSE 0
-        END
-      ) AS total_card
-    FROM FK2_TB_PAGAMENTOS pagamentos
-    WHERE pagamentos.FK_UTILIZADOR = :1
-      AND pagamentos.CAIXA_ID = :2
-      AND pagamentos.ESTADO = 2
-      AND pagamentos.CREATED_AT >= :3
-    `,
-      [params.operatorId, params.cashRegisterId, params.createdAt],
-    );
-    console.log(result);
-    return {
-      totalCash: Number(result[0]?.TOTAL_CASH || 0),
-      totalCard: Number(result[0]?.TOTAL_CARD || 0),
-    };
   }
 
   async findMovements(filters?: ListCashRegisterMovementsDto) {
@@ -728,20 +722,20 @@ export class CashRegistersService {
     }
     return toLowerCaseKeys(data) as { email: string; nome: string };
   }
-   private returnCashRegisterObj(cashRegister: CashRegister | null) {
-   return cashRegister ? {
-    id: cashRegister.id,
-    name: cashRegister.name,
-    status: cashRegister.status,
-    blocked: cashRegister.blocked,
-    operatorId: cashRegister.operatorId,
-    createdBy: cashRegister.createdBy,
-    updatedBy: cashRegister.updatedBy,
-    deletedBy: cashRegister.deletedBy,
-    createdAt: cashRegister.createdAt,
-    updatedAt: cashRegister.updatedAt,
-    deletedAt: cashRegister.deletedAt,
-   } : null;
+  private returnCashRegisterObj(cashRegister: CashRegister | null) {
+    return cashRegister ? {
+      id: cashRegister.id,
+      name: cashRegister.name,
+      status: cashRegister.status,
+      blocked: cashRegister.blocked,
+      operatorId: cashRegister.operatorId,
+      createdBy: cashRegister.createdBy,
+      updatedBy: cashRegister.updatedBy,
+      deletedBy: cashRegister.deletedBy,
+      createdAt: cashRegister.createdAt,
+      updatedAt: cashRegister.updatedAt,
+      deletedAt: cashRegister.deletedAt,
+    } : null;
   }
 }
 

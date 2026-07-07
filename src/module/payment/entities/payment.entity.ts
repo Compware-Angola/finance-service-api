@@ -9,9 +9,9 @@ import {
 } from 'typeorm';
 import { BaseEntity } from 'src/common/base-entity';
 
-@Entity({ name: 'UMA_TB_PAGAMENTOS', })
+@Entity({ name: 'UMA_TB_PAGAMENTOS' })
 export class Payment extends BaseEntity {
-  @PrimaryColumn({ name: 'Codigo', type: 'varchar2', length: 20 }) 
+  @PrimaryColumn({ name: 'Codigo', type: 'varchar2', length: 20 })
   Codigo: string;
 
   @Column({ type: 'varchar', length: 45 })
@@ -34,7 +34,12 @@ export class Payment extends BaseEntity {
 
   @Column({ type: 'timestamp', nullable: true })
   DataBanco?: Date;
-@Column({ name: 'Codigo_PreInscricao', type: 'varchar2', length: 20, nullable: true })
+  @Column({
+    name: 'Codigo_PreInscricao',
+    type: 'varchar2',
+    length: 20,
+    nullable: true,
+  })
   Codigo_PreInscricao?: string;
 
   @Column({ type: 'varchar', length: 45, nullable: true })
@@ -123,7 +128,8 @@ export class Payment extends BaseEntity {
   async generateCodigo() {
     if (!this.Codigo) {
       const repo = (this.constructor as any).repo;
-      if (!repo) throw new Error('Repositório não configurado. Use setRepository()');
+      if (!repo)
+        throw new Error('Repositório não configurado. Use setRepository()');
 
       console.log('GERANDO CÓDIGO DO PAGAMENTO...');
 

@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   Req,
+  ParseIntPipe,
 } from '@nestjs/common';
 
 import { CashRegistersService } from './cash-registers.service';
@@ -33,6 +34,7 @@ import { ListCashRegisterMovementsDto } from './dto/ist-movements.dto';
 import { ValidateMovementDto } from './dto/validate-movement.dto';
 import { CreateCashRegisterDto } from './dto/create-cash-register.dto';
 import { UpdateCashRegisterDto } from './dto/update-cash-register.dto';
+import { PaymentReportDto } from './dto/payment-report.dto';
 type Action =
   | 'CRIAR'
   | 'ATUALIZAR'
@@ -52,7 +54,7 @@ export class CashRegistersController {
     private readonly cashRegistersService: CashRegistersService,
     private readonly summaryService: CashRegisterSummaryService,
     private readonly httpService: HttpService,
-  ) {}
+  ) { }
 
   // =====================================================
   // LISTAR
@@ -220,9 +222,7 @@ export class CashRegistersController {
 
   @Get('me/summary')
   async getMySummary(@Req() req: any) {
-    return {
-      data: await this.summaryService.getMySummary(req.user.sub),
-    };
+    return this.summaryService.getMySummary(req.user.sub);
   }
 
   // =====================================================
@@ -290,6 +290,14 @@ export class CashRegistersController {
     return result;
   }
 
+  @Get('reports/:operatorId')
+  async findPaymentReportsForOperator(
+    @Param('operatorId', ParseIntPipe) operatorId: number,
+    @Query() query: PaymentReportDto,
+  ) {
+    return this.summaryService.findPaymentReportsForOperator(operatorId, query);
+  }
+
   // =====================================================
   // LOGGER CENTRAL
   // =====================================================
@@ -329,17 +337,15 @@ export class CashRegistersController {
         return `${base} ELIMINOU ${entity}${meta?.id ? ` (id: ${meta.id})` : ''}`;
 
       case 'ABRIR':
-        return `${base} ABRIU ${entity}${
-          meta?.id ? ` (id: ${meta.id})` : ''
-        }${meta?.openingAmount ? ` (valor: ${meta.openingAmount})` : ''}`;
+        return `${base} ABRIU ${entity}${meta?.id ? ` (id: ${meta.id})` : ''
+          }${meta?.openingAmount ? ` (valor: ${meta.openingAmount})` : ''}`;
 
       case 'FECHAR':
         return `${base} FECHOU ${entity}${meta?.id ? ` (id: ${meta.id})` : ''}`;
 
       case 'VALIDAR':
-        return `${base} VALIDOU ${entity}${
-          meta?.movementId ? ` (movement: ${meta.movementId})` : ''
-        }`;
+        return `${base} VALIDOU ${entity}${meta?.movementId ? ` (movement: ${meta.movementId})` : ''
+          }`;
 
       case 'BLOQUEAR':
         return `${base} BLOQUEOU ${entity}`;

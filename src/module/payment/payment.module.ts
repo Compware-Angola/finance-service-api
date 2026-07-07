@@ -17,6 +17,7 @@ import { CashRegisterMovement } from '../cash-registers/entities/cash-register-m
 import { CashRegistersService } from '../cash-registers/cash-registers.service';
 import { VoidPaymentService } from './void-payments.service';
 import { VoidPaymentTaxService } from './void-payments-tax.service';
+import { PaymentAnalyticsService } from '../cash-registers/payment-analytics.service';
 
 @Module({
   imports: [
@@ -41,10 +42,11 @@ import { VoidPaymentTaxService } from './void-payments-tax.service';
     PaymentService,
     AnoLectivoUtil,
     EstatisticasService,
+    PaymentAnalyticsService,
     CashRegistersService,
     VoidPaymentService,
     VoidPaymentTaxService,
   ],
   exports: [PaymentService],
 })
-export class PaymentModule {}
+export class PaymentModule { }

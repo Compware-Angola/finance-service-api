@@ -7,5 +7,5 @@ export class PaymentDailySummaryDto {
     @IsOptional()
     @IsInt()
     @Type(() => Number)
-    tipoPagamento?: number;
+    formaPagamento?: number;
 }

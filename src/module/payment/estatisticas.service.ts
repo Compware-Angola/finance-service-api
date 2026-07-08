@@ -13,7 +13,7 @@ export class EstatisticasService {
   constructor(
     @InjectDataSource()
     private readonly ds: DataSource,
-  ) {}
+  ) { }
 
   async getAgrupado(
     dto: EstatisticasQueryDto,
@@ -38,7 +38,7 @@ export class EstatisticasService {
     if (diffDias > MAX_RANGE_DAYS) {
       throw new BadRequestException(
         `Intervalo máximo permitido: ${MAX_RANGE_DAYS} dias (~3 meses). ` +
-          `Intervalo informado: ${diffDias} dias.`,
+        `Intervalo informado: ${diffDias} dias.`,
       );
     }
 

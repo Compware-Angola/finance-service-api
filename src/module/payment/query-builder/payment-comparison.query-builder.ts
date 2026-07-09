@@ -1,4 +1,5 @@
 import { PaymentServiceComparisonDto } from "../dto/payment-comparison.dto";
+
 export const buildPaymentServiceComparisonWhereClause = (
     filters: PaymentServiceComparisonDto,
 ) => {
@@ -59,32 +60,42 @@ export const buildPaymentServiceComparisonQuery = (
 ) => `
 SELECT
 
-    CASE
-        WHEN servico.SIGLA = 'PROP'
-            THEN 'PROP'
-        ELSE 'OUTROS'
-    END AS LABEL,
+    pagamento_labels.LABEL,
 
-    COUNT(DISTINCT pagamentos.CODIGO) AS TOTAL_PAGAMENTOS,
+    COUNT(*) AS TOTAL_PAGAMENTOS,
 
-    NVL(SUM(factura_items.TOTAL),0) AS TOTAL
+    NVL(SUM(pagamento_labels.VALOR_DEPOSITADO), 0) AS TOTAL
 
-FROM FK2_TB_PAGAMENTOS pagamentos
+FROM (
 
-INNER JOIN FK2_FACTURA_ITEMS factura_items
-    ON factura_items.CODIGOFACTURA = pagamentos.CODIGO_FACTURA
+    SELECT
+        pagamentos.CODIGO,
+        pagamentos.VALOR_DEPOSITADO,
+        CASE
+            WHEN MAX(
+                CASE WHEN servico.SIGLA = 'PROP' THEN 1 ELSE 0 END
+            ) = 1
+                THEN 'PROP'
+            ELSE 'OUTROS'
+        END AS LABEL
 
-INNER JOIN FK2_TB_TIPO_SERVICOS servico
-    ON servico.CODIGO = factura_items.CODIGOPRODUTO
+    FROM FK2_TB_PAGAMENTOS pagamentos
 
-WHERE ${whereClause}
+    INNER JOIN FK2_FACTURA_ITEMS factura_items
+        ON factura_items.CODIGOFACTURA = pagamentos.CODIGO_FACTURA
 
-GROUP BY
-CASE
-    WHEN servico.SIGLA = 'PROP'
-        THEN 'PROP'
-    ELSE 'OUTROS'
-END
+    INNER JOIN FK2_TB_TIPO_SERVICOS servico
+        ON servico.CODIGO = factura_items.CODIGOPRODUTO
 
-ORDER BY LABEL
+    WHERE ${whereClause}
+
+    GROUP BY
+        pagamentos.CODIGO,
+        pagamentos.VALOR_DEPOSITADO
+
+) pagamento_labels
+
+GROUP BY pagamento_labels.LABEL
+
+ORDER BY pagamento_labels.LABEL
 `;

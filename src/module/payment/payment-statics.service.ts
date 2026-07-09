@@ -9,6 +9,9 @@ import { PaymentServiceComparisonDto } from "./dto/payment-comparison.dto";
 import { buildPaymentServiceComparisonQuery, buildPaymentServiceComparisonWhereClause } from "./query-builder/payment-comparison.query-builder";
 import { PaymentPerformanceMonthlyDto } from "./dto/payment-performance-monthly.dto";
 import { toLowerCaseKeys } from "../util/toLowerCaseKeys";
+import { buildPaymentPerformanceMonthlyQuery, buildPaymentPerformanceYearlyTotalsQuery } from "./query-builder/payment-performance-monthly.query";
+
+
 
 @Injectable()
 export class PaymentStaticsService {
@@ -91,60 +94,39 @@ export class PaymentStaticsService {
     async getPaymentPerformanceMonthly(
         query: PaymentPerformanceMonthlyDto,
     ) {
-        const result = await this.dataSource.query(
-            `WITH meses AS (
-    SELECT 
-        MOD(LEVEL + 8, 12) + 1 AS mes,
-        LEVEL AS ordem
-    FROM dual
-    CONNECT BY LEVEL <= 10
-),
-anos AS (
-    SELECT
-        (SELECT DESIGNACAO FROM FK2_TB_ANO_LECTIVO WHERE CODIGO = :anoAtual)    AS label_ano_atual,
-        (SELECT DESIGNACAO FROM FK2_TB_ANO_LECTIVO WHERE CODIGO = :anoAnterior) AS label_ano_anterior
-    FROM dual
-)
-SELECT
-    meses.mes,
-    TRIM(
-        TO_CHAR(
-            TO_DATE(meses.mes, 'MM'),
-            'Month',
-            'NLS_DATE_LANGUAGE=PORTUGUESE'
-        )
-    ) AS nome_mes,
+        const params = {
+            anoAtual: query.currentYear,
+            anoAnterior: query.previousYear,
+        } as any;
 
-    anos.label_ano_atual,
-    NVL(SUM(
-        CASE WHEN pagamentos.ANOLECTIVO = :anoAtual
-             THEN pagamentos.VALOR_DEPOSITADO ELSE 0 END
-    ), 0) AS valor_ano_atual,
+        const [monthlyResult, yearlyTotalsResult] = await Promise.all([
+            this.dataSource.query(
+                buildPaymentPerformanceMonthlyQuery(),
+                params,
+            ),
+            this.dataSource.query(
+                buildPaymentPerformanceYearlyTotalsQuery(),
+                params,
+            ),
+        ]);
 
-    anos.label_ano_anterior,
-    NVL(SUM(
-        CASE WHEN pagamentos.ANOLECTIVO = :anoAnterior
-             THEN pagamentos.VALOR_DEPOSITADO ELSE 0 END
-    ), 0) AS valor_ano_anterior
+        const totais = toLowerCaseKeys(yearlyTotalsResult)[0] ?? null;
 
-FROM meses
-CROSS JOIN anos
-LEFT JOIN FK2_TB_PAGAMENTOS pagamentos
-    ON EXTRACT(MONTH FROM pagamentos.CREATED_AT) = meses.mes
-    AND pagamentos.STATUS_PAGAMENTO = 'concluido'
-    AND pagamentos.ANOLECTIVO IN (:anoAtual, :anoAnterior)
-
-GROUP BY
-    meses.mes,
-    meses.ordem,
-    anos.label_ano_atual,
-    anos.label_ano_anterior
-
-ORDER BY
-    meses.ordem`,
-            { anoAtual: query.currentYear, anoAnterior: query.previousYear } as any,
-        );
-        return toLowerCaseKeys(result)
+        return {
+            mensal: toLowerCaseKeys(monthlyResult),
+            totalAnual: totais && {
+                anoAtual: {
+                    label: totais.label_ano_atual,
+                    totalValor: totais.total_valor_ano_atual,
+                    totalPagamentos: totais.total_pagamentos_ano_atual,
+                },
+                anoAnterior: {
+                    label: totais.label_ano_anterior,
+                    totalValor: totais.total_valor_ano_anterior,
+                    totalPagamentos: totais.total_pagamentos_ano_anterior,
+                },
+            },
+        };
     }
 }
 

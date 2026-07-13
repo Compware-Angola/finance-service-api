@@ -4,6 +4,14 @@ import { PaymentMonthlySummaryDto } from "./dto/payment-monthly-summary.dto";
 
 import { PaymentDailySummaryDto } from "./dto/payment-daily-summary.dto";
 import { buildPaymentDailySummaryQuery, buildPaymentDailySummaryWhereClause } from "./query-builder/payment-daily-summary.query-builder";
+import { buildPaymentMonthlySummaryQuery, buildPaymentMonthlySummaryWhereClause } from "./query-builder/payment-monthly-summary.query-builder";
+import { PaymentServiceComparisonDto } from "./dto/payment-comparison.dto";
+import { buildPaymentServiceComparisonQuery, buildPaymentServiceComparisonWhereClause } from "./query-builder/payment-comparison.query-builder";
+import { PaymentPerformanceMonthlyDto } from "./dto/payment-performance-monthly.dto";
+import { toLowerCaseKeys } from "../util/toLowerCaseKeys";
+import { buildPaymentPerformanceMonthlyQuery, buildPaymentPerformanceYearlyTotalsQuery } from "./query-builder/payment-performance-monthly.query";
+
+
 
 @Injectable()
 export class PaymentStaticsService {
@@ -33,43 +41,23 @@ export class PaymentStaticsService {
         };
     }
 
-    async getPaymentMonthlySummary(query: PaymentMonthlySummaryDto) {
-        const { year, month } = query;
+    async getPaymentMonthlySummary(
+        query: PaymentMonthlySummaryDto,
+    ) {
+
+        const {
+            clauses,
+            params,
+        } = buildPaymentMonthlySummaryWhereClause(query);
+
+
         const [summary] = await this.dataSource.query(
-            `
-    SELECT
-        COUNT(*) AS TOTAL_PAGAMENTOS,
-        NVL(SUM(VALOR_DEPOSITADO), 0) AS TOTAL_ARRECADADO,
-        NVL(AVG(VALOR_DEPOSITADO), 0) AS VALOR_MEDIO,
-        NVL(MIN(VALOR_DEPOSITADO), 0) AS MENOR_PAGAMENTO,
-        NVL(MAX(VALOR_DEPOSITADO), 0) AS MAIOR_PAGAMENTO
-    FROM FK2_TB_PAGAMENTOS
-    WHERE STATUS_PAGAMENTO = 'concluido'
-      AND CREATED_AT >= TRUNC(
-            TO_DATE(
-                NVL(:year, TO_CHAR(SYSDATE, 'YYYY')) || '-' ||
-                LPAD(NVL(:month, TO_CHAR(SYSDATE, 'MM')), 2, '0') || '-01',
-                'YYYY-MM-DD'
+            buildPaymentMonthlySummaryQuery(
+                clauses.join(' AND '),
             ),
-            'MM'
-        )
-      AND CREATED_AT < ADD_MONTHS(
-            TRUNC(
-                TO_DATE(
-                    NVL(:year, TO_CHAR(SYSDATE, 'YYYY')) || '-' ||
-                    LPAD(NVL(:month, TO_CHAR(SYSDATE, 'MM')), 2, '0') || '-01',
-                    'YYYY-MM-DD'
-                ),
-                'MM'
-            ),
-            1
-        )
-    `,
-            {
-                month,
-                year,
-            } as any,
+            params as any,
         );
+
 
         return {
             totalPayments: Number(summary.TOTAL_PAGAMENTOS),
@@ -79,4 +67,67 @@ export class PaymentStaticsService {
             largestPayment: Number(summary.MAIOR_PAGAMENTO),
         };
     }
+
+    async getPaymentServiceComparison(
+        query: PaymentServiceComparisonDto,
+    ) {
+
+        const {
+            clauses,
+            params,
+        } = buildPaymentServiceComparisonWhereClause(query);
+
+        const result = await this.dataSource.query(
+            buildPaymentServiceComparisonQuery(
+                clauses.join(' AND '),
+            ),
+            params as any,
+        );
+
+        return result.map((item) => ({
+            label: item.LABEL,
+            totalPayments: Number(item.TOTAL_PAGAMENTOS),
+            totalAmount: Number(item.TOTAL),
+        }));
+    }
+
+    async getPaymentPerformanceMonthly(
+        query: PaymentPerformanceMonthlyDto,
+    ) {
+        const params = {
+            anoAtual: query.currentYear,
+            anoAnterior: query.previousYear,
+        } as any;
+
+        const [monthlyResult, yearlyTotalsResult] = await Promise.all([
+            this.dataSource.query(
+                buildPaymentPerformanceMonthlyQuery(),
+                params,
+            ),
+            this.dataSource.query(
+                buildPaymentPerformanceYearlyTotalsQuery(),
+                params,
+            ),
+        ]);
+
+        const totais = toLowerCaseKeys(yearlyTotalsResult)[0] ?? null;
+
+        return {
+            mensal: toLowerCaseKeys(monthlyResult),
+            totalAnual: totais && {
+                anoAtual: {
+                    label: totais.label_ano_atual,
+                    totalValor: totais.total_valor_ano_atual,
+                    totalPagamentos: totais.total_pagamentos_ano_atual,
+                },
+                anoAnterior: {
+                    label: totais.label_ano_anterior,
+                    totalValor: totais.total_valor_ano_anterior,
+                    totalPagamentos: totais.total_pagamentos_ano_anterior,
+                },
+            },
+        };
+    }
 }
+
+

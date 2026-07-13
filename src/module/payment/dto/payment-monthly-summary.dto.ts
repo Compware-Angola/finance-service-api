@@ -32,6 +32,6 @@ export class PaymentMonthlySummaryDto {
     @IsOptional()
     @IsInt()
     @Type(() => Number)
-    tipoPagamento?: number;
+    formaPagamento?: number;
 
 }

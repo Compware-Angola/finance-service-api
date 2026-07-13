@@ -10,9 +10,9 @@ export const buildPaymentDailySummaryWhereClause = (
         `TRUNC(pagamentos.CREATED_AT) = TRUNC(SYSDATE)`,
     ];
     const params: Record<string, any> = {};
-    if (filters.tipoPagamento) {
-        clauses.push(`pagamentos.TIPO_PAGAMENTO = :tipoPagamento`);
-        params.tipoPagamento = filters.tipoPagamento.toString();
+    if (filters.formaPagamento) {
+        clauses.push(`pagamentos.FORMA_PAGAMENTO = :formaPagamento`);
+        params.formaPagamento = filters.formaPagamento.toString();
     }
     return {
         clauses,

@@ -902,8 +902,8 @@ WHERE rn BETWEEN :startRow AND :endRow
           f.tipo_documento_factura_id  AS f_tipo_documento_factura_id,
 
           -- ================= ALUNO =================
-          p.Nome_Completo              AS nome_completo_aluno,
-          p.Bilhete_Identidade         AS bi_aluno,
+          p.NOME_COMPLETO              AS nome_completo_aluno,
+          p.BILHETE_IDENTIDADE        AS bi_aluno,
           p.Email                      AS email_aluno,
           p.Contactos_Telefonicos      AS contactos_telefonicos,
           p.Data_Nascimento            AS data_nascimento,
@@ -963,7 +963,7 @@ WHERE rn BETWEEN :startRow AND :endRow
              ON a.codigo = m.Codigo_Aluno
 
       LEFT JOIN FK2_TB_PREINSCRICAO p
-             ON p.Codigo = a.pre_incricao
+             ON p.CODIGO = a.pre_incricao
 
       LEFT JOIN FK2_PAGAMENTO_POR_REFERENCIAS ppr
              ON ppr.factura_codigo = f.Codigo

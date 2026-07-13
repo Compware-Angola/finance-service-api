@@ -897,7 +897,7 @@ WHERE fi.CodigoFactura = :invoiceId
     const params = [invoiceId];
 
     const results = await this.dataSource.query(sql, params);
-    console.log(results);
+
 
     return toLowerCaseKeys(results);
   }

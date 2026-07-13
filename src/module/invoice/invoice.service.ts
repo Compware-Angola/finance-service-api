@@ -848,37 +848,56 @@ WHERE rn BETWEEN :startRow AND :endRow
   }
   async findInvoiceItens(invoiceId: number) {
     const sql = `
-    SELECT
-      fi.Codigo                AS codigoItem,
-      fi.CodigoFactura         AS codigoFactura,
-      fi.CodigoProduto         AS codigoProduto,
-      fi.quantidade,
-      fi.obs,
-      fi.PRECO,
-      fi.TOTAL,
-      fi.multa  AS multa,
+  SELECT
+    fi.Codigo                AS codigoItem,
+    fi.CodigoFactura         AS codigoFactura,
+    fi.CodigoProduto         AS codigoProduto,
+    fi.quantidade,
+    fi.obs,
+    fi.PRECO,
+    fi.TOTAL,
+    fi.multa                 AS multa,
 
-      ts.Descricao             AS descricaoServico,
-      ts.Codigo                AS codigoServico,
+    ts.Descricao             AS descricaoServico,
+    ts.Codigo                AS codigoServico,
 
-      mt.id                    AS mesId,
-      mt.DESIGNACAO             AS mesDescricao,
-      mt.PRESTACAO              As prestacao
+    mt.id                    AS mesId,
+    mt.DESIGNACAO            AS mesDescricao,
+    mt.PRESTACAO             AS prestacao,
 
-    FROM FK2_FACTURA_ITEMS fi
+    CASE
+        WHEN ts.Sigla IN ('IaEdRurso', 'IeEEF')
+        THEN (
+            SELECT LISTAGG(d.DESIGNACAO, ' , ')
+                   WITHIN GROUP (ORDER BY d.DESIGNACAO)
+            FROM FK2_TB_HISTORICO_INSCRICOES_AVALIACOES hia
+            LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO gca
+                   ON gca.CODIGO = hia.CODIGO_GRADE_ALUNO
+            LEFT JOIN FK2_TB_GRADE_CURRICULAR gc
+                   ON gc.CODIGO = gca.CODIGO_GRADE_CURRICULAR
+            LEFT JOIN FK2_TB_DISCIPLINAS d
+                   ON d.CODIGO = gc.CODIGO_DISCIPLINA
+            WHERE hia.CODIGO_FACTURA = fi.CodigoFactura
+              AND hia.CODIGO_TIPO_AVALIACAO IN (7,11)
+        )
+        ELSE NULL
+    END AS cadeiras_recurso_epoca_especial
 
-    LEFT JOIN FK2_TB_TIPO_SERVICOS ts
-           ON ts.Codigo = fi.CodigoProduto
+FROM FK2_FACTURA_ITEMS fi
 
-    LEFT JOIN FK2_MES_TEMP mt
-           ON mt.id = fi.mes_temp_id
+LEFT JOIN FK2_TB_TIPO_SERVICOS ts
+       ON ts.Codigo = fi.CodigoProduto
 
-    WHERE fi.CodigoFactura = :invoiceId
+LEFT JOIN FK2_MES_TEMP mt
+       ON mt.id = fi.mes_temp_id
+
+WHERE fi.CodigoFactura = :invoiceId
   `;
 
     const params = [invoiceId];
 
     const results = await this.dataSource.query(sql, params);
+
 
     return toLowerCaseKeys(results);
   }

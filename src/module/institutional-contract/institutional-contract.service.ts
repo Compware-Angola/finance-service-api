@@ -4,7 +4,10 @@ import * as oracledb from 'oracledb';
 import { DataSource } from 'typeorm';
 import { UpdateContratoBolsaDto } from './dto/UpdateContratoBolsaDto';
 import { CreateContratoBolsaDto } from './dto/CreateContratoBolsaDto';
-import { ListContratoBolsaQueryDto } from './dto/ListContratoBolsaQueryDto';
+import {
+  ContratoBolsaEstatisticasQueryDto,
+  ListContratoBolsaQueryDto,
+} from './dto/ListContratoBolsaQueryDto';
 @Injectable()
 export class InstitutionalContractService {
   constructor(private readonly dataSource: DataSource) {}
@@ -199,6 +202,52 @@ export class InstitutionalContractService {
     } finally {
       await queryRunner.release();
     }
+  }
+  async obterEstatisticasContratosBolsa(
+    filtros: ContratoBolsaEstatisticasQueryDto,
+  ) {
+    const { codigoInstituicao, codigoContrato } = filtros;
+
+    let condicoes = '';
+    const params: Record<string, any> = {};
+
+    if (codigoInstituicao !== undefined) {
+      condicoes += ' AND cb.CODIGO_INSTITUICAO = :codigoInstituicao';
+      params.codigoInstituicao = codigoInstituicao;
+    }
+    if (codigoContrato !== undefined) {
+      condicoes += ' AND cb.CODIGO_CONTRATO = :codigoContrato';
+      params.codigoContrato = codigoContrato;
+    }
+
+    const sql = `
+      SELECT
+        SUM(CASE WHEN cb.ESTADO = 1
+                  AND cb.DATA_FIM >= TRUNC(SYSDATE)
+                 THEN 1 ELSE 0 END)                         AS ATIVOS,
+        SUM(CASE WHEN cb.ESTADO = 1
+                  AND cb.DATA_FIM >= TRUNC(SYSDATE)
+                  AND cb.DATA_FIM <= TRUNC(SYSDATE) + 30
+                 THEN 1 ELSE 0 END)                         AS AEXPIRAR,
+        SUM(CASE WHEN cb.DATA_FIM < TRUNC(SYSDATE)
+                 THEN 1 ELSE 0 END)                         AS EXPIRADOS,
+        COUNT(1)                                            AS TOTAL
+      FROM TB_CONTRATO_BOLSA cb
+      INNER JOIN FK2_TB_INSTITUICAO i
+        ON i.CODIGO = cb.CODIGO_INSTITUICAO
+      WHERE 1=1
+      ${condicoes}
+    `;
+
+    const result = await this.dataSource.query(sql, params as any);
+    const row = result[0] ?? {};
+
+    return {
+      ativos: Number(row.ATIVOS ?? 0),
+      aExpirar: Number(row.AEXPIRAR ?? 0),
+      expirados: Number(row.EXPIRADOS ?? 0),
+      total: Number(row.TOTAL ?? 0),
+    };
   }
 
   async listarContratosBolsa(filtros: {

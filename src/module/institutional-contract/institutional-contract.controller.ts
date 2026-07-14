@@ -12,7 +12,10 @@ import { InstitutionalContractService } from './institutional-contract.service';
 import { CreateContratoBolsaDto } from './dto/CreateContratoBolsaDto';
 import { UpdateContratoBolsaDto } from './dto/UpdateContratoBolsaDto';
 import { FindCreditoEducacionalDto } from '../credito_educacional/dto/find-credito-educacional.dto';
-import { ListContratoBolsaQueryDto } from './dto/ListContratoBolsaQueryDto';
+import {
+  ContratoBolsaEstatisticasQueryDto,
+  ListContratoBolsaQueryDto,
+} from './dto/ListContratoBolsaQueryDto';
 
 @Controller('institutional-contract')
 export class InstitutionalContractController {
@@ -48,5 +51,11 @@ export class InstitutionalContractController {
   @Delete(':id')
   remove(@Param('id') id: number) {
     return this.institutionalContractService.deleteContratoBolsa(+id);
+  }
+  @Get('estatisticas')
+  async getEstatisticas(@Query() query: ContratoBolsaEstatisticasQueryDto) {
+    return this.institutionalContractService.obterEstatisticasContratosBolsa(
+      query,
+    );
   }
 }

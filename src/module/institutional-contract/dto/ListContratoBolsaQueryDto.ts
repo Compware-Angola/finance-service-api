@@ -1,5 +1,5 @@
 import { IsOptional, IsInt } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class ListContratoBolsaQueryDto {
@@ -41,3 +41,8 @@ export class ListContratoBolsaQueryDto {
   @Type(() => Number)
   page?: number;
 }
+
+export class ContratoBolsaEstatisticasQueryDto extends OmitType(
+  ListContratoBolsaQueryDto,
+  ['limit', 'page'] as const,
+) {}

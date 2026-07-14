@@ -27,6 +27,7 @@ import { UtilizadorModule } from './module/utilizadores/utilizador.module';
 import { CreditoEducacionalModule } from './module/credito_educacional/credito_educacional.module';
 import { TipoCreditoModule } from './module/credito_educacional/tipo_credito/tipo_credito.module';
 import { BolsaModule } from './module/credito_educacional/bolsa/bolsa.module';
+import { InstitutionalContractModule } from './module/institutional-contract/institutional-contract.module';
 
 @Module({
   imports: [
@@ -108,6 +109,7 @@ import { BolsaModule } from './module/credito_educacional/bolsa/bolsa.module';
     UtilizadorModule,
     CreditoEducacionalModule,
     BolsaModule,
+    InstitutionalContractModule,
   ],
   providers: [BullMQWorkerService],
 })

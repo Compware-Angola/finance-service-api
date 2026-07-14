@@ -247,6 +247,59 @@ export class InstitutionalContractService {
       total: Number(row.TOTAL ?? 0),
     };
   }
+  async alternarEstadoContratoBolsa(id: number) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const existente = await queryRunner.query(
+        `SELECT CODIGO_CONTRATO, ESTADO
+           FROM TB_CONTRATO_BOLSA
+          WHERE CODIGO_CONTRATO = :codigoContrato
+            AND DELETED_AT IS NULL`,
+        { codigoContrato: id } as any,
+      );
+
+      if (!existente || existente.length === 0) {
+        throw new BadRequestException(
+          `Não foi encontrado contrato de bolsa com código ${id}`,
+        );
+      }
+
+      const estadoAtual = Number(existente[0].ESTADO);
+      const novoEstado = estadoAtual === 1 ? 0 : 1;
+
+      await queryRunner.query(
+        `UPDATE TB_CONTRATO_BOLSA
+            SET ESTADO = :novoEstado
+          WHERE CODIGO_CONTRATO = :codigoContrato`,
+        { novoEstado, codigoContrato: id } as any,
+      );
+
+      await queryRunner.commitTransaction();
+
+      return {
+        success: true,
+        message:
+          novoEstado === 1
+            ? 'Contrato de bolsa ativado com sucesso'
+            : 'Contrato de bolsa desativado com sucesso',
+        data: {
+          codigoContrato: id,
+          estado: novoEstado,
+        },
+      };
+    } catch (error: any) {
+      await queryRunner.rollbackTransaction();
+      console.error('Erro ao alternar estado do contrato de bolsa:', error);
+      throw new Error(
+        `Falha ao alternar estado do contrato de bolsa: ${error.message}`,
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
 
   async listarContratosBolsa(filtros: {
     codigoInstituicao?: number;

@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Query,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { InstitutionalContractService } from './institutional-contract.service';
 import { CreateContratoBolsaDto } from './dto/CreateContratoBolsaDto';
@@ -46,6 +47,10 @@ export class InstitutionalContractController {
       id,
       updateInstitutionalContractDto,
     );
+  }
+  @Patch(':id/estado')
+  async alternarEstado(@Param('id', ParseIntPipe) id: number) {
+    return this.institutionalContractService.alternarEstadoContratoBolsa(id);
   }
 
   @Delete(':id')

@@ -311,13 +311,14 @@ export class InstitutionalContractService {
     }
   }
 
-  async listarContratosBolsa(filtros: {
-    codigoInstituicao?: number;
-    codigoContrato?: number;
-    limit?: number;
-    page?: number;
-  }) {
-    const { codigoInstituicao, codigoContrato, limit = 10, page = 1 } = filtros;
+  async listarContratosBolsa(filtros: ListContratoBolsaQueryDto) {
+    const {
+      codigoInstituicao,
+      codigoContrato,
+      limit = 10,
+      page = 1,
+      situacao,
+    } = filtros;
 
     const offset = (page - 1) * limit;
     let condicoes = '';
@@ -330,6 +331,13 @@ export class InstitutionalContractService {
     if (codigoContrato !== undefined) {
       condicoes += ' AND cb.CODIGO_CONTRATO = :codigoContrato';
       params.codigoContrato = codigoContrato;
+    }
+
+    if (situacao == 1) {
+      condicoes += ' AND cb.ESTADO = 1 and AND cb.DATA_FIM >= TRUNC(SYSDATE)';
+    }
+    if (situacao == 0) {
+      condicoes += ' AND cb.DATA_FIM < TRUNC(SYSDATE)';
     }
 
     const baseJoins = `

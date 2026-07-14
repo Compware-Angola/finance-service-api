@@ -334,7 +334,7 @@ export class InstitutionalContractService {
     }
 
     if (situacao == 1) {
-      condicoes += ' AND cb.ESTADO = 1 and AND cb.DATA_FIM >= TRUNC(SYSDATE)';
+      condicoes += ' AND cb.ESTADO = 1  AND cb.DATA_FIM >= TRUNC(SYSDATE)';
     }
     if (situacao == 0) {
       condicoes += ' AND cb.DATA_FIM < TRUNC(SYSDATE)';

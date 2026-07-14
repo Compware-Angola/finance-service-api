@@ -201,18 +201,34 @@ export class InstitutionalContractService {
     }
   }
 
-  async listarContratosBolsa(filtros: ListContratoBolsaQueryDto) {
+  async listarContratosBolsa(filtros: {
+    codigoInstituicao?: number;
+    codigoContrato?: number;
+    limit?: number;
+    page?: number;
+  }) {
+    const { codigoInstituicao, codigoContrato, limit = 10, page = 1 } = filtros;
+
+    const offset = (page - 1) * limit;
     let condicoes = '';
     const params: Record<string, any> = {};
 
-    if (filtros.codigoInstituicao !== undefined) {
+    if (codigoInstituicao !== undefined) {
       condicoes += ' AND cb.CODIGO_INSTITUICAO = :codigoInstituicao';
-      params.codigoInstituicao = filtros.codigoInstituicao;
+      params.codigoInstituicao = codigoInstituicao;
     }
-    if (filtros.codigoContrato !== undefined) {
+    if (codigoContrato !== undefined) {
       condicoes += ' AND cb.CODIGO_CONTRATO = :codigoContrato';
-      params.codigoContrato = filtros.codigoContrato;
+      params.codigoContrato = codigoContrato;
     }
+
+    const baseJoins = `
+      FROM TB_CONTRATO_BOLSA cb
+      INNER JOIN FK2_TB_INSTITUICAO i
+        ON i.CODIGO = cb.CODIGO_INSTITUICAO
+      WHERE 1=1
+      ${condicoes}
+    `;
 
     const sqlContratos = `
       SELECT
@@ -222,18 +238,31 @@ export class InstitutionalContractService {
         cb.DATA_INICIO         as dataInicio,
         cb.DATA_FIM            as dataFim,
         cb.ESTADO              as estado
-      FROM TB_CONTRATO_BOLSA cb
-      INNER JOIN FK2_TB_INSTITUICAO i
-        ON i.CODIGO = cb.CODIGO_INSTITUICAO
-      WHERE 1=1
-      ${condicoes}
+      ${baseJoins}
       ORDER BY cb.CODIGO_CONTRATO DESC
+      OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
     `;
 
-    const contratos = await this.dataSource.query(sqlContratos, params as any);
+    const sqlCount = `
+      SELECT COUNT(1) AS TOTAL
+      ${baseJoins}
+    `;
+
+    const [contratos, countResult] = await Promise.all([
+      this.dataSource.query(sqlContratos, { ...params, offset, limit } as any),
+      this.dataSource.query(sqlCount, params as any),
+    ]);
+
+    const total = Number(countResult[0].TOTAL);
 
     if (!contratos || contratos.length === 0) {
-      return [];
+      return {
+        data: [],
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
     }
 
     const codigosContrato: number[] = contratos.map(
@@ -241,7 +270,7 @@ export class InstitutionalContractService {
     );
     const itensPorContrato = await this.obterItensPorContratos(codigosContrato);
 
-    return contratos.map((c: any) => ({
+    const data = contratos.map((c: any) => ({
       codigoContrato: c.CODIGOCONTRATO,
       codigoInstituicao: c.CODIGOINSTITUICAO,
       instituicao: c.INSTITUICAO,
@@ -250,6 +279,14 @@ export class InstitutionalContractService {
       estado: c.ESTADO,
       bolsas: itensPorContrato.get(c.CODIGOCONTRATO) ?? [],
     }));
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   private async obterItensPorContratos(

@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import * as oracledb from 'oracledb';
 import { DataSource } from 'typeorm';
@@ -79,7 +83,9 @@ export class InstitutionalContractService {
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
       console.error('Erro ao criar contrato de bolsa:', error);
-      throw new Error(`Falha ao criar contrato de bolsa: ${error?.message}`);
+      throw new BadRequestException(
+        `Falha ao criar contrato de bolsa: ${error?.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -98,7 +104,7 @@ export class InstitutionalContractService {
         { codigoContrato: codigoContrato } as any,
       );
       if (!existente || existente.length === 0) {
-        throw new BadRequestException(
+        throw new NotFoundException(
           `Não foi encontrado contrato de bolsa com código ${codigoContrato}`,
         );
       }
@@ -175,7 +181,9 @@ export class InstitutionalContractService {
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
       console.error('Erro ao editar contrato de bolsa:', error);
-      throw new Error(`Falha ao editar contrato de bolsa: ${error.message}`);
+      throw new BadRequestException(
+        `Falha ao editar contrato de bolsa: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -196,7 +204,9 @@ export class InstitutionalContractService {
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
       console.error('Erro ao apagar contrato de bolsa:', error);
-      throw new Error(`Falha ao apagar contrato de bolsa: ${error.message}`);
+      throw new BadRequestException(
+        `Falha ao apagar contrato de bolsa: ${error.message}`,
+      );
     } finally {
       await queryRunner.release();
     }
@@ -262,7 +272,7 @@ export class InstitutionalContractService {
       );
 
       if (!existente || existente.length === 0) {
-        throw new BadRequestException(
+        throw new NotFoundException(
           `Não foi encontrado contrato de bolsa com código ${id}`,
         );
       }
@@ -293,7 +303,7 @@ export class InstitutionalContractService {
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
       console.error('Erro ao alternar estado do contrato de bolsa:', error);
-      throw new Error(
+      throw new BadRequestException(
         `Falha ao alternar estado do contrato de bolsa: ${error.message}`,
       );
     } finally {

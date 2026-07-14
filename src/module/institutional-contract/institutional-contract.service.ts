@@ -187,11 +187,9 @@ export class InstitutionalContractService {
     await queryRunner.startTransaction();
     try {
       await queryRunner.query(
-        `DELETE FROM TB_CONTRATO_BOLSA_ITEM WHERE CODIGO_CONTRATO = :codigoContrato`,
-        { codigoContrato: id } as any,
-      );
-      await queryRunner.query(
-        `DELETE FROM TB_CONTRATO_BOLSA WHERE CODIGO_CONTRATO = :codigoContrato`,
+        `UPDATE TB_CONTRATO_BOLSA
+   SET DELETED_AT = SYSDATE
+   WHERE CODIGO_CONTRATO = :codigoContrato`,
         { codigoContrato: id } as any,
       );
       await queryRunner.commitTransaction();
@@ -210,7 +208,7 @@ export class InstitutionalContractService {
 
     let condicoes = '';
     const params: Record<string, any> = {};
-
+    condicoes += ' AND cb.DELETED_AT is null';
     if (codigoInstituicao !== undefined) {
       condicoes += ' AND cb.CODIGO_INSTITUICAO = :codigoInstituicao';
       params.codigoInstituicao = codigoInstituicao;
@@ -261,7 +259,7 @@ export class InstitutionalContractService {
     const offset = (page - 1) * limit;
     let condicoes = '';
     const params: Record<string, any> = {};
-
+    condicoes += ' AND cb.DELETED_AT is null';
     if (codigoInstituicao !== undefined) {
       condicoes += ' AND cb.CODIGO_INSTITUICAO = :codigoInstituicao';
       params.codigoInstituicao = codigoInstituicao;

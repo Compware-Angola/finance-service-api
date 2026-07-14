@@ -551,6 +551,7 @@ export class InvoiceService {
     const {
       anoLectivo,
       codigoMatricula,
+      biEstudante,
       reference,
       limit = 10,
       page = 1,
@@ -597,6 +598,13 @@ export class InvoiceService {
       countQueryParams.reference = reference;
     }
 
+    if (biEstudante) {
+      whereConditions.push(
+        `COALESCE(p1.BILHETE_IDENTIDADE, p2.BILHETE_IDENTIDADE) = :biEstudante`,
+      );
+      dataQueryParams.biEstudante = biEstudante;
+      countQueryParams.biEstudante = biEstudante;
+    }
     const whereClause =
       whereConditions.length > 0 ? 'AND ' + whereConditions.join(' AND ') : '';
 
@@ -626,7 +634,7 @@ FROM (
 
         -- Nome do aluno
         COALESCE(p1.Nome_Completo, p2.Nome_Completo) AS nome_aluno,
-
+        COALESCE(p1.BILHETE_IDENTIDADE, p2.BILHETE_IDENTIDADE)  AS bi_aluno,
         c.designacao                      AS curso,
         po.designacao                     AS polo,
         ano.Designacao                    AS ano_lectivo,
@@ -761,6 +769,8 @@ FROM (
         f.estado,
         f.desconto,
         p1.Nome_Completo,
+        p1.BILHETE_IDENTIDADE,
+        p2.BILHETE_IDENTIDADE,
         p2.Nome_Completo,
         c.designacao,
         po.designacao,
@@ -781,12 +791,13 @@ WHERE rn BETWEEN :startRow AND :endRow
     FROM FK2_FACTURA f
     LEFT JOIN FK2_TB_MATRICULAS m ON m.Codigo = f.CodigoMatricula
     LEFT JOIN FK2_TB_ADMISSAO a ON a.codigo = m.Codigo_Aluno
-    LEFT JOIN FK2_TB_PREINSCRICAO p ON p.Codigo = a.pre_incricao
+    LEFT JOIN FK2_TB_PREINSCRICAO p1 ON p1.Codigo = a.pre_incricao
+    LEFT JOIN FK2_TB_PREINSCRICAO p2 ON p2.Codigo = f.codigo_preinscricao
     LEFT JOIN FK2_TB_CURSOS c ON c.codigo = m.Codigo_Curso
     LEFT JOIN FK2_POLOS po ON po.id = f.polo_id
     WHERE 1=1
     ${whereClause}
-  `;
+`;
 
     const totalResult = await this.dataSource.query(countSql, countQueryParams);
 
@@ -801,6 +812,7 @@ WHERE rn BETWEEN :startRow AND :endRow
       totalPages,
     };
   }
+
   async findInvoiceItens(invoiceId: number) {
     const sql = `
     SELECT
@@ -903,7 +915,7 @@ WHERE rn BETWEEN :startRow AND :endRow
 
           -- ================= ALUNO =================
           p.NOME_COMPLETO              AS nome_completo_aluno,
-          p.BILHETE_IDENTIDADE        AS bi_aluno,
+          p.BILHETE_IDENTIDADE         AS bi_aluno,
           p.Email                      AS email_aluno,
           p.Contactos_Telefonicos      AS contactos_telefonicos,
           p.Data_Nascimento            AS data_nascimento,
@@ -963,7 +975,7 @@ WHERE rn BETWEEN :startRow AND :endRow
              ON a.codigo = m.Codigo_Aluno
 
       LEFT JOIN FK2_TB_PREINSCRICAO p
-             ON p.CODIGO = a.pre_incricao
+             ON p.CODIGO = f.CODIGO_PREINSCRICAO
 
       LEFT JOIN FK2_PAGAMENTO_POR_REFERENCIAS ppr
              ON ppr.factura_codigo = f.Codigo
@@ -1009,6 +1021,7 @@ WHERE rn BETWEEN :startRow AND :endRow
         AND f.ano_lectivo = :academicYear
         AND f.estado <> 3
         AND (:status IS NULL OR f.estado = :status)
+        
   `;
 
     const totalResult = await this.dataSource.query(countSql, {

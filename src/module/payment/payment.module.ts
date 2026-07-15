@@ -18,6 +18,8 @@ import { CashRegistersService } from '../cash-registers/cash-registers.service';
 import { VoidPaymentService } from './void-payments.service';
 import { VoidPaymentTaxService } from './void-payments-tax.service';
 import { PaymentAnalyticsService } from '../cash-registers/payment-analytics.service';
+import { PaymentStaticsController } from './payment-statics.controller';
+import { PaymentStaticsService } from './payment-statics.service';
 
 @Module({
   imports: [
@@ -37,7 +39,7 @@ import { PaymentAnalyticsService } from '../cash-registers/payment-analytics.ser
     MonthlyFeesModule,
     InvoiceModule,
   ],
-  controllers: [PaymentController],
+  controllers: [PaymentController, PaymentStaticsController],
   providers: [
     PaymentService,
     AnoLectivoUtil,
@@ -46,6 +48,7 @@ import { PaymentAnalyticsService } from '../cash-registers/payment-analytics.ser
     CashRegistersService,
     VoidPaymentService,
     VoidPaymentTaxService,
+    PaymentStaticsService
   ],
   exports: [PaymentService],
 })

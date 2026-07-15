@@ -32,6 +32,13 @@ export class PaymentStaticsController {
     type: PaymentServiceComparisonResponseDto,
     isArray: true,
   })
+
+  @Get('summary/comparison')
+  @ApiOkResponse({
+    description: 'Comparação entre Propinas e Outros Serviços.',
+    type: PaymentServiceComparisonResponseDto,
+    isArray: true,
+  })
   async getPaymentServiceComparison(
     @Query() query: PaymentServiceComparisonDto,
   ) {

@@ -1,5 +1,25 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpCode, HttpStatus, ParseIntPipe, UseGuards, Req } from '@nestjs/common'; // Importação do ParseIntPipe
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  HttpCode,
+  HttpStatus,
+  ParseIntPipe,
+  UseGuards,
+  Req,
+} from '@nestjs/common'; // Importação do ParseIntPipe
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 
 import { InvoiceService } from './invoice.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -17,11 +37,13 @@ import { PermissionTypeDetails } from 'src/common/enums/permission.type';
 import { HttpService } from '@nestjs/axios';
 import { AccessLogHelper } from 'src/common/helpers/access-log.helper';
 
-
 @ApiTags('Invoices')
 @Controller('invoices')
 export class InvoiceController {
-  constructor(private readonly invoiceService: InvoiceService, private httpService: HttpService) { }
+  constructor(
+    private readonly invoiceService: InvoiceService,
+    private httpService: HttpService,
+  ) {}
 
   // ------------------------------------
   // 1. CREATE (POST)
@@ -29,18 +51,17 @@ export class InvoiceController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Cria uma nova fatura' })
-  @ApiResponse({ status: 201, "description": 'Fatura criada com sucesso.' })
+  @ApiResponse({ status: 201, description: 'Fatura criada com sucesso.' })
   async create(@Body() createInvoiceDto: CreateInvoiceDto) {
     return this.invoiceService.queueCreateInvoice(createInvoiceDto);
   }
   @Post('no-job')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Cria uma nova fatura' })
-  @ApiResponse({ status: 201, "description": 'Fatura criada com sucesso.' })
+  @ApiResponse({ status: 201, description: 'Fatura criada com sucesso.' })
   async create2(@Body() createInvoiceDto: CreateInvoiceDto) {
     return this.invoiceService.create(createInvoiceDto);
   }
-
 
   // ------------------------------------
   // 2. FIND ALL (GET) - COM PAGINAÇÃO
@@ -49,15 +70,23 @@ export class InvoiceController {
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.FACTURAS.sigla)
   @ApiOperation({ summary: 'Retorna todas as faturas com paginação' })
-  @ApiResponse({ status: 200, "description": 'Lista de faturas retornada com sucesso.' })
-  async findAll(@Query() paginationQuery: InvoiceSearchDto): Promise<PagedResult<Invoice>> {
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de faturas retornada com sucesso.',
+  })
+  async findAll(
+    @Query() paginationQuery: InvoiceSearchDto,
+  ): Promise<PagedResult<Invoice>> {
     return this.invoiceService.findInvoices(paginationQuery);
   }
 
-
   @Get('types')
   @ApiOperation({ summary: 'Retorna todos os tipos de documento de faturação' })
-  @ApiResponse({ status: 200, "description": 'Lista de tipos de documento de faturação retornada com sucesso.' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Lista de tipos de documento de faturação retornada com sucesso.',
+  })
   async findAllTypeInvoiceDocument(): Promise<TypeInvoiceDocument[]> {
     return this.invoiceService.findAllTypeInvoiceDocument();
   }
@@ -66,12 +95,13 @@ export class InvoiceController {
   // 6. FIND BY MATRICULA (GET /invoices/by-matricula)
   // ------------------------------------
   @Get('by-matricula')
-  @ApiOperation({ summary: 'Retorna faturas por Código de Matrícula, "com" paginação' })
-  @ApiResponse({ status: 200, "description": 'Lista de faturas filtrada.' })
+  @ApiOperation({
+    summary: 'Retorna faturas por Código de Matrícula, "com" paginação',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de faturas filtrada.' })
   async findByMatricula(
-    @Query() filterQuery: InvoiceFilterEnrollmentDto
+    @Query() filterQuery: InvoiceFilterEnrollmentDto,
   ): Promise<PagedResult<Invoice>> {
-
     return this.invoiceService.findByEnrollmentCode(filterQuery);
   }
 
@@ -79,11 +109,23 @@ export class InvoiceController {
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.DELETAR_FACTURA.sigla)
   @ApiOperation({ summary: 'Anula uma fatura pelo Código' })
-  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura a ser anulada', "type": Number })
-  @ApiResponse({ status: 200, "description": 'Fatura anulada com sucesso.', "type": Invoice })
-  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' })
-  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
-  async annulInvoice(@Param('id', ParseIntPipe) Codigo: number, @Body() body: { motivo: string }, @Req() req: any): Promise<{ sucesso: boolean; mensagem: string }> {
+  @ApiParam({
+    name: 'id',
+    description: 'O Código (ID) da fatura a ser anulada',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Fatura anulada com sucesso.',
+    type: Invoice,
+  })
+  @ApiResponse({ status: 400, description: 'ID da fatura inválido.' })
+  @ApiResponse({ status: 404, description: 'Fatura não encontrada.' })
+  async annulInvoice(
+    @Param('id', ParseIntPipe) Codigo: number,
+    @Body() body: { motivo: string },
+    @Req() req: any,
+  ): Promise<{ sucesso: boolean; mensagem: string }> {
     const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     console.log('Usuário autenticado:', user);
@@ -99,11 +141,22 @@ export class InvoiceController {
   @UseGuards(RemoteJwtAuthGuard, PermissionsGuard)
   @RequiredPermissions(PermissionTypeDetails.REACTIVAR_FACTURA.sigla)
   @ApiOperation({ summary: 'Reativa uma fatura anulada pelo Código' })
-  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura a ser reativada', "type": Number })
-  @ApiResponse({ status: 200, "description": 'Fatura reativada com sucesso.', "type": Invoice })
-  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' })
-  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
-  async reactivateInvoice(@Param('id', ParseIntPipe) Codigo: number, @Req() req: any): Promise<Invoice> {
+  @ApiParam({
+    name: 'id',
+    description: 'O Código (ID) da fatura a ser reativada',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Fatura reativada com sucesso.',
+    type: Invoice,
+  })
+  @ApiResponse({ status: 400, description: 'ID da fatura inválido.' })
+  @ApiResponse({ status: 404, description: 'Fatura não encontrada.' })
+  async reactivateInvoice(
+    @Param('id', ParseIntPipe) Codigo: number,
+    @Req() req: any,
+  ): Promise<Invoice> {
     const user = req.user;
     const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
     console.log('Usuário autenticado:', user);
@@ -121,21 +174,27 @@ export class InvoiceController {
   // ------------------------------------
   @Get(':id')
   @ApiOperation({ summary: 'Busca uma fatura pelo Código' })
-  @ApiParam({ name: 'id', "description": 'O Código (ID) da fatura', "type": Number })
-  @ApiResponse({ status: 200, "description": 'Fatura encontrada.', "type": Invoice })
-  @ApiResponse({ status: 400, "description": 'ID da fatura inválido.' })
-  @ApiResponse({ status: 404, "description": 'Fatura não encontrada.' })
+  @ApiParam({
+    name: 'id',
+    description: 'O Código (ID) da fatura',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Fatura encontrada.',
+    type: Invoice,
+  })
+  @ApiResponse({ status: 400, description: 'ID da fatura inválido.' })
+  @ApiResponse({ status: 404, description: 'Fatura não encontrada.' })
   async findOne(@Param('id', ParseIntPipe) Codigo: number): Promise<Invoice> {
     return this.invoiceService.findOne(Codigo);
   }
 
   /**
-     * Lista os itens de uma factura pelo ID da factura
-     */
+   * Lista os itens de uma factura pelo ID da factura
+   */
   @Get(':id/itens')
-  async findInvoiceItens(
-    @Param('id', ParseIntPipe) invoiceId: number,
-  ) {
+  async findInvoiceItens(@Param('id', ParseIntPipe) invoiceId: number) {
     const itens = await this.invoiceService.findInvoiceItens(invoiceId);
 
     return {

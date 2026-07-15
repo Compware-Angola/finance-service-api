@@ -25,6 +25,18 @@ periodos AS (
         anos.ano_anterior
     FROM meses
     CROSS JOIN anos
+),
+pagamentos_validos AS (
+    SELECT
+        pgt.CODIGO,
+        pgt.ANOLECTIVO,
+        pgt.CREATED_AT,
+        pgt.VALOR_DEPOSITADO,
+        pgt.STATUS_PAGAMENTO,
+        factura.ESTADO AS FACTURA_ESTADO
+    FROM FK2_TB_PAGAMENTOS pgt
+    INNER JOIN FK2_FACTURA factura
+        ON factura.CODIGO = pgt.CODIGO_FACTURA
 )
 SELECT
     periodos.ordem                                                                          AS ordem,
@@ -48,8 +60,8 @@ SELECT
     ), 0)                                                                                     AS valor_ano_anterior
 
 FROM periodos
-LEFT JOIN FK2_TB_PAGAMENTOS pagamentos
-    ON pagamentos.STATUS_PAGAMENTO = 'concluido'
+LEFT JOIN pagamentos_validos pagamentos
+    ON (pagamentos.STATUS_PAGAMENTO = 'concluido' OR pagamentos.FACTURA_ESTADO = 1)
     AND (
         (pagamentos.ANOLECTIVO = periodos.ano_atual
             AND pagamentos.CREATED_AT >= periodos.inicio_mes_atual
@@ -78,6 +90,18 @@ WITH anos AS (
         (SELECT TRUNC(DATAINICIOPRIMEIROSEMESTRE, 'MM') FROM FK2_TB_ANO_LECTIVO WHERE CODIGO = :anoAtual)    AS inicio_ano_atual,
         (SELECT TRUNC(DATAINICIOPRIMEIROSEMESTRE, 'MM') FROM FK2_TB_ANO_LECTIVO WHERE CODIGO = :anoAnterior) AS inicio_ano_anterior
     FROM dual
+),
+pagamentos_validos AS (
+    SELECT
+        pgt.CODIGO,
+        pgt.ANOLECTIVO,
+        pgt.CREATED_AT,
+        pgt.VALOR_DEPOSITADO,
+        pgt.STATUS_PAGAMENTO,
+        factura.ESTADO AS FACTURA_ESTADO
+    FROM FK2_TB_PAGAMENTOS pgt
+    INNER JOIN FK2_FACTURA factura
+        ON factura.CODIGO = pgt.CODIGO_FACTURA
 )
 SELECT
     anos.label_ano_atual                                                                      AS label_ano_atual,
@@ -105,8 +129,8 @@ SELECT
              THEN pagamentos.CODIGO END)                                                      AS total_pagamentos_ano_anterior
 
 FROM anos
-LEFT JOIN FK2_TB_PAGAMENTOS pagamentos
-    ON pagamentos.STATUS_PAGAMENTO = 'concluido'
+LEFT JOIN pagamentos_validos pagamentos
+    ON (pagamentos.STATUS_PAGAMENTO = 'concluido' OR pagamentos.FACTURA_ESTADO = 1)
     AND (
         (pagamentos.ANOLECTIVO = anos.ano_atual
             AND pagamentos.CREATED_AT >= anos.inicio_ano_atual

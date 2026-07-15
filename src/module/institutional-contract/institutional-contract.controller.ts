@@ -1,34 +1,66 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { InstitutionalContractService } from './institutional-contract.service';
-import { CreateInstitutionalContractDto } from './dto/create-institutional-contract.dto';
-import { UpdateInstitutionalContractDto } from './dto/update-institutional-contract.dto';
+import { CreateContratoBolsaDto } from './dto/CreateContratoBolsaDto';
+import { UpdateContratoBolsaDto } from './dto/UpdateContratoBolsaDto';
+import { FindCreditoEducacionalDto } from '../credito_educacional/dto/find-credito-educacional.dto';
+import {
+  ContratoBolsaEstatisticasQueryDto,
+  ListContratoBolsaQueryDto,
+} from './dto/ListContratoBolsaQueryDto';
 
 @Controller('institutional-contract')
 export class InstitutionalContractController {
-  constructor(private readonly institutionalContractService: InstitutionalContractService) {}
+  constructor(
+    private readonly institutionalContractService: InstitutionalContractService,
+  ) {}
 
   @Post()
-  create(@Body() createInstitutionalContractDto: CreateInstitutionalContractDto) {
-    return this.institutionalContractService.create(createInstitutionalContractDto);
+  create(@Body() createInstitutionalContractDto: CreateContratoBolsaDto) {
+    return this.institutionalContractService.createContratoBolsa(
+      createInstitutionalContractDto,
+    );
   }
 
   @Get()
-  findAll() {
-    return this.institutionalContractService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.institutionalContractService.findOne(+id);
+  findAll(@Query() findInstitutionalContractDto: ListContratoBolsaQueryDto) {
+    return this.institutionalContractService.listarContratosBolsa(
+      findInstitutionalContractDto,
+    );
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateInstitutionalContractDto: UpdateInstitutionalContractDto) {
-    return this.institutionalContractService.update(+id, updateInstitutionalContractDto);
+  update(
+    @Param('id') id: number,
+    @Body() updateInstitutionalContractDto: UpdateContratoBolsaDto,
+  ) {
+    return this.institutionalContractService.editarContratoBolsa(
+      id,
+      updateInstitutionalContractDto,
+    );
+  }
+  @Patch(':id/estado')
+  async alternarEstado(@Param('id', ParseIntPipe) id: number) {
+    return this.institutionalContractService.alternarEstadoContratoBolsa(id);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.institutionalContractService.remove(+id);
+  remove(@Param('id') id: number) {
+    return this.institutionalContractService.deleteContratoBolsa(+id);
+  }
+  @Get('estatisticas')
+  async getEstatisticas(@Query() query: ContratoBolsaEstatisticasQueryDto) {
+    return this.institutionalContractService.obterEstatisticasContratosBolsa(
+      query,
+    );
   }
 }

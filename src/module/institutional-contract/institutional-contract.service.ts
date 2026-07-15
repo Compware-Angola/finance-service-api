@@ -15,12 +15,48 @@ import {
 @Injectable()
 export class InstitutionalContractService {
   constructor(private readonly dataSource: DataSource) {}
+  private async verificarInstituicaoExiste(
+    queryRunner: any,
+    codigoInstituicao: number,
+  ): Promise<void> {
+    const instituicaoExiste = await queryRunner.query(
+      `SELECT CODIGO FROM FK2_TB_INSTITUICAO WHERE CODIGO = :codigoInstituicao`,
+      { codigoInstituicao } as any,
+    );
+
+    if (!instituicaoExiste || instituicaoExiste.length === 0) {
+      throw new BadRequestException(
+        `Não foi encontrada instituição com código ${codigoInstituicao}`,
+      );
+    }
+  }
   async createContratoBolsa(dto: CreateContratoBolsaDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
+      await this.verificarInstituicaoExiste(queryRunner, dto.codigoInstituicao);
+      const codigosBolsa = dto.bolsas.map((item) => item.codigoBolsa);
+      const bolsasEmConflito = await this.instituicaoTemContratoBolsa(
+        dto.codigoInstituicao,
+        codigosBolsa,
+      );
+      console.log('conflitos', bolsasEmConflito);
+      const bolsasParaCriar = dto.bolsas.filter(
+        (item) =>
+          !bolsasEmConflito.some(
+            (b) => Number(b.codigoBolsa) === Number(item.codigoBolsa),
+          ),
+      );
+      if (bolsasParaCriar.length === 0) {
+        throw new BadRequestException({
+          message:
+            'Todas as bolsas selecionadas já possuem contrato ativo com esta instituição',
+          bolsasEmConflito,
+        });
+      }
+
       const sql = `
         INSERT INTO TB_CONTRATO_BOLSA (
           CODIGO_INSTITUICAO,
@@ -63,7 +99,7 @@ export class InstitutionalContractService {
         )
       `;
 
-      for (const item of dto.bolsas) {
+      for (const item of bolsasParaCriar) {
         await queryRunner.query(sqlItem, {
           codigoContrato: codigoContratoCriado,
           codigoBolsa: item.codigoBolsa,
@@ -79,6 +115,8 @@ export class InstitutionalContractService {
         data: {
           codigoContrato: codigoContratoCriado,
         },
+        bolsasIgnoradas:
+          bolsasEmConflito.length > 0 ? bolsasEmConflito : undefined,
       };
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
@@ -405,6 +443,50 @@ export class InstitutionalContractService {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+  private async instituicaoTemContratoBolsa(
+    codigoInstituicao: number,
+    codigoBolsas: number[],
+    codigoContratoExcluir?: number,
+  ): Promise<{ codigoBolsa: number; designacao: string }[]> {
+    if (codigoBolsas.length === 0) return [];
+
+    const placeholders = codigoBolsas.map((_, idx) => `:cod${idx}`).join(', ');
+    const params: Record<string, any> = {};
+    codigoBolsas.forEach((codigo, idx) => {
+      params[`cod${idx}`] = codigo;
+    });
+    params['codigoInstituicao'] = codigoInstituicao;
+
+    let condicaoExclusao = '';
+    if (codigoContratoExcluir !== undefined) {
+      condicaoExclusao = ' AND cb.CODIGO_CONTRATO != :codigoContratoExcluir';
+      params['codigoContratoExcluir'] = codigoContratoExcluir;
+    }
+
+    const sql = `
+    SELECT DISTINCT
+      ci.CODIGO_BOLSA as CODIGO_BOLSA,
+      b.DESIGNACAO    as DESIGNACAO
+    FROM TB_CONTRATO_BOLSA cb
+    INNER JOIN TB_CONTRATO_BOLSA_ITEM ci
+        ON ci.CODIGO_CONTRATO = cb.CODIGO_CONTRATO
+    INNER JOIN FK2_TB_INSTITUICAO i
+        ON i.CODIGO = cb.CODIGO_INSTITUICAO
+    INNER JOIN FK2_TB_BOLSAS b
+        ON b.CODIGO = ci.CODIGO_BOLSA
+    WHERE cb.DELETED_AT is null
+    AND ci.CODIGO_BOLSA in (${placeholders})
+    AND cb.CODIGO_INSTITUICAO = :codigoInstituicao
+    AND cb.DATA_FIM >= TRUNC(SYSDATE)
+    ${condicaoExclusao}`;
+
+    const rows = await this.dataSource.query(sql, params as any);
+
+    return rows.map((row: any) => ({
+      codigoBolsa: Number(row.CODIGO_BOLSA),
+      designacao: row.DESIGNACAO,
+    }));
   }
 
   private async obterItensPorContratos(

@@ -258,7 +258,7 @@ export class InvoiceService {
       this.academicYearRepository.target,
       {
         where: { estado: 'Activo' },
-        select: ['Codigo', 'Designacao'],
+        select: ['codigo', 'designacao'],
       },
     );
 
@@ -272,10 +272,10 @@ export class InvoiceService {
     const hashData = await this.hashService.generateInvoiceHashData(
       fixToInt(invoiceData.TotalPreco ?? 0),
       tipoDocId,
-      anoLetivo.Codigo,
+      anoLetivo.codigo,
       invoiceData.polo_id ?? 1,
       tipoDocumentoSigla,
-      anoLetivo.Designacao,
+      anoLetivo.designacao ?? "",
     );
 
     //4.1 Verificar a Isenção
@@ -288,7 +288,7 @@ export class InvoiceService {
         .map((_, i) => `:service${i}`)
         .join(', ');
       const queryParams: any = {
-        academicYear: invoiceData.codigo_anoLectivo ?? anoLetivo.Codigo,
+        academicYear: invoiceData.codigo_anoLectivo ?? anoLetivo.codigo,
         studentId: createInvoiceDto?.CodigoMatricula,
       };
       invoiceProductCodes.forEach((code, i) => {
@@ -437,7 +437,7 @@ export class InvoiceService {
         contaCorrente: '',
         faturaReference: '',
         canal: invoiceData.canal ?? 3,
-        anoLectivo: invoiceData.codigo_anoLectivo ?? anoLetivo.Codigo,
+        anoLectivo: invoiceData.codigo_anoLectivo ?? anoLetivo.codigo,
         codigoPreInscricao: invoiceData.codigo_preinscricao ?? null,
         numSequenciaFactura: hashData.numSequenciaFactura,
         tipoDocumentoFacturaId: tipoDocId,

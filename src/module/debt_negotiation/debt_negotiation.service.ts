@@ -505,7 +505,7 @@ export class DebtNegotiationService {
 
     const curso = toLowerCaseKeys(cursoRaw) || null;
     const anoCorrente = this.anoAtualPrincipal;
-    const anoAtual = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
+    const anoAtual = await this.anoLectivoRepo.findOne({ where: { codigo: anoCorrente } });
 
     if (!anoAtual) return [];
 
@@ -546,10 +546,10 @@ export class DebtNegotiationService {
 
     let bolseiroGlobal: TbBolseiroSiiuma | null = null;
     if (maiorAno?.maior) {
-      const anoLectivoBolsa = await this.anoLectivoRepo.findOne({ where: { Codigo: maiorAno.maior } });
+      const anoLectivoBolsa = await this.anoLectivoRepo.findOne({ where: { codigo: maiorAno.maior } });
       if (anoLectivoBolsa) {
         bolseiroGlobal = await this.bolseiroRepo.findOne({
-          where: { codigo_matricula: matricula.codigo, ano: anoLectivoBolsa.Designacao },
+          where: { codigo_matricula: matricula.codigo, ano: anoLectivoBolsa.designacao },
         });
       }
     }
@@ -834,7 +834,7 @@ AND ts."codigo_ano_lectivo" = :3
     if (!curso?.curso) return [];
 
     // 3. Ano letivo atual
-    const anoActual = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
+    const anoActual = await this.anoLectivoRepo.findOne({ where: { codigo: anoCorrente } });
     if (!anoActual) return [];
 
     // 4. Meses ativos para pós-graduação
@@ -883,12 +883,12 @@ AND ts."codigo_ano_lectivo" = :3
       mes_propina: mes.mes_propina,
       mes_temp_id: null,
       n_prestacao: mes.codigo_mes,
-      ano_lectivo: anoActual.Designacao,
+      ano_lectivo: anoActual.designacao || "",
       taxa_multa: 0,
       taxa_desconto: 0,
       bolsa: '',
-      codigo_propina: propina.Codigo,
-      codigo_anoLectivo: anoActual.Codigo,
+      codigo_propina: propina.codigo,
+      codigo_anoLectivo: anoActual.codigo,
       desconto: 0,
       valor_iva: 0,
       tipo_taxas: 0,
@@ -995,7 +995,7 @@ AND ts."codigo_ano_lectivo" = :3
     }
 
     const anoCorrente = this.anoAtualPrincipal;
-    const anoCorrenteObj = await this.anoLectivoRepo.findOne({ where: { Codigo: anoCorrente } });
+    const anoCorrenteObj = await this.anoLectivoRepo.findOne({ where: { codigo: anoCorrente } });
     const meses = await this.mesCalendarioRepo.find({ where: { id: 7 } });
     const mesesDividas = dividas
       .filter(d => d.mes_temp_id)
@@ -1397,7 +1397,7 @@ AND ts."codigo_ano_lectivo" = :3
    */
   async dividasFacturasAnoCorrente(preinscricaoId: number): Promise<number> {
     // 1. Busca ano letivo atual com segurança
-    const anoAtual = await this.anoLectivoRepo.findOne({ where: { Codigo: this.anoAtualPrincipal } });
+    const anoAtual = await this.anoLectivoRepo.findOne({ where: { codigo: this.anoAtualPrincipal } });
     if (!anoAtual) return 0;
 
     // 2. Usa GROUP BY + MAX() ao invés de DISTINCT
@@ -1423,7 +1423,7 @@ AND ts."codigo_ano_lectivo" = :3
       .where('pre.Codigo = :preCodigo', { preCodigo: preinscricaoId })
       .andWhere('f.corrente = 1')
       .andWhere('f.estado != 3')
-      .andWhere('f.ano_lectivo = :anoLectivo', { anoLectivo: anoAtual.Codigo })
+      .andWhere('f.ano_lectivo = :anoLectivo', { anoLectivo: anoAtual.codigo })
       .groupBy('f.Codigo')
       .orderBy('f.Codigo', 'ASC')
       .getRawMany();

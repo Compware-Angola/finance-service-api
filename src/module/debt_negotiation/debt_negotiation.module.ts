@@ -44,6 +44,7 @@ import { ListDebtNegotiationController } from './list_debt_negotiation.controlle
 import { ListDebtNegotiationService } from './list_debt_negotiation.service';
 import { MonthlyFeesDiscountUtilService } from '../shared/monthly_fees/monthly_fees.discount.Util.service';
 import { NegotiationService } from './negotiation.service';
+import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { NegotiationService } from './negotiation.service';
     InvoiceNumberingAndHashService,
     CompanyKey,
     MonthlyFeesDiscountUtilService,
+    StudentMovimentUtilService,
   ],
 })
-export class DebtNegotiationModule { }
+export class DebtNegotiationModule {}

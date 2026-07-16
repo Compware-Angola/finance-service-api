@@ -1,11 +1,9 @@
 import { Controller, Get, Query } from "@nestjs/common";
 import { ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { PaymentStaticsService } from "./payment-statics.service";
-import { PaymentMonthlySummaryDto } from "./dto/payment-monthly-summary.dto";
-import { PaymentSummaryResponseDto } from "./dto/payment-summary-response.dto";
-import { PaymentDailySummaryDto } from "./dto/payment-daily-summary.dto";
 import { PaymentServiceComparisonDto, PaymentServiceComparisonResponseDto } from "./dto/payment-comparison.dto";
 import { PaymentPerformanceMonthlyDto } from "./dto/payment-performance-monthly.dto";
+import { PaymentSummaryDto, PaymentSummaryResponseDto } from "./dto/payment-summary.dto";
 
 @ApiTags('payment')
 @Controller('payment/statics')
@@ -14,28 +12,26 @@ export class PaymentStaticsController {
     private readonly paymentStaticsService: PaymentStaticsService,
   ) { }
 
-  @Get('summary/daily')
+  @Get('summary')
   @ApiOkResponse({
-    description: 'Resumo dos pagamentos realizados no dia corrente',
+    description: 'Resumo de pagamentos agrupados por forma de pagamento.',
     type: PaymentSummaryResponseDto,
+    isArray: true,
   })
-  async getPaymentDailySummary(
-    @Query() query: PaymentDailySummaryDto,
+  async getPaymentSummary(
+    @Query() query: PaymentSummaryDto,
   ) {
-    return this.paymentStaticsService.getPaymentDailySummary(query);
+    const data = await this.paymentStaticsService.getPaymentSummary(query);
+    return { data }
+
   }
 
-
-  @Get('summary/monthly')
+  @Get('summary/comparison')
   @ApiOkResponse({
-    description: 'Resumo dos pagamentos por mês',
-    type: PaymentSummaryResponseDto,
+    description: 'Comparação entre Propinas e Outros Serviços.',
+    type: PaymentServiceComparisonResponseDto,
+    isArray: true,
   })
-  async getPaymentMonthlySummary(
-    @Query() query: PaymentMonthlySummaryDto,
-  ) {
-    return this.paymentStaticsService.getPaymentMonthlySummary(query);
-  }
 
   @Get('summary/comparison')
   @ApiOkResponse({

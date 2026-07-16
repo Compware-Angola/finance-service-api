@@ -597,9 +597,9 @@ export class CreditoEducacionalService {
     return tipo === 'PERCENTUAL'
       ? `${valor}%`
       : new Intl.NumberFormat('pt-AO', {
-          style: 'currency',
-          currency: 'AOA',
-        }).format(valor);
+        style: 'currency',
+        currency: 'AOA',
+      }).format(valor);
   }
 
   private formatSemestre(semestre?: number | string): string {

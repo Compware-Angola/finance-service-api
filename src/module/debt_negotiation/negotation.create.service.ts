@@ -73,7 +73,7 @@ export class CreateDebtNegotiationService {
 
       // 2. Buscar ano letivo atual
       const anoLectivo = await this.academicYearRepo.findOne({
-        where: { Codigo: this.anoAtualPrincipal },
+        where: { codigo: this.anoAtualPrincipal },
       });
       if (!anoLectivo) throw new BadRequestException('Ano letivo não encontrado');
 
@@ -87,7 +87,7 @@ export class CreateDebtNegotiationService {
 
       if (negociacaoExistente) {
         throw new BadRequestException(
-          `Aluno ${aluno.matricula} já possui negociação no ano letivo ${anoLectivo.Designacao}`,
+          `Aluno ${aluno.matricula} já possui negociação no ano letivo ${anoLectivo.designacao}`,
         );
       }
 
@@ -244,7 +244,7 @@ export class CreateDebtNegotiationService {
         primeiroValorApagar,
         valorRestante,
         codigo_matricula: aluno.matricula,
-        codigo_ano_lectivo: anoLectivo.Codigo,
+        codigo_ano_lectivo: anoLectivo.codigo,
         codigo_fatura: faturaEntrada.Codigo,
         qtd_prestacoes: qtd_meses,
         tipo_negociacao_id,

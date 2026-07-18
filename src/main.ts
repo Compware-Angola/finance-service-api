@@ -1,4 +1,5 @@
 process.env.TZ = 'Africa/Luanda';
+process.env.ORA_SDTZ = 'Africa/Luanda';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';

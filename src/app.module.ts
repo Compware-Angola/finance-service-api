@@ -65,6 +65,8 @@ import { InstitutionalContractModule } from './module/institutional-contract/ins
           username: config.get<string>('DB_USERNAME'),
           password: config.get<string>('DB_PASSWORD'),
           sid: config.get<string>('DB_SID'),
+          timezone: config.get<string>('TZ') || 'Africa/Luanda',
+
 
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: false,

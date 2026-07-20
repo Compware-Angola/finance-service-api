@@ -6,7 +6,7 @@ export const buildPaymentServiceComparisonWhereClause = (
 
     const clauses = [
 
-        `pagamentos.STATUS_PAGAMENTO = 'concluido'`,
+        `(pagamentos.STATUS_PAGAMENTO = 'concluido' OR factura.ESTADO = 1)`,
 
         `
         pagamentos.CREATED_AT >= TRUNC(
@@ -80,6 +80,9 @@ FROM (
         END AS LABEL
 
     FROM FK2_TB_PAGAMENTOS pagamentos
+
+    INNER JOIN FK2_FACTURA factura
+        ON factura.CODIGO = pagamentos.CODIGO_FACTURA
 
     INNER JOIN FK2_FACTURA_ITEMS factura_items
         ON factura_items.CODIGOFACTURA = pagamentos.CODIGO_FACTURA

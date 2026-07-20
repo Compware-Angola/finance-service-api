@@ -408,10 +408,11 @@ export class PaymentService {
     const joins = `
       FROM FK2_TB_PAGAMENTOS pg
       INNER JOIN FK2_FACTURA fac              ON fac.codigo = pg.codigo_factura
-      INNER JOIN FK2_TB_MATRICULAS mac        ON mac.codigo = fac.CODIGOMATRICULA
-      INNER JOIN FK2_TB_ADMISSAO adm          ON adm.codigo = mac.CODIGO_ALUNO
-      INNER JOIN FK2_TB_PREINSCRICAO pre      ON pre.codigo = adm.PRE_INCRICAO
-      INNER JOIN FK2_TB_CURSOS cur            ON cur.codigo = mac.codigo_curso
+      LEFT JOIN FK2_TB_MATRICULAS mac        ON mac.codigo = fac.CODIGOMATRICULA
+      LEFT JOIN FK2_TB_ADMISSAO adm          ON adm.codigo = mac.CODIGO_ALUNO
+     LEFT JOIN FK2_TB_PREINSCRICAO pre
+  ON pre.codigo = NVL(adm.PRE_INCRICAO, fac.CODIGO_PREINSCRICAO)
+      LEFT JOIN FK2_TB_CURSOS cur            ON cur.codigo = NVL(mac.codigo_curso, pre.curso_candidatura)
       LEFT  JOIN FK2_TB_CAIXAS cai            ON cai.codigo = pg.caixa_id
       LEFT  JOIN fk2_tb_canal_comunicacao can ON can.codigo = pg.canal
       LEFT  JOIN FK2_TB_FORMA_PAGAMENTO fp    ON to_char(fp.codigo) = pg.forma_pagamento
@@ -693,6 +694,7 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     }
 
     const anoCorrente = this.anoAtualPrincipal;
+
     const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
     const cleanText = (value?: string) => value?.replace(/\s+/g, '').trim();
     const cleanNOperacaoBancaria = cleanText(nOperacaoBancaria);
@@ -755,7 +757,7 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     const finalPayload = {
       ...rest,
       totalGeral: invoice.TotalPreco || 0,
-      anoLectivo: anoLectivo ?? anoCorrente,
+      anoLectivo: anoLectivo ?? invoice.anoLectivo ?? anoCorrente,
       codigoFactura: dto.codigoFactura,
       codigoPreInscricao:
         student?.codigo_preinscricao ??

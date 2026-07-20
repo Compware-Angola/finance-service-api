@@ -54,6 +54,10 @@ import { InstitutionalContractModule } from './module/institutional-contract/ins
       useFactory: (config: ConfigService) => {
         const isSSL = config.get<string>('DB_SSL') === 'true';
 
+        // ✅ Garantir timezone antes da criação da pool Oracle
+        process.env.TZ = config.get<string>('TZ') || 'Africa/Luanda';
+        process.env.ORA_SDTZ = config.get<string>('ORA_SDTZ') || 'Africa/Luanda';
+
         return {
           type: 'oracle' as const,
           host: config.get<string>('DB_HOST'),
@@ -61,6 +65,8 @@ import { InstitutionalContractModule } from './module/institutional-contract/ins
           username: config.get<string>('DB_USERNAME'),
           password: config.get<string>('DB_PASSWORD'),
           sid: config.get<string>('DB_SID'),
+          timezone: config.get<string>('TZ') || 'Africa/Luanda',
+
 
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: false,

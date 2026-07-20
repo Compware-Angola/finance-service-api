@@ -339,8 +339,8 @@ export class PaymentReferencesService {
         throw error instanceof InternalServerErrorException
           ? error
           : new InternalServerErrorException(
-              'Erro ao registar referência de pagamento',
-            );
+            'Erro ao registar referência de pagamento',
+          );
       }
     }
 
@@ -369,7 +369,7 @@ export class PaymentReferencesService {
         const mesTemps = await transactionalEntityManager.find(
           this.mesTempRepository.target,
           {
-            where: { ano_lectivo: academicYear.Codigo, activo: 1 },
+            where: { ano_lectivo: academicYear.codigo, activo: 1 },
           },
         );
         if (!mesTemps.length) {

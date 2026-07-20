@@ -20,6 +20,8 @@ import { VoidPaymentTaxService } from './void-payments-tax.service';
 import { PaymentAnalyticsService } from '../cash-registers/payment-analytics.service';
 import { PaymentStaticsController } from './payment-statics.controller';
 import { PaymentStaticsService } from './payment-statics.service';
+import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
+import { AlunoService } from '../aluno/aluno.service';
 
 @Module({
   imports: [
@@ -48,8 +50,10 @@ import { PaymentStaticsService } from './payment-statics.service';
     CashRegistersService,
     VoidPaymentService,
     VoidPaymentTaxService,
-    PaymentStaticsService
+    PaymentStaticsService,
+    StudentMovimentUtilService,
+    AlunoService,
   ],
-  exports: [PaymentService],
+  exports: [PaymentService, StudentMovimentUtilService, AlunoService],
 })
-export class PaymentModule { }
+export class PaymentModule {}

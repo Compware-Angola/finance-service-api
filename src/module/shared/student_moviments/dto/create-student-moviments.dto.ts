@@ -26,6 +26,15 @@ export class CreateStudentMovimentDTO {
   @IsNumber()
   valor: number;
 
+  @ApiPropertyOptional({
+    description: 'Valor de Apagar',
+    example: 50000,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  valorFactura?: number;
+
   @ApiProperty({
     description: 'debito/credito',
     example: 0,

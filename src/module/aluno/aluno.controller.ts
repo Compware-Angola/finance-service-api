@@ -1,4 +1,11 @@
-import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiNotFoundResponse,
@@ -8,6 +15,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AlunoService } from './aluno.service';
+import { FindMovimentoContaEstudanteDTO } from './dto/find-movimento-conta-estudante.dto';
 
 @ApiTags('Alunos')
 @Controller('alunos')
@@ -76,5 +84,22 @@ export class AlunoController {
     @Param('codigo', ParseIntPipe) codigo: number,
   ) {
     return this.alunoService.findAlunoPreinscricaoByMatricula(codigo);
+  }
+
+  @Get('/:codigoMatricula/movimentos')
+  @ApiParam({
+    name: 'codigoMatricula',
+    type: Number,
+    example: 260,
+    description: 'Código da matrícula',
+  })
+  async findMovimentoContaEstudante(
+    @Param('codigoMatricula', ParseIntPipe) codigoMatricula: number,
+    @Query() findMovimentoContaEstudanteDTO: FindMovimentoContaEstudanteDTO,
+  ) {
+    return this.alunoService.findMovimentoContaEstudante(
+      codigoMatricula,
+      findMovimentoContaEstudanteDTO,
+    );
   }
 }

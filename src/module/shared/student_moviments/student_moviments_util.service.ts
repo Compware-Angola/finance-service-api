@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
 import { CreateStudentMovimentDTO } from './dto/create-student-moviments.dto';
 import { StudentMovimentOperationType } from 'src/enum/student-moviment-operation-type.enum';
+import { AlunoService } from 'src/module/aluno/aluno.service';
 
 @Injectable()
 export class StudentMovimentUtilService {
-  constructor(private dataSource: DataSource) {}
+  constructor(
+    private dataSource: DataSource,
+    private alunoService: AlunoService,
+  ) {}
 
   async registrarMovimento(
     dto: CreateStudentMovimentDTO,
@@ -41,7 +45,19 @@ export class StudentMovimentUtilService {
         saldoOperacao -= debito;
         break;
     }
-    const valorExcedente = saldoOperacao > 0 ? saldoOperacao : 0;
+    let valorExcedente = 0;
+    if (dto.tipoOperacao === StudentMovimentOperationType.CREDIT) {
+      if (dto.valorFactura != null) {
+        valorExcedente = dto.valor - dto.valorFactura;
+      } else {
+        valorExcedente = Math.max(saldoOperacao, 0);
+      }
+      await this.cadastrarSaldoEstudante(
+        valorExcedente,
+        dto.matricula,
+        queryRunner,
+      );
+    }
 
     await runner.query(
       `
@@ -93,6 +109,8 @@ export class StudentMovimentUtilService {
         valorExcedente,
       } as any,
     );
+    if (valorExcedente > 0) {
+    }
 
     return {
       saldoGeral,
@@ -150,5 +168,25 @@ export class StudentMovimentUtilService {
 
     const row = resultado[0] ?? {};
     return Number(row.TOTAL_CREDITO ?? 0) - Number(row.TOTAL_DEBITO ?? 0);
+  }
+  async cadastrarSaldoEstudante(
+    valorExcedente: number,
+    codigoMatricula: number,
+    queryRunner?: QueryRunner,
+  ) {
+    const runner = queryRunner ?? this.dataSource;
+    const preInscricao =
+      await this.alunoService.findAlunoPreinscricaoByMatricula(codigoMatricula);
+    await runner.query(
+      `
+      update fk2_tb_preinscricao
+      SET saldo = NVL(saldo, 0) + :valorExcedente
+      where codigo = :codigoPreinscricao
+      `,
+      {
+        codigoPreinscricao: preInscricao.CODIGO,
+        valorExcedente: valorExcedente,
+      } as any,
+    );
   }
 }

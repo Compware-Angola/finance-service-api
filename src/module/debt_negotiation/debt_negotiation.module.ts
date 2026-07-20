@@ -45,6 +45,7 @@ import { ListDebtNegotiationService } from './list_debt_negotiation.service';
 import { MonthlyFeesDiscountUtilService } from '../shared/monthly_fees/monthly_fees.discount.Util.service';
 import { NegotiationService } from './negotiation.service';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
+import { AlunoService } from '../aluno/aluno.service';
 
 @Module({
   imports: [
@@ -92,6 +93,7 @@ import { StudentMovimentUtilService } from '../shared/student_moviments/student_
     CompanyKey,
     MonthlyFeesDiscountUtilService,
     StudentMovimentUtilService,
+    AlunoService,
   ],
 })
 export class DebtNegotiationModule {}

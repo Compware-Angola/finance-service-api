@@ -12,6 +12,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { InvoiceProcessor } from '../jobs/invoice-servico.processor';
 import { HttpModule } from '@nestjs/axios/dist/http.module';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
+import { AlunoService } from '../aluno/aluno.service';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { StudentMovimentUtilService } from '../shared/student_moviments/student_
     CompanyKey,
     InvoiceProcessor,
     StudentMovimentUtilService,
+    AlunoService,
   ],
   exports: [
     InvoiceService,
@@ -43,6 +45,7 @@ import { StudentMovimentUtilService } from '../shared/student_moviments/student_
     InvoiceNumberingAndHashService,
     InvoiceProcessor,
     StudentMovimentUtilService,
+    AlunoService,
   ],
 })
 export class InvoiceModule {}

@@ -122,4 +122,15 @@ export class AlunoService {
       totalPages: Math.ceil(total / limit),
     };
   }
+  async findSaldoContaEstudante(codigoMatricula: number) {
+    const sql = `select p.saldo from fk2_tb_matriculas    m
+      inner join FK2_TB_ADMISSAO         a on a.codigo = m.CODIGO_ALUNO
+      inner join FK2_TB_PREINSCRICAO     p on p.codigo = a.PRE_INCRICAO
+      where m.codigo =  :codigoMatricula`;
+    const result = await this.dataSource.query(sql, { codigoMatricula } as any);
+    const saldo = Number(result?.[0]?.SALDO ?? 0);
+    return {
+      saldo,
+    };
+  }
 }

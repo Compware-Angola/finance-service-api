@@ -102,4 +102,16 @@ export class AlunoController {
       findMovimentoContaEstudanteDTO,
     );
   }
+  @Get('/:codigoMatricula/saldo')
+  @ApiParam({
+    name: 'codigoMatricula',
+    type: Number,
+    example: 260,
+    description: 'Código da matrícula',
+  })
+  async findSaldoContaEstudante(
+    @Param('codigoMatricula', ParseIntPipe) codigoMatricula: number,
+  ) {
+    return this.alunoService.findSaldoContaEstudante(codigoMatricula);
+  }
 }

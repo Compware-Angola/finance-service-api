@@ -148,4 +148,14 @@ export class CreatePaymentDto {
   @IsInt()
   @IsPositive()
   anoLectivo: number;
+  @ApiPropertyOptional({
+    description: 'Valor da reserva utilizado',
+    example: 0,
+  })
+  @IsNumber()
+  @Min(0)
+  valorReservaUtilizado?: number;
+
+
+
 }

@@ -34,6 +34,8 @@ import { normalizeParam } from '../util/normalize-util';
 import { InvoiceItemEnum } from 'src/common/enums/invoice-item.enum';
 import { InvoiceEnum } from 'src/common/enums/invoice.enum';
 import { fixToInt } from '../util/round';
+import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
+import { StudentMovimentOperationType } from 'src/enum/student-moviment-operation-type.enum';
 
 type ExemptionType = { CODIGO: number; SIGLA: string };
 
@@ -47,7 +49,7 @@ export class InvoiceService {
   constructor(
     @InjectQueue('invoice_service')
     private readonly invoiceQueue: Queue,
-
+    private readonly studentMovimentUtilService: StudentMovimentUtilService,
     @InjectRepository(Invoice)
     private readonly invoiceRepository: Repository<Invoice>,
 
@@ -538,7 +540,20 @@ export class InvoiceService {
         );
       }
     }
-
+    //Caso dar erro deixar somente assim e nao fazer nada  ...
+    if (invoiceData.CodigoMatricula) {
+      try {
+        this.studentMovimentUtilService.registrarMovimento({
+          estado: 1,
+          codigoTipoMovimento: 1,
+          matricula: invoiceData.CodigoMatricula,
+          referencia: referencia,
+          tipoOperacao: StudentMovimentOperationType.DEBIT,
+          valor: fixToInt(invoiceAmount ?? 0),
+          factura: codigoGerado,
+        });
+      } catch (error: any) {}
+    }
     return savedInvoice;
   }
 
@@ -909,7 +924,6 @@ WHERE fi.CodigoFactura = :invoiceId
     const params = [invoiceId];
 
     const results = await this.dataSource.query(sql, params);
-
 
     return toLowerCaseKeys(results);
   }

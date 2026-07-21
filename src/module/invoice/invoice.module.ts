@@ -11,25 +11,41 @@ import { InvoiceItem } from './entities/InvoiceIten.entity';
 import { BullModule } from '@nestjs/bullmq';
 import { InvoiceProcessor } from '../jobs/invoice-servico.processor';
 import { HttpModule } from '@nestjs/axios/dist/http.module';
+import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
+import { AlunoService } from '../aluno/aluno.service';
 
 @Module({
   imports: [
     HttpModule.register({
-        timeout: 5000,
-        maxRedirects: 5
-      }),
-   TypeOrmModule.forFeature([Invoice, TypeInvoiceDocument, AcademicYear,InvoiceItem]),
-      BullModule.registerQueue({
-         name: 'invoice_service',
-       }),
+      timeout: 5000,
+      maxRedirects: 5,
+    }),
+    TypeOrmModule.forFeature([
+      Invoice,
+      TypeInvoiceDocument,
+      AcademicYear,
+      InvoiceItem,
+    ]),
+    BullModule.registerQueue({
+      name: 'invoice_service',
+    }),
   ],
   controllers: [InvoiceController],
   providers: [
     InvoiceService,
     InvoiceNumberingAndHashService,
-    CompanyKey ,
+    CompanyKey,
     InvoiceProcessor,
+    StudentMovimentUtilService,
+    AlunoService,
   ],
-  exports: [InvoiceService, CompanyKey, InvoiceNumberingAndHashService,InvoiceProcessor],
+  exports: [
+    InvoiceService,
+    CompanyKey,
+    InvoiceNumberingAndHashService,
+    InvoiceProcessor,
+    StudentMovimentUtilService,
+    AlunoService,
+  ],
 })
 export class InvoiceModule {}

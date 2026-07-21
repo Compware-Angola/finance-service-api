@@ -32,13 +32,22 @@ export class ListContratoBolsaQueryDto {
   limit?: number;
 
   @ApiPropertyOptional({
-    description: 'Situação do contrato: 1 - Ativo, 0 - Expirado',
+    description: 'Situação do contrato: 1 - Não Expirado, 0 - Expirado',
     example: 1,
   })
   @IsOptional()
   @IsInt()
   @Type(() => Number)
   situacao?: number;
+
+  @ApiPropertyOptional({
+    description: 'Estado do contrato: 1 - Ativo, 0 - Inactivo',
+    example: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  estado?: number;
 
   @ApiPropertyOptional({
     description: 'Número da página',

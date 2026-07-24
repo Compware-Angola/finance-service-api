@@ -1,78 +1,56 @@
-import { Entity, PrimaryColumn, Column, BeforeInsert } from 'typeorm';
+import { Entity, PrimaryColumn, Column, PrimaryGeneratedColumn } from 'typeorm';
 import { BaseEntity } from 'src/common/base-entity';
 
-@Entity({ name: 'UMA_NEGOCIACAO_DIVIDAS' })
+@Entity({ name: 'FK2_NEGOCIACAO_DIVIDAS' })
 export class DebtNegotiation extends BaseEntity {
-  @PrimaryColumn({ name: 'id', type: 'number' })
+  @PrimaryGeneratedColumn({ name: 'ID', type: 'number' })
   id: number;
 
-  @Column({ name: 'codigo_matricula', type: 'number' })
+  @Column({ name: 'CODIGO_MATRICULA', type: 'number' })
   codigo_matricula: number;
 
-  @Column({ name: 'valor_divida', type: 'number', nullable: true })
+  @Column({ name: 'VALOR_DIVIDA', type: 'number', nullable: true })
   valor_divida: number;
 
-  @Column({ name: 'qtd_prestacoes', type: 'number' })
+  @Column({ name: 'QTD_PRESTACOES', type: 'number' })
   qtd_prestacoes: number;
 
-  @Column({ name: 'id_mes_inicial', type: 'number', nullable: true })
+  @Column({ name: 'ID_MES_INICIAL', type: 'number', nullable: true })
   id_mes_inicial: number;
 
-  @Column({ name: 'id_mes_final', type: 'number', nullable: true })
+  @Column({ name: 'ID_MES_FINAL', type: 'number', nullable: true })
   id_mes_final: number;
 
-  @Column({ name: 'primeiroValorApagar', type: 'number', nullable: true })
+  @Column({ name: 'PRIMEIROVALORAPAGAR', type: 'number', nullable: true })
   primeiroValorApagar: number;
 
-  @Column({ name: 'codigo_ano_lectivo', type: 'number' })
+  @Column({ name: 'CODIGO_ANO_LECTIVO', type: 'number' })
   codigo_ano_lectivo: number;
 
-  @Column({ name: 'mesesQuitar', type: 'number', nullable: true })
+  @Column({ name: 'CREATED_AT', type: 'timestamp', nullable: true })
+  created_at: Date;
+
+  @Column({ name: 'UPDATED_AT', type: 'timestamp', nullable: true })
+  updated_at: Date;
+
+  @Column({ name: 'MESESQUITAR', type: 'number', nullable: true })
   mesesQuitar: number;
 
-  @Column({ name: 'valorRestante', type: 'number', nullable: true })
+  @Column({ name: 'VALORRESTANTE', type: 'number', nullable: true })
   valorRestante: number;
 
-  @Column({ name: 'valorPrestacoes', type: 'number', nullable: true })
+  @Column({ name: 'VALORPRESTACOES', type: 'number', nullable: true })
   valorPrestacoes: number;
 
-  @Column({ name: 'mesesParImpar', type: 'varchar2', length: 10, nullable: true })
+  @Column({ name: 'MESESPARIMPAR', type: 'varchar2', length: 10, nullable: true })
   mesesParImpar: string;
 
-  @Column({ name: 'codigo_fatura', type: 'number' })
+  @Column({ name: 'CODIGO_FATURA', type: 'number' })
   codigo_fatura: number;
 
-  @Column({ name: 'tipo_negociacao_id', type: 'number' })
+  @Column({ name: 'TIPO_NEGOCIACAO_ID', type: 'number' })
   tipo_negociacao_id: number;
 
-  @Column({ name: 'estado', type: 'number', nullable: true })
+  @Column({ name: 'ESTADO', type: 'number', nullable: true })
   estado: number;
-
-  // ===== GERA O ID SEQUENCIAL AUTOMATICAMENTE =====
-  @BeforeInsert()
-  async generateId() {
-    if (!this.id) {
-      const repo = (this.constructor as any).repo;
-      if (!repo) throw new Error('Repositório não configurado. Use setRepository()');
-
-      console.log('GERANDO ID DA NEGOCIAÇÃO...');
-
-      const last = await repo
-        .createQueryBuilder('n')
-        .select('n.id', 'n_id')
-        .where("REGEXP_LIKE(n.id, '^[0-9]+$')")
-        .orderBy('TO_NUMBER(n.id)', 'DESC')
-        .limit(1)
-        .getRawOne();
-
-      let nextId = 1000;
-      if (last && last.n_id) {
-        const lastNum = Number(last.n_id);
-        if (!isNaN(lastNum)) nextId = lastNum + 1;
-      }
-
-      this.id = nextId;
-      console.log('ID GERADO:', this.id);
-    }
-  }
 }

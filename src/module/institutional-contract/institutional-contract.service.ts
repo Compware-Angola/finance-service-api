@@ -318,6 +318,7 @@ export class InstitutionalContractService {
       limit = 10,
       page = 1,
       situacao,
+      estado,
     } = filtros;
 
     const offset = (page - 1) * limit;
@@ -334,10 +335,14 @@ export class InstitutionalContractService {
     }
 
     if (situacao == 1) {
-      condicoes += ' AND cb.ESTADO = 1  AND cb.DATA_FIM >= TRUNC(SYSDATE)';
+      condicoes += ' AND cb.DATA_FIM >= TRUNC(SYSDATE)';
     }
     if (situacao == 0) {
       condicoes += ' AND cb.DATA_FIM < TRUNC(SYSDATE)';
+    }
+    if (estado) {
+      condicoes += ' AND cb.ESTADO = :estado';
+      params.estado = estado;
     }
 
     const baseJoins = `

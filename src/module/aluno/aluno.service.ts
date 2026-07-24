@@ -6,6 +6,7 @@ import {
 import { DataSource } from 'typeorm';
 import { FindMatriculaDto } from './dto/find-matricula.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { FindMovimentoContaEstudanteDTO } from './dto/find-movimento-conta-estudante.dto';
 
 @Injectable()
 export class AlunoService {
@@ -34,7 +35,6 @@ export class AlunoService {
     }
 
     const aluno = result[0];
-   
 
     if (aluno?.ESTADO_MATRICULA?.toLowerCase() === 'diplomado') {
       throw new BadRequestException('Aluno diplomado');
@@ -54,5 +54,83 @@ export class AlunoService {
     }
     const preInscricao = result[0];
     return preInscricao;
+  }
+  async findMovimentoContaEstudante(
+    codigoMatricula: number,
+    filters: FindMovimentoContaEstudanteDTO,
+  ) {
+    const { page = 1, limit = 10 } = filters;
+
+    const offset = (page - 1) * limit;
+
+    const conditions: string[] = [];
+    const params: any = { offset, limit };
+
+    if (codigoMatricula) {
+      conditions.push(`hm.MATRICULA = :codigoMatricula`);
+      params.codigoMatricula = codigoMatricula;
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const baseQuery = `
+    FROM FK2_HISTORICO_MOVIMENTO_CONTA_ESTUDANTE hm
+    ${whereClause}
+  `;
+
+    const sql = `
+    SELECT
+      hm.REFERENCIA,
+      hm.DATA_MOVIMENTO,
+      hm.CREDITO,
+      hm.DEBITO,
+      hm.ESTADO,
+      hm.MATRICULA,
+      hm.SALDO_OPERACAO,
+      hm.SALDO_GERAL,
+      hm.CODIGOTIPOMOVIMENTO,
+      hm.CODIGOMOTIVO,
+      hm.CODIGOUTILIZADOR,
+      hm.OBSERVACAO,
+      hm.FACTURA,
+      hm.CODIGO,
+      hm.VALOR_EXCEDENTE
+    ${baseQuery}
+    ORDER BY hm.CODIGO DESC
+    OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+  `;
+
+    const sqlCount = `
+    SELECT COUNT(1) AS TOTAL
+    ${baseQuery}
+
+  `;
+
+    const [result, countResult] = await Promise.all([
+      this.dataSource.query(sql, params),
+      this.dataSource.query(sqlCount, { codigoMatricula } as any),
+    ]);
+
+    const total = Number(countResult[0].TOTAL);
+
+    return {
+      data: toLowerCaseKeys(result),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+  async findSaldoContaEstudante(codigoMatricula: number) {
+    const sql = `select p.saldo from fk2_tb_matriculas    m
+      inner join FK2_TB_ADMISSAO         a on a.codigo = m.CODIGO_ALUNO
+      inner join FK2_TB_PREINSCRICAO     p on p.codigo = a.PRE_INCRICAO
+      where m.codigo =  :codigoMatricula`;
+    const result = await this.dataSource.query(sql, { codigoMatricula } as any);
+    const saldo = Number(result?.[0]?.SALDO ?? 0);
+    return {
+      saldo,
+    };
   }
 }

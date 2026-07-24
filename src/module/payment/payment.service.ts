@@ -25,6 +25,9 @@ import { YesNo } from '../cash-registers/enums/cash-register-status.enum';
 import { ExportPaymentMonthlyDTO } from './dto/export-payment-monthly.dto';
 import { CsvExportHelper } from 'src/common/helpers/export/csv-export.helper';
 import { PdfExportHelper } from 'src/common/helpers/export/pdf-export.helper';
+import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
+import { StudentMovimentOperationType } from 'src/enum/student-moviment-operation-type.enum';
+import { fixToInt } from '../util/round';
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
 
@@ -68,6 +71,7 @@ export class PaymentService {
     private readonly dataSource: DataSource,
     private readonly httpService: HttpService,
     private readonly cashRegistersService: CashRegistersService,
+    private readonly studentMovimentUtilService: StudentMovimentUtilService,
   ) {
     this.initAnoAtual();
   }
@@ -834,6 +838,24 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
             updatedAt: new Date(),
           },
         );
+      }
+      //Registrar o pagamento nos movimentos do estudante
+      //Caso dar erro deixar somente assim e nao fazer nada  ...
+      if (invoice) {
+        try {
+          this.studentMovimentUtilService.registrarMovimento({
+            estado: 1,
+            codigoTipoMovimento: 2,
+            matricula: invoice.CodigoMatricula!,
+            referencia: invoice.Referencia,
+            tipoOperacao: StudentMovimentOperationType.CREDIT,
+            valor: fixToInt(valorDepositado),
+            factura: invoice.Codigo,
+            valorFactura: invoice.ValorAPagar,
+          });
+        } catch (error: any) {
+          console.log(error);
+        }
       }
 
       // 7. Atualizar negociação de dívidas se existir

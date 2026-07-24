@@ -15,7 +15,7 @@ import { TestMonthlyDTO } from './dto/test-monthly.dto';
 import { resolverDescontobolseiro } from 'src/module/util/calcular-desconto-bolseiro';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
-  constructor(private dataSource: DataSource) { }
+  constructor(private dataSource: DataSource) {}
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -59,8 +59,8 @@ export class MonthlyFeesDiscountUtilService {
       db.sigla,
       b.codigo_bolsa,
       b.isentar_multa,
-      b.instituicao_pagou,          
-      b.codigo,                         
+      b.instituicao_pagou,
+      b.codigo,
       b.semestre
     FROM fk2_tb_bolseiros b
     left join fk2_tb_bolsas bo
@@ -81,11 +81,23 @@ export class MonthlyFeesDiscountUtilService {
       } as any);
 
       if (!row) {
-        return { bolseiro: false, desconto: 0, isentar_multa: false, instituicaoPagou: true, codigoBolseiro: null };
+        return {
+          bolseiro: false,
+          desconto: 0,
+          isentar_multa: false,
+          instituicaoPagou: true,
+          codigoBolseiro: null,
+        };
       }
       const desconto = resolverDescontobolseiro(row, mensalidade);
       if (desconto == null) {
-        return { bolseiro: false, desconto: 0, isentar_multa: false, instituicaoPagou: true, codigoBolseiro: null };
+        return {
+          bolseiro: false,
+          desconto: 0,
+          isentar_multa: false,
+          instituicaoPagou: true,
+          codigoBolseiro: null,
+        };
       }
 
       const isentar_multa =
@@ -96,7 +108,7 @@ export class MonthlyFeesDiscountUtilService {
         desconto: desconto === 0 ? 1 : desconto / 100,
         isentar_multa,
         instituicaoPagou: Number(row.INSTITUICAO_PAGOU) === 1,
-        codigoBolseiro: row.CODIGO
+        codigoBolseiro: row.CODIGO,
       };
     } catch (err) {
       throw new Error(
@@ -463,9 +475,10 @@ export class MonthlyFeesDiscountUtilService {
       data_pagamento: null,
       instituicao_pagou: bolseiroInfo.instituicaoPagou ?? true,
       codigo_bolseiro: bolseiroInfo.codigoBolseiro,
-      observacao: bolseiroInfo.instituicaoPagou === false
-        ? "Instituição não pagou a bolsa. Estudante deve pagar o valor integral."
-        : null,
+      observacao:
+        bolseiroInfo.instituicaoPagou === false
+          ? 'Instituição não pagou a bolsa. Estudante deve pagar o valor integral.'
+          : null,
     };
   }
 
@@ -710,7 +723,6 @@ export class MonthlyFeesDiscountUtilService {
       });
       console.log(pagamento);
 
-
       if (pagamento.estado_fatura === 4) {
         // Deletar o item da fatura se estiver isento/cancelado
         await this.dataSource.query(
@@ -734,13 +746,17 @@ export class MonthlyFeesDiscountUtilService {
 
         multa          = :totalmulta
       WHERE codigo = :codigo
-    `, {
-        total: (pagamento.total_preco ?? 0) + (pagamento.multa ?? 0) - (pagamento.desconto ?? 0),
-        desconto: pagamento.desconto ?? 0,
+    `,
+        {
+          total:
+            (pagamento.total_preco ?? 0) +
+            (pagamento.multa ?? 0) -
+            (pagamento.desconto ?? 0),
+          desconto: pagamento.desconto ?? 0,
 
-        totalmulta: pagamento.multa ?? 0,
-        codigo: mesTemp.codigo_item_fatura,
-      } as any,
+          totalmulta: pagamento.multa ?? 0,
+          codigo: mesTemp.codigo_item_fatura,
+        } as any,
       );
 
       pagamentos.push(pagamento);
@@ -752,20 +768,25 @@ export class MonthlyFeesDiscountUtilService {
         desconto: acc.desconto + (p.desconto ?? 0),
 
         totalmulta: acc.totalmulta + (p.multa ?? 0),
-        valorapagar: acc.valorapagar + ((p.total_preco ?? 0) + (p.multa ?? 0) - (p.desconto ?? 0)),
-        valorentregue: acc.valorentregue + (p.valorEntregue ?? p.valor_pago ?? 0),
-      }), {
-      totalpreco: 0,
-      desconto: 0,
-      totalmulta: 0,
-      valorapagar: 0,
-      valorentregue: 0,
-    });
+        valorapagar:
+          acc.valorapagar +
+          ((p.total_preco ?? 0) + (p.multa ?? 0) - (p.desconto ?? 0)),
+        valorentregue:
+          acc.valorentregue + (p.valorEntregue ?? p.valor_pago ?? 0),
+      }),
+      {
+        totalpreco: 0,
+        desconto: 0,
+        totalmulta: 0,
+        valorapagar: 0,
+        valorentregue: 0,
+      },
+    );
 
-
-    await this.dataSource.query(`
-    UPDATE fk2_factura 
-    SET 
+    await this.dataSource.query(
+      `
+    UPDATE fk2_factura
+    SET
       totalpreco    = :totalpreco,
       desconto      = :desconto,
       totalmulta    = :totalmulta,
@@ -800,7 +821,7 @@ export class MonthlyFeesDiscountUtilService {
   }) {
     const { codigo_matricula, mes_temp_id, ano_lectivo, valor_ja_pago } = data;
     const sqlFatura = `
-    SELECT 
+    SELECT
       f.codigo AS codigo_fatura,
       fi.codigo AS codigo_item,
       fi.total AS valor_total_atual,
@@ -824,41 +845,48 @@ export class MonthlyFeesDiscountUtilService {
       throw new BadRequestException('Fatura não encontrada para este mês');
     }
 
-    const valorRestante = Number(fatura.VALOR_TOTAL_ATUAL) - Number(valor_ja_pago);
+    const valorRestante =
+      Number(fatura.VALOR_TOTAL_ATUAL) - Number(valor_ja_pago);
 
     // Atualizar o item da fatura
-    await this.dataSource.query(`
-    UPDATE fk2_factura_items 
-    SET 
+    await this.dataSource.query(
+      `
+    UPDATE fk2_factura_items
+    SET
       valorentregue = :valor_ja_pago,
       total = :valorRestante,
       observacao = NVL(observacao, '') || ' | Ajuste: Instituição não pagou bolsa. Aluno paga restante.'
     WHERE codigo = :codigo_item
-  `, {
-      valor_ja_pago: Number(valor_ja_pago),
-      valorRestante: Math.max(0, valorRestante),
-      codigo_item: fatura.CODIGO_ITEM
-    } as any);
+  `,
+      {
+        valor_ja_pago: Number(valor_ja_pago),
+        valorRestante: Math.max(0, valorRestante),
+        codigo_item: fatura.CODIGO_ITEM,
+      } as any,
+    );
 
     // Atualizar a fatura principal
-    await this.dataSource.query(`
-    UPDATE fk2_factura 
-    SET 
+    await this.dataSource.query(
+      `
+    UPDATE fk2_factura
+    SET
       estado = 2,                    -- Parcelado
       valorentregue = :valor_ja_pago,
       valorapagar = :valorRestante
     WHERE codigo = :codigo_fatura
-  `, {
-      valor_ja_pago: Number(valor_ja_pago),
-      valorRestante: Math.max(0, valorRestante),
-      codigo_fatura: fatura.CODIGO_FATURA
-    } as any);
+  `,
+      {
+        valor_ja_pago: Number(valor_ja_pago),
+        valorRestante: Math.max(0, valorRestante),
+        codigo_fatura: fatura.CODIGO_FATURA,
+      } as any,
+    );
 
     return {
       success: true,
-      message: "Fatura ajustada para estado parcelado (2). Estudante deve pagar o restante.",
-      valor_restante: valorRestante
+      message:
+        'Fatura ajustada para estado parcelado (2). Estudante deve pagar o restante.',
+      valor_restante: valorRestante,
     };
   }
-
 }

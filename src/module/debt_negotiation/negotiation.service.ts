@@ -65,9 +65,9 @@ export class NegotiationService {
       FROM fk2_tb_ano_lectivo a
       WHERE a.codigo = mt.ano_lectivo
        AND TRIM(UPPER(a.estado)) = 'ACTIVO'
-       AND TRIM(UPPER(a.estado)) = 'USAVEL'
-       AND TRIM(UPPER(a.estado)) = 'CONFIGURAVEL'
-       AND TRIM(UPPER(a.estado)) = 'RASCUNHO'
+       AND TRIM(UPPER(a.FASE_ANOLECTIVO)) = 'USAVEL'
+       AND TRIM(UPPER(a.FASE_ANOLECTIVO)) = 'CONFIGURAVEL'
+       AND TRIM(UPPER(a.FASE_ANOLECTIVO)) = 'RASCUNHO'
        
   )
 `;

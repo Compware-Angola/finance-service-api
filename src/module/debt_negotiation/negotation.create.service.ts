@@ -250,22 +250,23 @@ export class CreateDebtNegotiationService {
         tipo_negociacao_id,
         valorPrestacoes: valorPrestacaoMensal,
         id_mes_inicial,
+        created_at: new Date(),
         id_mes_final,
         mesesQuitar: qtd_meses,
         mesesParImpar: '',
         estado: 1,
       } as DeepPartial<DebtNegotiation>);
       await queryRunner.manager.save(negociacao);
-
+console.log(negociacao)
       // 13. Registar faturas na tabela de relação
       await queryRunner.manager.query(
-        `INSERT INTO FK2_TB_NEGOCIACAO_FACTURA (CODIGO_FACTURA, CODIGO_NEGOCIACAO) VALUES (:codigo_factura, :codigo_negociacao)`,
+        `INSERT INTO FK2_TB_NEGOCIACAO_FACTURA (CODIGO_FACTURA, CODIGO_NEGOCIACAO, CREATED_AT) VALUES (:codigo_factura, :codigo_negociacao, SYSDATE)`,
         { codigo_factura: faturaEntrada.Codigo, codigo_negociacao: negociacao.id } as any,
       );
 
       if (!isTotal && faturaSaldo?.Codigo) {
         await queryRunner.manager.query(
-          `INSERT INTO FK2_TB_NEGOCIACAO_FACTURA (CODIGO_FACTURA, CODIGO_NEGOCIACAO) VALUES (:codigo_factura, :codigo_negociacao)`,
+          `INSERT INTO FK2_TB_NEGOCIACAO_FACTURA (CODIGO_FACTURA, CODIGO_NEGOCIACAO, CREATED_AT) VALUES (:codigo_factura, :codigo_negociacao, SYSDATE)`,
           { codigo_factura: faturaSaldo.Codigo, codigo_negociacao: negociacao.id } as any,
         );
       }

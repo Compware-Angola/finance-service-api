@@ -3,6 +3,7 @@ import { DataSource, QueryRunner } from 'typeorm';
 import { CreateStudentMovimentDTO } from './dto/create-student-moviments.dto';
 import { StudentMovimentOperationType } from 'src/enum/student-moviment-operation-type.enum';
 import { AlunoService } from 'src/module/aluno/aluno.service';
+import { StudentMovimentType } from 'src/enum/student-moviment-type.enum';
 
 @Injectable()
 export class StudentMovimentUtilService {
@@ -27,6 +28,9 @@ export class StudentMovimentUtilService {
     const saldoOperacaoAnteriores = await this.calcularSaldoOperacaoAnteriores(
       dto.factura!,
       queryRunner,
+    );
+    const codigoTipoMovimento = await this.obterCodigoTipoMovimentoPorSigla(
+      dto.siglaTipoMovimento,
     );
 
     let saldoGeral = saldoGeralAnteriores;
@@ -101,7 +105,7 @@ export class StudentMovimentUtilService {
         matricula: dto.matricula,
         saldoOperacao: Math.abs(saldoOperacao),
         saldoGeral,
-        codigoTipoMovimento: dto.codigoTipoMovimento,
+        codigoTipoMovimento: codigoTipoMovimento,
         codigoMotivo: dto.codigoMotivo ?? null,
         codigoUtilizador: dto.codigoUtilizador ?? null,
         observacao: dto.observacao ?? null,
@@ -117,6 +121,95 @@ export class StudentMovimentUtilService {
       saldoOperacao,
       creditoDisponivel: Math.max(saldoGeral, 0),
     };
+  }
+  async obterCodigoTipoMovimentoPorSigla(sigla: string) {
+    const sql = `
+      select
+        designacao,
+        codigo
+      from fk2_tb_tipo_movimento where sigla = :sigla
+    `;
+    const result = await this.dataSource.query(sql, {
+      sigla,
+    } as any);
+    return result?.[0]?.CODIGO ?? null;
+  }
+  async registrarRetiradaSaldoContaEstudante(
+    codigoMatricula: number,
+    valor: number,
+    queryRunner?: QueryRunner,
+  ) {
+    const runner = queryRunner ?? this.dataSource;
+    const saldoGeral = await this.calcularSaldoGeralAnterior(codigoMatricula);
+    const codigoTipoMovimento = await this.obterCodigoTipoMovimentoPorSigla(
+      StudentMovimentType.RSE,
+    );
+    await runner.query(
+      `
+      insert into fk2_historico_movimento_conta_estudante (
+        referencia,
+        data_movimento,
+        credito,
+        debito,
+        estado,
+        matricula,
+        saldo_operacao,
+        saldo_geral,
+        codigotipomovimento,
+        codigomotivo,
+        codigoutilizador,
+        observacao,
+        factura,
+        valor_excedente
+      ) values (
+        :referencia,
+        sysdate,
+        :credito,
+        :debito,
+        :estado,
+        :matricula,
+        :saldoOperacao,
+        :saldoGeral,
+        :codigoTipoMovimento,
+        :codigoMotivo,
+        :codigoUtilizador,
+        :observacao,
+        :factura,
+        :valorExcedente
+      )
+      `,
+      {
+        referencia: null,
+        credito: 0,
+        debito: valor,
+        estado: 1,
+        matricula: codigoMatricula,
+        saldoOperacao: 0,
+        saldoGeral: saldoGeral - valor,
+        codigoTipoMovimento: codigoTipoMovimento,
+        codigoMotivo: null,
+        codigoUtilizador: null,
+        observacao: 'Retirada na conta do estudante',
+        factura: null,
+        valorExcedente: 0,
+      } as any,
+    );
+
+    //Retirar o saldo no estudante
+    const preInscricao =
+      await this.alunoService.findAlunoPreinscricaoByMatricula(codigoMatricula);
+    await runner.query(
+      `
+      update fk2_tb_preinscricao
+      SET saldo_anterior = NVL(saldo, 0),
+          saldo = NVL(saldo, 0) - :valor
+      where codigo = :codigoPreinscricao
+      `,
+      {
+        codigoPreinscricao: preInscricao.CODIGO,
+        valor: valor,
+      } as any,
+    );
   }
 
   async obterCreditoDisponivel(
@@ -180,7 +273,8 @@ export class StudentMovimentUtilService {
     await runner.query(
       `
       update fk2_tb_preinscricao
-      SET saldo = NVL(saldo, 0) + :valorExcedente
+      SET saldo_anterior = NVL(saldo, 0),
+      saldo = NVL(saldo, 0) + :valorExcedente
       where codigo = :codigoPreinscricao
       `,
       {

@@ -28,6 +28,7 @@ import { PdfExportHelper } from 'src/common/helpers/export/pdf-export.helper';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
 import { StudentMovimentOperationType } from 'src/enum/student-moviment-operation-type.enum';
 import { fixToInt } from '../util/round';
+import { StudentMovimentType } from 'src/enum/student-moviment-type.enum';
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
 
@@ -847,8 +848,6 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
           );
         }
 
-
-
         //TODO: aqui preciso fazer a alteração do saldo em reserva do aluno
       }
 
@@ -878,16 +877,26 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       //Caso dar erro deixar somente assim e nao fazer nada  ...
       if (invoice) {
         try {
-          this.studentMovimentUtilService.registrarMovimento({
-            estado: 1,
-            codigoTipoMovimento: 2,
-            matricula: invoice.CodigoMatricula!,
-            referencia: invoice.Referencia,
-            tipoOperacao: StudentMovimentOperationType.CREDIT,
-            valor: fixToInt(valorDepositado),
-            factura: invoice.Codigo,
-            valorFactura: invoice.ValorAPagar,
-          });
+          if (dto.valorReservaUtilizado) {
+            await this.studentMovimentUtilService.registrarRetiradaSaldoContaEstudante(
+              invoice.CodigoMatricula!,
+              dto.valorReservaUtilizado,
+              queryRunner,
+            );
+          }
+          await this.studentMovimentUtilService.registrarMovimento(
+            {
+              estado: 1,
+              siglaTipoMovimento: StudentMovimentType.GDP,
+              matricula: invoice.CodigoMatricula!,
+              referencia: invoice.Referencia,
+              tipoOperacao: StudentMovimentOperationType.CREDIT,
+              valor: fixToInt(valorDepositado),
+              factura: invoice.Codigo,
+              valorFactura: invoice.ValorAPagar,
+            },
+            queryRunner,
+          );
         } catch (error: any) {
           console.log(error);
         }

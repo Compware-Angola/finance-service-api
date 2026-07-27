@@ -6,13 +6,16 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AcademicYear } from '../invoice/entities/academic.year.entity';
 import { AnoLectivoUtil } from '../util/current-academic-year';
 import { PagamentosBolsaInstituicaoModule } from './pagamentos_bolsa_instituicao/pagamentos_bolsa_instituicao.module';
+import { TipoCandidatura } from '../invoice/entities/tipo.candidatura.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([AcademicYear]),
+  imports: [
+    TypeOrmModule.forFeature([AcademicYear, TipoCandidatura]),
     PaymentModule,
-    PagamentosBolsaInstituicaoModule],
+    PagamentosBolsaInstituicaoModule,
+  ],
   controllers: [CreditoEducacionalController],
   providers: [CreditoEducacionalService, AnoLectivoUtil],
   exports: [CreditoEducacionalService],
 })
-export class CreditoEducacionalModule { }
+export class CreditoEducacionalModule {}

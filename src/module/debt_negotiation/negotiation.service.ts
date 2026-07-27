@@ -32,7 +32,7 @@ export class NegotiationService {
            AND cf.CODIGO_ANO_LECTIVO = :codAnoLectivo`,
                 { codigo_matricula, codAnoLectivo } as any
             );
-            console.log(confirmacao);
+
 
 
             const total = Number(confirmacao[0]?.TOTAL ?? confirmacao[0]?.total ?? 0);

@@ -15,7 +15,7 @@ import { TestMonthlyDTO } from './dto/test-monthly.dto';
 import { resolverDescontobolseiro } from 'src/module/util/calcular-desconto-bolseiro';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -258,6 +258,9 @@ export class MonthlyFeesDiscountUtilService {
       polo: dadosAluno.polo,
       anoLectivo,
     } as any);
+
+    console.log('Mensalidade', row, dadosAluno, anoLectivo);
+
 
     if (!row?.PRECO) {
       throw new BadRequestException('Nenhuma mensalidade encontrada');

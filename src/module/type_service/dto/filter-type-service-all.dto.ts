@@ -28,7 +28,7 @@ export class FilterTypeServiceAllDto {
   @IsNumber()
   codigoAnoLectivo?: number;
 
-    @ApiPropertyOptional({
+  @ApiPropertyOptional({
     description: 'Código do Polo',
     example: 1,
   })
@@ -63,6 +63,15 @@ export class FilterTypeServiceAllDto {
   @Type(() => String)
   @IsString()
   visualizarNoPortal?: string;
+
+  @ApiPropertyOptional({
+    description: 'Tipo de Candidatura',
+    example: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  tipoCandidatura?: number;
 
   /* ================= PAGINAÇÃO ================= */
 

@@ -28,6 +28,7 @@ import { PdfExportHelper } from 'src/common/helpers/export/pdf-export.helper';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
 import { StudentMovimentOperationType } from 'src/enum/student-moviment-operation-type.enum';
 import { fixToInt } from '../util/round';
+import { StudentMovimentType } from 'src/enum/student-moviment-type.enum';
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
 
@@ -695,7 +696,19 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
 
     const anoCorrente = this.anoAtualPrincipal;
 
-    const { nOperacaoBancaria, anoLectivo, ...rest } = dto;
+    const {
+      nOperacaoBancaria,
+      anoLectivo,
+      valorReservaUtilizado,
+      feitoComReserva,
+      valorDepositado: valorDepositadoDto,
+      ...rest
+    } = dto;
+
+    // Valor que veio da reserva (só conta se o front sinalizou feitoComReserva = 'S')
+    const valorReserva =
+      feitoComReserva === 'Y' ? valorReservaUtilizado || 0 : 0;
+
     const cleanText = (value?: string) => value?.replace(/\s+/g, '').trim();
     const cleanNOperacaoBancaria = cleanText(nOperacaoBancaria);
 
@@ -723,8 +736,12 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     const existingPayment = await this.findPaymentByCodigoFactura(
       dto.codigoFactura,
     );
+
+    // Valor depositado agora inclui o que foi retirado da reserva
     const valorDepositado =
-      dto.valorDepositado || existingPayment?.valorDepositado || 0;
+      (valorDepositadoDto || existingPayment?.valorDepositado || 0) +
+      valorReserva;
+
     const estados = invoice.ValorAPagar > valorDepositado ? 2 : 1;
 
     const itens = await this.dataSource.query(
@@ -756,6 +773,7 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
 
     const finalPayload = {
       ...rest,
+      valorDepositado,
       totalGeral: invoice.TotalPreco || 0,
       anoLectivo: anoLectivo ?? invoice.anoLectivo ?? anoCorrente,
       codigoFactura: dto.codigoFactura,
@@ -819,6 +837,20 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
         tdaResult = await this.handleTda(invoice);
       }
 
+      // 5.1 Remover da reserva do estudante o valor utilizado neste pagamento
+      // TODO: confirme o nome real da tabela/colunas de saldo em reserva do aluno.
+      // Assumi FK2_RESERVA_ALUNO(CODIGO_MATRICULA, SALDO) pelo padrão das outras
+      // queries deste ficheiro — ajuste conforme a estrutura real.
+      if (valorReserva > 0) {
+        if (!invoice.CodigoMatricula) {
+          throw new BadRequestException(
+            'Não é possível usar reserva: a fatura não tem matrícula associada',
+          );
+        }
+
+        //TODO: aqui preciso fazer a alteração do saldo em reserva do aluno
+      }
+
       // 6. Criar ou atualizar pagamento
       if (!existingPayment) {
         const payment = this.paymentRepository.create(finalPayload);
@@ -831,7 +863,9 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
             statusPagamento: PaymentStatus.CONCLUIDO,
             nOperacaoBancaria2: cleanNOperacaoBancaria,
             valorDepositado:
-              existingPayment.valorDepositado + (dto.valorDepositado || 0),
+              existingPayment.valorDepositado +
+              (valorDepositadoDto || 0) +
+              valorReserva,
             formaPagamento: dto.formaPagamento,
             fkUtilizador: user?.sub,
             utilizador: user?.sub,
@@ -843,16 +877,26 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       //Caso dar erro deixar somente assim e nao fazer nada  ...
       if (invoice) {
         try {
-          this.studentMovimentUtilService.registrarMovimento({
-            estado: 1,
-            codigoTipoMovimento: 2,
-            matricula: invoice.CodigoMatricula!,
-            referencia: invoice.Referencia,
-            tipoOperacao: StudentMovimentOperationType.CREDIT,
-            valor: fixToInt(valorDepositado),
-            factura: invoice.Codigo,
-            valorFactura: invoice.ValorAPagar,
-          });
+          if (dto.valorReservaUtilizado) {
+            await this.studentMovimentUtilService.registrarRetiradaSaldoContaEstudante(
+              invoice.CodigoMatricula!,
+              dto.valorReservaUtilizado,
+              queryRunner,
+            );
+          }
+          await this.studentMovimentUtilService.registrarMovimento(
+            {
+              estado: 1,
+              siglaTipoMovimento: StudentMovimentType.GDP,
+              matricula: invoice.CodigoMatricula!,
+              referencia: invoice.Referencia,
+              tipoOperacao: StudentMovimentOperationType.CREDIT,
+              valor: fixToInt(valorDepositado),
+              factura: invoice.Codigo,
+              valorFactura: invoice.ValorAPagar,
+            },
+            queryRunner,
+          );
         } catch (error: any) {
           console.log(error);
         }

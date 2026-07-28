@@ -63,13 +63,12 @@ export class CreateStudentMovimentDTO {
   matricula: number;
 
   @ApiProperty({
-    description: 'Código do tipo de movimento',
+    description: 'Sigla do tipo de movimento',
     example: 1,
   })
   @IsNotEmpty()
-  @Type(() => Number)
-  @IsInt()
-  codigoTipoMovimento: number;
+  @IsString()
+  siglaTipoMovimento: string;
 
   @ApiPropertyOptional({
     description: 'Código do motivo do movimento',

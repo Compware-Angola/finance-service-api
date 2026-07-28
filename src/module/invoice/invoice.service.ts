@@ -36,6 +36,7 @@ import { InvoiceEnum } from 'src/common/enums/invoice.enum';
 import { fixToInt } from '../util/round';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
 import { StudentMovimentOperationType } from 'src/enum/student-moviment-operation-type.enum';
+import { StudentMovimentType } from 'src/enum/student-moviment-type.enum';
 
 type ExemptionType = { CODIGO: number; SIGLA: string };
 
@@ -277,7 +278,7 @@ export class InvoiceService {
       anoLetivo.codigo,
       invoiceData.polo_id ?? 1,
       tipoDocumentoSigla,
-      anoLetivo.designacao ?? "",
+      anoLetivo.designacao ?? '',
     );
 
     //4.1 Verificar a Isenção
@@ -543,9 +544,9 @@ export class InvoiceService {
     //Caso dar erro deixar somente assim e nao fazer nada  ...
     if (invoiceData.CodigoMatricula) {
       try {
-        this.studentMovimentUtilService.registrarMovimento({
+        await this.studentMovimentUtilService.registrarMovimento({
           estado: 1,
-          codigoTipoMovimento: 1,
+          siglaTipoMovimento: StudentMovimentType.GDF,
           matricula: invoiceData.CodigoMatricula,
           referencia: referencia,
           tipoOperacao: StudentMovimentOperationType.DEBIT,
@@ -1099,7 +1100,7 @@ WHERE fi.CodigoFactura = :invoiceId
         AND f.ano_lectivo = :academicYear
         AND f.estado <> 3
         AND (:status IS NULL OR f.estado = :status)
-        
+
   `;
 
     const totalResult = await this.dataSource.query(countSql, {

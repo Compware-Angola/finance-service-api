@@ -28,6 +28,7 @@ import { CreditoEducacionalModule } from './module/credito_educacional/credito_e
 import { TipoCreditoModule } from './module/credito_educacional/tipo_credito/tipo_credito.module';
 import { BolsaModule } from './module/credito_educacional/bolsa/bolsa.module';
 import { InstitutionalContractModule } from './module/institutional-contract/institutional-contract.module';
+import { ConciliacaoDividasModule } from './module/conciliacao-dividas/conciliacao-dividas.module';
 
 @Module({
   imports: [
@@ -116,6 +117,7 @@ import { InstitutionalContractModule } from './module/institutional-contract/ins
     CreditoEducacionalModule,
     BolsaModule,
     InstitutionalContractModule,
+    ConciliacaoDividasModule,
   ],
   providers: [BullMQWorkerService],
 })

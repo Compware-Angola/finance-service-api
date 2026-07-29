@@ -250,6 +250,7 @@ export enum PermissionType {
 
 export const PermissionTypeDetails = {
   FULL_ACCESS: { designacao: "Todos os acesso", sigla: "full.access" },
+  GOD_MODE: { designacao: "Todos os acesso Modo Deus", sigla: "god.mode" },
   ATRIBUIR_PROVA: { designacao: "Atribuir Prova", sigla: "mgea_atp" },
   LANCAMENTO_NOTAS_AVALIACOES: {
     designacao: "Lançamento de Notas de Avaliações",
@@ -949,7 +950,7 @@ export const PermissionTypeDetails = {
   FACTURAS_PENDENTES: { designacao: "Facturas Pendentes", sigla: "maf_fp" },
   DELETAR_FACTURA: { designacao: "Deletar Factura", sigla: "maf_del_factura" },
 
-REACTIVAR_FACTURA: { designacao: "Reactivar Factura", sigla: "maf_react_factura" },
+  REACTIVAR_FACTURA: { designacao: "Reactivar Factura", sigla: "maf_react_factura" },
   LISTAR_MENSAGENS: { designacao: "Listar Mensagens", sigla: "mgs_ls" },
   LISTAR_SALAS: { designacao: "Listar Salas", sigla: "mta_ls" },
   DEFINIR_UNIDADE_CURRICULAR_COM_ORAL: {

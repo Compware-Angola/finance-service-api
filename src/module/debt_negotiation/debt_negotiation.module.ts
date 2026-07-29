@@ -46,6 +46,7 @@ import { MonthlyFeesDiscountUtilService } from '../shared/monthly_fees/monthly_f
 import { NegotiationService } from './negotiation.service';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
 import { AlunoService } from '../aluno/aluno.service';
+import { TipoCandidatura } from '../invoice/entities/tipo.candidatura.entity';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { AlunoService } from '../aluno/aluno.service';
       Empresa,
       TypeInvoiceDocument,
       DebtNegotiation,
+      TipoCandidatura,
     ]),
   ],
   controllers: [DebtNegotiationController, ListDebtNegotiationController],

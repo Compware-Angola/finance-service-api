@@ -6,6 +6,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { MesTemp } from '../payment-references/entities/mes-temp.entity';
 import { MonthlyFeesStatisticFilterDto } from '../../shared/monthly_fees/dto/monthly-fees-statistic.dto';
 import { MonthlyFeesDiscountUtilService } from 'src/module/shared/monthly_fees/monthly_fees.discount.Util.service';
+import { MonthlyFeePosGraduationService } from './monthly-fee-posgraduation.service';
+import { AnoLectivoUtil } from 'src/module/util/current-academic-year';
+import { ApplicationType } from 'src/enum/application-type';
 
 @Injectable()
 export class MonthlyFeesService {
@@ -14,7 +17,9 @@ export class MonthlyFeesService {
     @InjectRepository(MesTemp) private mesTempRepo: Repository<MesTemp>,
 
     private readonly monthlyFeeDiscount: MonthlyFeesDiscountUtilService,
-  ) { }
+    private readonly monthlyFeePosGraduationService: MonthlyFeePosGraduationService,
+    private readonly anoLectivoUtilService: AnoLectivoUtil,
+  ) {}
 
   async findMonthlyFees(
     paginationQuery: MonthlyFeesFilterDto,
@@ -117,18 +122,35 @@ export class MonthlyFeesService {
       .limit(limit)
       .getRawMany();
 
+    const siglaTipoCandidatura =
+      await this.anoLectivoUtilService.getSiglaTipoCandidaturaPorAno(
+        codAnoLectivo,
+      );
     // ====================== PAGAMENTOS A GERAR ======================
     let generated: any[] = [];
 
-    // Só busca os a gerar se o status permitir (evita query desnecessária)
-    if (!status || status === 'pending' || status === 'all') {
-      generated = await this.monthlyFeeDiscount.generatePayment({
-        codAnoLectivo,
-        codigo_matricula,
-        status: status || 'pending', // só os pendentes por padrão
-      });
-    }
+    const isPosGraduation =
+      siglaTipoCandidatura === ApplicationType.DOUTORAMENTO ||
+      siglaTipoCandidatura === ApplicationType.MESTRADO;
 
+    const shouldGenerateDiscount =
+      !status || status === 'pending' || status === 'all';
+
+    if (isPosGraduation) {
+      generated =
+        await this.monthlyFeePosGraduationService.gerarPagamentosPosGraduacao({
+          codAnoLectivo,
+          codigo_matricula,
+        });
+    } else {
+      if (shouldGenerateDiscount) {
+        generated = await this.monthlyFeeDiscount.generatePayment({
+          codAnoLectivo,
+          codigo_matricula,
+          status: status || 'pending',
+        });
+      }
+    }
     // Concatena os resultados
     const data = [...results, ...generated];
 
@@ -140,8 +162,10 @@ export class MonthlyFeesService {
       totalPages: Math.ceil((total + generated.length) / limit),
     };
   }
+
   async recalculatePayments(invoiceId: number) {
-    const pagamento = await this.monthlyFeeDiscount.recalculatedPayments(invoiceId);
+    const pagamento =
+      await this.monthlyFeeDiscount.recalculatedPayments(invoiceId);
     return pagamento;
   }
   async ajustarFaturaParcial(data: {
@@ -153,6 +177,7 @@ export class MonthlyFeesService {
   }) {
     return this.monthlyFeeDiscount.ajustarFaturaParcialEstudante(data);
   }
+
   async verificarConfirmacao(codigoMatricula: number, anoLectivo: number) {
     const sql = `
       select codigo

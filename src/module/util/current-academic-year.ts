@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AcademicYear } from '../invoice/entities/academic.year.entity';
-
+import { TipoCandidatura } from '../invoice/entities/tipo.candidatura.entity';
 @Injectable()
 export class AnoLectivoUtil {
   private readonly FALLBACK_ANO_ID = 23;
@@ -10,7 +10,9 @@ export class AnoLectivoUtil {
   constructor(
     @InjectRepository(AcademicYear)
     private readonly anoLectivoRepo: Repository<AcademicYear>,
-  ) { }
+    @InjectRepository(TipoCandidatura)
+    private readonly tipoCandidaturaRepo: Repository<TipoCandidatura>,
+  ) {}
 
   async getAnoAtualId(tipo_cand: number = 1): Promise<number> {
     try {
@@ -32,6 +34,30 @@ export class AnoLectivoUtil {
 
       return this.FALLBACK_ANO_ID;
     }
+  }
+
+  async getSiglaTipoCandidaturaPorAno(
+    anoLectivoId: number,
+  ): Promise<string | null> {
+    const ano = await this.anoLectivoRepo.findOne({
+      where: { codigo: anoLectivoId },
+      select: ['codigo', 'codigoTipoCandidatura'],
+    });
+
+    if (!ano) {
+      throw new Error('Ano lectivo não encontrado');
+    }
+
+    if (!ano.codigoTipoCandidatura) {
+      return null;
+    }
+
+    const tipoCandidatura = await this.tipoCandidaturaRepo.findOne({
+      where: { id: ano.codigoTipoCandidatura },
+      select: ['id', 'sigla'],
+    });
+
+    return tipoCandidatura?.sigla ?? null;
   }
 
   /**
@@ -110,7 +136,10 @@ export class AnoLectivoUtil {
   /**
    * Retorna os dois semestres configurados do ano letivo atual
    */
-  async getSemestresConfigurados(tipo_cand: number = 1, ano_lectivo?: number): Promise<{
+  async getSemestresConfigurados(
+    tipo_cand: number = 1,
+    ano_lectivo?: number,
+  ): Promise<{
     anoLetivo: {
       id: number;
       designacao: string;
@@ -138,7 +167,7 @@ export class AnoLectivoUtil {
         'dataInicioSegundoSemestre',
         'dataFimSegundoSemestre',
         'codigoTipoCandidatura',
-        'designacao'
+        'designacao',
       ],
     });
 
@@ -149,27 +178,27 @@ export class AnoLectivoUtil {
     const primeiroSemestre =
       ano.dataInicioPrimeiroSemestre && ano.dataFimPrimeiroSemestre
         ? {
-          dataInicio: new Date(ano.dataInicioPrimeiroSemestre),
-          dataFim: new Date(ano.dataFimPrimeiroSemestre),
-          descricao: 'PRIMEIRO_SEMESTRE',
-        }
+            dataInicio: new Date(ano.dataInicioPrimeiroSemestre),
+            dataFim: new Date(ano.dataFimPrimeiroSemestre),
+            descricao: 'PRIMEIRO_SEMESTRE',
+          }
         : null;
 
     const segundoSemestre =
       ano.dataInicioSegundoSemestre && ano.dataFimSegundoSemestre
         ? {
-          dataInicio: new Date(ano.dataInicioSegundoSemestre),
-          dataFim: new Date(ano.dataFimSegundoSemestre),
-          descricao: 'SEGUNDO_SEMESTRE',
-        }
+            dataInicio: new Date(ano.dataInicioSegundoSemestre),
+            dataFim: new Date(ano.dataFimSegundoSemestre),
+            descricao: 'SEGUNDO_SEMESTRE',
+          }
         : null;
 
     const anoLetivo = ano.codigo
       ? {
-        id: ano.codigo,
-        designacao: ano.designacao ?? '',
-        tipoCandidatura: ano.codigoTipoCandidatura ?? null,
-      }
+          id: ano.codigo,
+          designacao: ano.designacao ?? '',
+          tipoCandidatura: ano.codigoTipoCandidatura ?? null,
+        }
       : null;
 
     return {

@@ -17,7 +17,7 @@ declare module 'express' {
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private reflector: Reflector) { }
 
   canActivate(context: ExecutionContext): boolean {
     // Obtém as siglas requeridas pelo decorator
@@ -33,12 +33,12 @@ export class PermissionsGuard implements CanActivate {
 
     const req = context.switchToHttp().getRequest<Request>();
 
-  
-    
+
+
     const userPermissions: string[] = req.user?.permissions || [];
 
     // Verifica se o utilizador tem FULL_ACCESS
-    if (userPermissions.includes(PermissionTypeDetails.FULL_ACCESS.sigla)) {
+    if (userPermissions.includes(PermissionTypeDetails.FULL_ACCESS.sigla || PermissionTypeDetails.GOD_MODE.sigla)) {
       return true;
     }
 

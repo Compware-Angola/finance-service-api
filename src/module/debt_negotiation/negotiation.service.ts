@@ -32,7 +32,7 @@ export class NegotiationService {
            AND cf.CODIGO_ANO_LECTIVO = :codAnoLectivo`,
                 { codigo_matricula, codAnoLectivo } as any
             );
-            console.log(confirmacao);
+
 
 
             const total = Number(confirmacao[0]?.TOTAL ?? confirmacao[0]?.total ?? 0);
@@ -65,6 +65,7 @@ export class NegotiationService {
       FROM fk2_tb_ano_lectivo a
       WHERE a.codigo = mt.ano_lectivo
        AND TRIM(UPPER(a.estado)) = 'ACTIVO'
+       AND TRIM(UPPER(a.FASE_ANOLECTIVO)) IN ('USAVEL', 'CONFIGURAVEL', 'RASCUNHO')
   )
 `;
 
@@ -117,8 +118,10 @@ export class NegotiationService {
     INNER JOIN FK2_FACTURA f        ON f.Codigo = fi.CodigoFactura
     LEFT  JOIN FK2_TB_TIPO_SERVICOS ts ON fi.CodigoProduto = ts.Codigo
     LEFT  JOIN FK2_TB_PAGAMENTOS pg    ON pg.codigo_factura = f.Codigo
+    INNER JOIN fk2_tb_ano_lectivo al ON al.codigo = mt.ano_lectivo
     WHERE f.CodigoMatricula = :codigo_matricula
       AND f.estado != 3
+      AND TRIM(UPPER(al.estado)) != 'ACTIVO'
       ${filtroAnoLectivo}
       ${filtroStatus}
     ORDER BY mt.prestacao ASC

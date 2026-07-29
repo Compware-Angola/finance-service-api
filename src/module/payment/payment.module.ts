@@ -22,6 +22,7 @@ import { PaymentStaticsController } from './payment-statics.controller';
 import { PaymentStaticsService } from './payment-statics.service';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
 import { AlunoService } from '../aluno/aluno.service';
+import { TipoCandidatura } from '../invoice/entities/tipo.candidatura.entity';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { AlunoService } from '../aluno/aluno.service';
       AcademicYear,
       CashRegister,
       CashRegisterMovement,
+      TipoCandidatura,
     ]),
     MonthlyFeesModule,
     InvoiceModule,

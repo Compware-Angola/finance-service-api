@@ -15,7 +15,7 @@ import { TestMonthlyDTO } from './dto/test-monthly.dto';
 import { resolverDescontobolseiro } from 'src/module/util/calcular-desconto-bolseiro';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   // ====================== DADOS DO ALUNO (ÚNICA QUERY) ======================
   private async obterDadosCompletosAluno(codigoMatricula: number) {
@@ -258,6 +258,9 @@ export class MonthlyFeesDiscountUtilService {
       polo: dadosAluno.polo,
       anoLectivo,
     } as any);
+
+    console.log('Mensalidade', row, dadosAluno, anoLectivo);
+
 
     if (!row?.PRECO) {
       throw new BadRequestException('Nenhuma mensalidade encontrada');
@@ -538,6 +541,7 @@ export class MonthlyFeesDiscountUtilService {
           AND tp.activo = 1
           AND TRIM(UPPER(a.estado)) != 'ACTIVO'
 
+          AND TRIM(UPPER(a.FASE_ANOLECTIVO)) NOT IN ('USAVEL', 'CONFIGURAVEL', 'RASCUNHO')
           AND tp.id NOT IN (
             SELECT it.mes_temp_id
             FROM fk2_factura ft
@@ -568,6 +572,7 @@ export class MonthlyFeesDiscountUtilService {
             WHERE cf.codigo_matricula = :codigo_matricula
               AND cf.CODIGO_ANO_LECTIVO = tp.ano_lectivo
               AND TRIM(UPPER(a.estado)) != 'ACTIVO'
+              AND TRIM(UPPER(a.FASE_ANOLECTIVO)) NOT IN ('USAVEL', 'CONFIGURAVEL', 'RASCUNHO')
           )
 
           AND tp.id NOT IN (

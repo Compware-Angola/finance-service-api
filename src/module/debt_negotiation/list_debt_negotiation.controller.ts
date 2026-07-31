@@ -8,7 +8,7 @@ import {
 
 import { GetDebtNegotiationFilterDto } from './dto/find-deb-negotation.dto';
 import { ListDebtNegotiationService } from './list_debt_negotiation.service';
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 
 
 @ApiTags('Negociação de Dívidas')
@@ -17,10 +17,15 @@ import { Controller, Get, Query } from '@nestjs/common';
 export class ListDebtNegotiationController {
   constructor(
     private readonly listdebtNegotiationService: ListDebtNegotiationService,
- 
+
   ) { }
-@Get('list')
-async listNegotiations(@Query() filter: GetDebtNegotiationFilterDto) {
-  return this.listdebtNegotiationService.findNegotiations(filter);
-}
+  @Get('list')
+  async listNegotiations(@Query() filter: GetDebtNegotiationFilterDto) {
+    return this.listdebtNegotiationService.findNegotiations(filter);
+  }
+
+  @Get('details/:id')
+  async getdetails(@Param('id') id: string) {
+    return this.listdebtNegotiationService.getDetails(id);
+  }
 }

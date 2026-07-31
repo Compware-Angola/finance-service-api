@@ -14,7 +14,7 @@ export class ConciliacaoDividasService {
   async create(createConciliacaoDividaDto: CreateConciliacaoDividaDto) {
     const { invoices, descricao } = createConciliacaoDividaDto;
 
-    const errors: { invoiceId: number; designacao: string; mensagem: string }[] = [];
+    const errors: { invoiceId: number; mensagem: string }[] = [];
 
     for (const invoice of invoices) {
       const faturaExistente = await this.invoiceRepo.findOne({
@@ -24,7 +24,7 @@ export class ConciliacaoDividasService {
       if (!faturaExistente) {
         errors.push({
           invoiceId: invoice.InvoiceId,
-          designacao: '',
+
           mensagem: `A fatura ${invoice.InvoiceId} não foi encontrada.`,
         });
       }

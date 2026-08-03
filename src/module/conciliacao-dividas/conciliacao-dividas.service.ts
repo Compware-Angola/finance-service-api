@@ -12,15 +12,31 @@ export class ConciliacaoDividasService {
     private readonly invoiceRepo: Repository<Invoice>,
   ) { }
   async create(createConciliacaoDividaDto: CreateConciliacaoDividaDto) {
+    const { invoices, descricao } = createConciliacaoDividaDto;
 
-    const { InvoiceId, descricao, itens } = createConciliacaoDividaDto
+    const errors: { invoiceId: number; mensagem: string }[] = [];
 
-    const faturaExistente = await this.invoiceRepo.findOne({ where: { Codigo: InvoiceId } })
-    if (!faturaExistente) {
-      throw new BadRequestException('Fatura não encontrada')
+    for (const invoice of invoices) {
+      const faturaExistente = await this.invoiceRepo.findOne({
+        where: { Codigo: invoice.InvoiceId },
+      });
+
+      if (!faturaExistente) {
+        errors.push({
+          invoiceId: invoice.InvoiceId,
+
+          mensagem: `A fatura ${invoice.InvoiceId} não foi encontrada.`,
+        });
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        message: 'Uma ou mais faturas não foram encontradas.',
+        errors,
+      });
     }
 
     return 'This action adds a new conciliacaoDivida';
   }
-
 }

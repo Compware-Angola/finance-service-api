@@ -1,43 +1,74 @@
-import { ApiProperty } from "@nestjs/swagger";
-import { Type } from "class-transformer";
-import { ArrayMinSize, IsArray, IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, ValidateNested } from "class-validator";
-import { InvoiceItemDto } from "src/module/invoice/dto/create-invoice-itens.dto";
+import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+    ArrayMinSize,
+    IsArray,
+    IsInt,
+    IsNotEmpty,
+    IsNumber,
+    IsOptional,
+    IsPositive,
+    IsString,
+    ValidateNested,
+} from 'class-validator';
 
-export class CreateConciliacaoDividaDto {
+export class InvoiceItemDto {
+    @ApiProperty({
+        description: 'ID do item da fatura.',
+        example: 1,
+    })
+    @IsInt()
+    @IsPositive()
+    @Type(() => Number)
+    InvoiceItemId: number;
+
+    @ApiProperty({
+        description: 'Valor conciliado.',
+        example: 1500,
+    })
+    @IsNumber()
+    @Type(() => Number)
+    valor: number;
+}
+
+export class InvoiceDto {
     @ApiProperty({
         description: 'ID da Fatura.',
-        type: Number,
-        example: 1
+        example: 1,
     })
-    @IsNotEmpty()
     @IsInt()
     @IsPositive()
     @Type(() => Number)
     InvoiceId: number;
 
     @ApiProperty({
-        description: 'Descrição da conciliação.',
-        type: String,
-        example: 'Conciliação de pagamento'
-    })
-    @IsOptional()
-    @IsString()
-    @Type(() => String)
-    descricao?: string;
-
-    // --------------------------------------------------------------------------------
-    // ITENS DA FATURA (ARRAY)
-    // --------------------------------------------------------------------------------
-
-    @ApiProperty({
-        description: 'Lista de pagamentos incluídos na fatura.',
+        description: 'Itens da fatura.',
         type: [InvoiceItemDto],
-        required: true,
     })
     @IsArray()
     @ArrayMinSize(1)
     @ValidateNested({ each: true })
     @Type(() => InvoiceItemDto)
-    itens?: InvoiceItemDto[];
+    itens: InvoiceItemDto[];
+}
 
+export class CreateConciliacaoDividaDto {
+    @ApiProperty({
+        description: 'Descrição da conciliação.',
+        example: 'Conciliação de pagamento',
+        required: false,
+    })
+    @IsOptional()
+    @IsString()
+    descricao?: string;
+
+    @ApiProperty({
+        description: 'Lista de faturas.',
+        type: [InvoiceDto],
+    })
+    @IsArray()
+    @ArrayMinSize(1)
+    @ValidateNested({ each: true })
+    @Type(() => InvoiceDto)
+    invoices: InvoiceDto[];
 }

@@ -12,7 +12,7 @@ import {
     ValidateNested,
 } from 'class-validator';
 
-export class InvoiceItemDto {
+export class ConciliacaoInvoiceItemDto {
     @ApiProperty({
         description: 'ID do item da fatura.',
         example: 1,
@@ -39,17 +39,17 @@ export class InvoiceDto {
     @IsInt()
     @IsPositive()
     @Type(() => Number)
-    InvoiceId: number;
+    invoiceId: number;
 
     @ApiProperty({
         description: 'Itens da fatura.',
-        type: [InvoiceItemDto],
+        type: [ConciliacaoInvoiceItemDto],
     })
     @IsArray()
     @ArrayMinSize(1)
     @ValidateNested({ each: true })
-    @Type(() => InvoiceItemDto)
-    itens: InvoiceItemDto[];
+    @Type(() => ConciliacaoInvoiceItemDto)
+    itens: ConciliacaoInvoiceItemDto[];
 }
 
 export class CreateConciliacaoDividaDto {

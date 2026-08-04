@@ -5,7 +5,10 @@ import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { CreateTypeServiceDto } from './dto/create-type_service.dto';
 import { UpdateTypeServiceDto } from './dto/update-type_service.dto';
 import { FilterTypeServiceAllDto } from './dto/filter-type-service-all.dto';
-import { ListServiceByYearDto, TipoListagemServico } from './dto/ListServiceByYearDto';
+import {
+  ListServiceByYearDto,
+  TipoListagemServico,
+} from './dto/ListServiceByYearDto';
 import { CreateTypeServiceMassDto } from './dto/CreateTypeServiceMassDto';
 export interface ServicoProcessado {
   descricao: string;
@@ -17,7 +20,7 @@ export interface ServicoProcessado {
 }
 @Injectable()
 export class TypeServiceService {
-  constructor(private readonly dataSource: DataSource) { }
+  constructor(private readonly dataSource: DataSource) {}
   async findTipoServicosDropdown({
     sigla,
     codigoAnoLectivo,
@@ -116,7 +119,6 @@ export class TypeServiceService {
       params.tipoCandidatura = tipoCandidatura;
     }
 
-
     if (sigla) {
       whereConditions.push('UPPER(TS.SIGLA) = UPPER(:sigla)');
       params.sigla = sigla;
@@ -152,9 +154,7 @@ export class TypeServiceService {
     }
 
     if (visualizarNoPortal !== undefined) {
-      whereConditions.push(
-        'TS.VISUALIZAR_NO_PORTAL = :visualizarNoPortal',
-      );
+      whereConditions.push('TS.VISUALIZAR_NO_PORTAL = :visualizarNoPortal');
       params.visualizarNoPortal = visualizarNoPortal;
     }
 
@@ -264,9 +264,6 @@ export class TypeServiceService {
       whereConditions.push('TS.ESTADO = :estado');
       params.estado = estado;
     }
-
-
-
 
     const whereClause =
       whereConditions.length > 0
@@ -488,9 +485,7 @@ export class TypeServiceService {
 
     if (updateDto.visualizarNoPortal !== undefined) {
       setClauses.push('VISUALIZAR_NO_PORTAL = :visualizarNoPortal');
-      params.visualizarNoPortal = updateDto.visualizarNoPortal
-        ? 'SIM'
-        : 'NAO';
+      params.visualizarNoPortal = updateDto.visualizarNoPortal ? 'SIM' : 'NAO';
     }
 
     if (updateDto.sigla !== undefined) {
@@ -521,10 +516,7 @@ export class TypeServiceService {
 
     await this.dataSource.query(sql, params);
   }
-  async listByAnoLectivo({
-    codigoAnoLectivo,
-    tipo,
-  }: ListServiceByYearDto) {
+  async listByAnoLectivo({ codigoAnoLectivo, tipo }: ListServiceByYearDto) {
     const params: any = {
       codigoAnoLectivo,
     };
@@ -567,8 +559,14 @@ export class TypeServiceService {
     TS.VISUALIZAR_NO_PORTAL,
     TS.SIGLA,
     TS.ESTADO_SOLICITACAO,
-    TS.TIPO_CANDIDATURA
+    TS.TIPO_CANDIDATURA,
+    PO.DESIGNACAO AS POLO_DESIGNACAO,
+    AL.DESIGNACAO AS ANOLECTIVO
   FROM FK2_TB_TIPO_SERVICOS TS
+  LEFT JOIN FK2_POLOS PO
+  ON PO.ID = TS.POLO_ID
+  LEFT JOIN FK2_TB_ANO_LECTIVO AL
+  ON AL.CODIGO = TS.CODIGO_ANO_LECTIVO
   WHERE TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
     AND TS.ESTADO = 'Ativo'
    AND TS.DESCRICAO IS NOT NULL
@@ -593,7 +591,6 @@ export class TypeServiceService {
     const duplicados: ServicoProcessado[] = [];
 
     try {
-
       const checkSql = `
   SELECT TS.CODIGO
 FROM FK2_TB_TIPO_SERVICOS TS
@@ -602,7 +599,6 @@ WHERE TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
   AND NVL(TS.SIGLA, '-') = NVL(:sigla, '-')
   AND DBMS_LOB.SUBSTR(TS.DESCRICAO, 4000, 1) = :descricao
     `;
-
 
       const insertSql = `
       INSERT INTO FK2_TB_TIPO_SERVICOS (
@@ -651,9 +647,7 @@ WHERE TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
       )
     `;
 
-
       for (const item of createDto.services) {
-
         const existe: any = await queryRunner.query(checkSql, {
           codigoAnoLectivo: item.codigoAnoLectivo,
           poloId: item.poloId ?? null,
@@ -661,19 +655,17 @@ WHERE TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
           descricao: item.descricao ?? null,
         } as any);
 
-
         if (existe.length > 0) {
           duplicados.push({
             descricao: item.descricao,
             sigla: item.sigla,
             codigoAnoLectivo: item.codigoAnoLectivo,
             poloId: item.poloId ?? 0,
-            motivo: 'Serviço já cadastrado neste ano lectivo'
+            motivo: 'Serviço já cadastrado neste ano lectivo',
           });
 
           continue;
         }
-
 
         const params = {
           taxaIvaId: item.taxaIvaId,
@@ -682,73 +674,50 @@ WHERE TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
           descricao: item.descricao ?? null,
           tipoServico: item.tipoServico ?? null,
 
-          estado: (item.estado ?? true)
-            ? 'Ativo'
-            : 'Inativo',
+          estado: (item.estado ?? true) ? 'Ativo' : 'Inativo',
 
           data: item.data
             ? new Date(item.data).toISOString().split('T')[0]
             : null,
 
           disponibilizarAluno:
-            (item.disponibilizarAluno ?? true)
-              ? 'SIM'
-              : 'NAO',
+            (item.disponibilizarAluno ?? true) ? 'SIM' : 'NAO',
 
-          codigoGradeCurricular:
-            item.codigoGradeCurricular ?? undefined,
+          codigoGradeCurricular: item.codigoGradeCurricular ?? undefined,
 
-          mestrado:
-            item.mestrado ? 'SIM' : 'NAO',
+          mestrado: item.mestrado ? 'SIM' : 'NAO',
 
-          canal:
-            item.canal ?? null,
+          canal: item.canal ?? null,
 
-          poloId:
-            item.poloId,
+          poloId: item.poloId,
 
-          cacuaco:
-            item.cacuaco ? 'SIM' : 'NAO',
+          cacuaco: item.cacuaco ? 'SIM' : 'NAO',
 
-          codigoAnoLectivo:
-            item.codigoAnoLectivo,
+          codigoAnoLectivo: item.codigoAnoLectivo,
 
-          valorAnterior:
-            item.valorAnterior ?? null,
+          valorAnterior: item.valorAnterior ?? null,
 
-          visualizarNoPortal:
-            (item.visualizarNoPortal ?? true)
-              ? 'SIM'
-              : 'NAO',
+          visualizarNoPortal: (item.visualizarNoPortal ?? true) ? 'SIM' : 'NAO',
 
-          sigla:
-            item.sigla ?? null,
+          sigla: item.sigla ?? null,
 
-          estadoSolicitacao:
-            item.estadoSolicitacao ?? null,
+          estadoSolicitacao: item.estadoSolicitacao ?? null,
 
-          tipoCandidatura:
-            item.tipoCandidatura ?? null,
+          tipoCandidatura: item.tipoCandidatura ?? null,
         };
 
-
         await queryRunner.query(insertSql, params as any);
-
 
         cadastrados.push({
           descricao: item.descricao,
           sigla: item.sigla,
           codigoAnoLectivo: item.codigoAnoLectivo!,
           poloId: item.poloId ?? 0,
-          status: 'Cadastrado'
+          status: 'Cadastrado',
         });
-
-
       }
 
-
       await queryRunner.commitTransaction();
-
 
       return {
         message: 'Processamento concluído',
@@ -756,19 +725,13 @@ WHERE TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
         totalCadastrados: cadastrados.length,
         totalDuplicados: duplicados.length,
         cadastrados,
-        duplicados
+        duplicados,
       };
-
-
     } catch (error) {
-
       await queryRunner.rollbackTransaction();
       throw error;
-
     } finally {
-
       await queryRunner.release();
-
     }
   }
 }

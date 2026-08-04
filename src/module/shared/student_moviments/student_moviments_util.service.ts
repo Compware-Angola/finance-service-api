@@ -52,11 +52,16 @@ export class StudentMovimentUtilService {
       } else {
         valorExcedente = Math.max(saldoOperacao, 0);
       }
-      await this.cadastrarSaldoEstudante(
-        valorExcedente,
-        dto.matricula,
-        queryRunner,
-      );
+
+      if (dto.matricula) {
+        await this.cadastrarSaldoEstudante(
+          valorExcedente,
+          dto.matricula,
+          queryRunner,
+        );
+      }
+      // else: aluno em pré-inscrição, sem matrícula ainda — não há
+      // saldo de conta-corrente de matrícula para creditar aqui.
     }
 
     await runner.query(

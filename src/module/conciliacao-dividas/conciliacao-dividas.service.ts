@@ -14,6 +14,7 @@ import { ReconciliacaoNegociacaoDivida } from './entities/conciliacao-divida.ent
 import { FindConciliacaoDividaDto } from './dto/find-conciliacao-divida.dto';
 import { PagedResult } from '../debt_negotiation/list_debt_negotiation.service';
 import { ReconciliacaoDecisaoEnum, ValidarConciliacaoDividaDto } from './dto/validar-conciliacao-divida.dto';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 
 const ESTADO_FATURA_ELIMINADO = 3;
 const ESTADO_INVOICE_PENDENTE = 0
@@ -255,7 +256,11 @@ export class ConciliacaoDividasService {
     id: number,
     dto: ValidarConciliacaoDividaDto,
     validatedBy: number,
-  ): Promise<ReconciliacaoNegociacaoDivida> {
+  ): Promise<{
+    message: string;
+    estadoFacturaOriginal: string | number;
+    estadoFacturaPropostaAlteracao: string | number;
+  }> {
     const reconciliacao = await this.reconciliacaoRepo.findOne({
       where: { id },
       relations: ['facturaOriginal', 'facturaPropostaAlteracao'],
@@ -317,13 +322,17 @@ export class ConciliacaoDividasService {
       reconciliacao.validatedBy = validatedBy;
       reconciliacao.validatedAt = new Date();
 
-      const salvo = await queryRunner.manager.save(
+      await queryRunner.manager.save(
         ReconciliacaoNegociacaoDivida,
         reconciliacao,
       );
 
       await queryRunner.commitTransaction();
-      return salvo;
+      return {
+        message: 'Conciliação validada com sucesso.',
+        estadoFacturaOriginal: dto.decisao === ReconciliacaoDecisaoEnum.REJEITADO ? 'ANULADA' : ESTADO_INVOICE_PENDENTE,
+        estadoFacturaPropostaAlteracao: dto.decisao === ReconciliacaoDecisaoEnum.APROVADO ? ESTADO_INVOICE_PENDENTE : 'ANULADA',
+      };
     } catch (err) {
       await queryRunner.rollbackTransaction();
       if (err instanceof BadRequestException || err instanceof NotFoundException) {
@@ -342,7 +351,7 @@ export class ConciliacaoDividasService {
    */
   async findAll(
     filter: FindConciliacaoDividaDto,
-  ): Promise<PagedResult<ReconciliacaoNegociacaoDivida>> {
+  ): Promise<PagedResult<any>> {
     const {
       page = 1,
       limit = 10,
@@ -350,34 +359,158 @@ export class ConciliacaoDividasService {
       facturaOriginalId,
       facturaPropostaId,
       createdBy,
+      codigoAnoLectivo,
+      codigoCurso,
+      codigoMatricula,
+      nome,
     } = filter;
 
-    const qb = this.reconciliacaoRepo
-      .createQueryBuilder('r')
-      .leftJoinAndSelect('r.facturaOriginal', 'facturaOriginal')
-      .leftJoinAndSelect('r.facturaPropostaAlteracao', 'facturaProposta')
-      .orderBy('r.id', 'DESC');
+    const offset = (page - 1) * limit;
 
-    if (status) {
-      qb.andWhere('r.status = :status', { status });
-    }
-    if (facturaOriginalId) {
-      qb.andWhere('facturaOriginal.Codigo = :facturaOriginalId', {
-        facturaOriginalId,
-      });
-    }
-    if (facturaPropostaId) {
-      qb.andWhere('facturaProposta.Codigo = :facturaPropostaId', {
-        facturaPropostaId,
-      });
-    }
-    if (createdBy) {
-      qb.andWhere('r.createdBy = :createdBy', { createdBy });
-    }
+    const params = {
+      status: status ?? null,
+      facturaOriginalId: facturaOriginalId ?? null,
+      facturaPropostaId: facturaPropostaId ?? null,
+      createdBy: createdBy ?? null,
+      codigoAnoLectivo: codigoAnoLectivo ?? null,
+      codigoCurso: codigoCurso ?? null,
+      codigoMatricula: codigoMatricula ?? null,
+      nome: nome ?? null,
+    };
 
-    qb.skip((page - 1) * limit).take(limit);
+    /* =============================================
+       QUERY PRINCIPAL PAGINADA
+       ============================================= */
+    const dataSql = `
+    SELECT
+      r.CODIGO                 AS id,
+      r.STATUS                 AS status,
+      r.DESCRICAO_CRIACAO      AS descricao_criacao,
+      r.DESCRICAO_VALIDACAO    AS descricao_validacao,
+      r.CREATED_AT             AS created_at,
+      r.UPDATED_AT             AS updated_at,
+      r.CREATED_BY             AS created_by,
+      r.VALIDATED_BY           AS validated_by,
+      r.VALIDATED_AT           AS validated_at,
 
-    const [data, total] = await qb.getManyAndCount();
+      fo.CODIGO                AS factura_original_id,
+      fo.DESCRICAO             AS factura_original_descricao,
+      fo.REFERENCIA            AS factura_original_referencia,
+      fo.ESTADO                AS factura_original_estado,
+      fo.TOTALPRECO            AS factura_original_total_preco,
+      fo.VALORAPAGAR           AS factura_original_valor_apagar,
+      fo.DATAFACTURA           AS factura_original_data,
+      fo.ANO_LECTIVO           AS factura_original_ano_lectivo,
+
+      fp.CODIGO                AS factura_proposta_id,
+      fp.DESCRICAO             AS factura_proposta_descricao,
+      fp.REFERENCIA            AS factura_proposta_referencia,
+      fp.ESTADO                AS factura_proposta_estado,
+      fp.TOTALPRECO            AS factura_proposta_total_preco,
+      fp.VALORAPAGAR           AS factura_proposta_valor_apagar,
+      fp.DATAFACTURA           AS factura_proposta_data,
+
+      m.codigo                 AS codigo_matricula,
+      p.NOME_COMPLETO           AS nome_estudante,
+      c.codigo                 AS codigo_curso,
+      c.designacao             AS curso,
+      f.DESIGNACAO             AS faculdade
+
+    FROM FK2_TB_RECONCILIACAO_NEGOCIACAO_DIVIDA r
+    INNER JOIN FK2_FACTURA fo          ON fo.CODIGO = r.FACTURA_ORIGINAL
+    LEFT  JOIN FK2_FACTURA fp          ON fp.CODIGO = r.FACTURA_PROPOSTA_ALTERACAO
+    LEFT  JOIN FK2_TB_MATRICULAS m     ON m.codigo  = fo.CODIGOMATRICULA
+    LEFT  JOIN FK2_TB_ADMISSAO a       ON a.codigo  = m.CODIGO_ALUNO
+    LEFT  JOIN FK2_TB_PREINSCRICAO p   ON p.codigo  = a.PRE_INCRICAO
+    LEFT  JOIN FK2_TB_CURSOS c         ON c.codigo  = m.CODIGO_CURSO
+    LEFT  JOIN FK2_TB_FACULDADE f      ON f.codigo  = c.FACULDADE_ID
+    WHERE 1=1
+      AND (:status IS NULL             OR r.STATUS      = :status)
+      AND (:facturaOriginalId IS NULL  OR fo.CODIGO     = :facturaOriginalId)
+      AND (:facturaPropostaId IS NULL  OR fp.CODIGO     = :facturaPropostaId)
+      AND (:createdBy IS NULL          OR r.CREATED_BY  = :createdBy)
+      AND (:codigoAnoLectivo IS NULL   OR fo.ANO_LECTIVO = :codigoAnoLectivo)
+      AND (:codigoCurso IS NULL        OR c.codigo      = :codigoCurso)
+      AND (:codigoMatricula IS NULL    OR m.codigo      = :codigoMatricula)
+      AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
+    ORDER BY r.CODIGO DESC
+    OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+    `;
+
+    const rawResults = await this.dataSource.query(dataSql, {
+      ...params,
+      offset,
+      limit,
+    } as any);
+
+    /* =============================================
+       QUERY DE CONTAGEM TOTAL
+       ============================================= */
+    const countSql = `
+    SELECT COUNT(*) AS TOTAL
+    FROM FK2_TB_RECONCILIACAO_NEGOCIACAO_DIVIDA r
+    INNER JOIN FK2_FACTURA fo          ON fo.CODIGO = r.FACTURA_ORIGINAL
+    LEFT  JOIN FK2_FACTURA fp          ON fp.CODIGO = r.FACTURA_PROPOSTA_ALTERACAO
+    LEFT  JOIN FK2_TB_MATRICULAS m     ON m.codigo  = fo.CODIGOMATRICULA
+    LEFT  JOIN FK2_TB_ADMISSAO a       ON a.codigo  = m.CODIGO_ALUNO
+    LEFT  JOIN FK2_TB_PREINSCRICAO p   ON p.codigo  = a.PRE_INCRICAO
+    LEFT  JOIN FK2_TB_CURSOS c         ON c.codigo  = m.CODIGO_CURSO
+    WHERE 1=1
+      AND (:status IS NULL             OR r.STATUS      = :status)
+      AND (:facturaOriginalId IS NULL  OR fo.CODIGO     = :facturaOriginalId)
+      AND (:facturaPropostaId IS NULL  OR fp.CODIGO     = :facturaPropostaId)
+      AND (:createdBy IS NULL          OR r.CREATED_BY  = :createdBy)
+      AND (:codigoAnoLectivo IS NULL   OR fo.ANO_LECTIVO = :codigoAnoLectivo)
+      AND (:codigoCurso IS NULL        OR c.codigo      = :codigoCurso)
+      AND (:codigoMatricula IS NULL    OR m.codigo      = :codigoMatricula)
+      AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
+    `;
+
+    const totalResult = await this.dataSource.query(countSql, params as any);
+    const total = Number(totalResult[0]?.TOTAL ?? 0);
+
+    /* =============================================
+       MONTA O RESULTADO FINAL
+       ============================================= */
+    const data = toLowerCaseKeys(rawResults).map((row: any) => ({
+      id: row.id,
+      status: row.status,
+      descricaoCriacao: row.descricao_criacao,
+      descricaoValidacao: row.descricao_validacao,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      createdBy: row.created_by,
+      validatedBy: row.validated_by,
+      validatedAt: row.validated_at,
+      facturaOriginal: {
+        codigo: row.factura_original_id,
+        descricao: row.factura_original_descricao,
+        referencia: row.factura_original_referencia,
+        estado: row.factura_original_estado,
+        totalPreco: Number(row.factura_original_total_preco ?? 0),
+        valorApagar: Number(row.factura_original_valor_apagar ?? 0),
+        data: row.factura_original_data,
+        anoLectivo: row.factura_original_ano_lectivo,
+      },
+      facturaPropostaAlteracao: row.factura_proposta_id
+        ? {
+          codigo: row.factura_proposta_id,
+          descricao: row.factura_proposta_descricao,
+          referencia: row.factura_proposta_referencia,
+          estado: row.factura_proposta_estado,
+          totalPreco: Number(row.factura_proposta_total_preco ?? 0),
+          valorApagar: Number(row.factura_proposta_valor_apagar ?? 0),
+          data: row.factura_proposta_data,
+        }
+        : null,
+      estudante: {
+        codigoMatricula: row.codigo_matricula,
+        nome: row.nome_estudante,
+        codigoCurso: row.codigo_curso,
+        curso: row.curso,
+        faculdade: row.faculdade,
+      },
+    }));
 
     return {
       data,
@@ -391,7 +524,7 @@ export class ConciliacaoDividasService {
   /**
    * Detalhe de uma reconciliação específica.
    */
-  async findOne(id: number): Promise<ReconciliacaoNegociacaoDivida> {
+  async findOne(id: number): Promise<any> {
     const reconciliacao = await this.reconciliacaoRepo.findOne({
       where: { id },
       relations: ['facturaOriginal', 'facturaPropostaAlteracao'],
@@ -403,6 +536,32 @@ export class ConciliacaoDividasService {
       );
     }
 
-    return reconciliacao;
+    // busca os itens da fatura original
+    const itensFacturaOriginal = await this.invoiceItemRepo.find({
+      where: { CodigoFactura: reconciliacao.facturaOriginal.Codigo } as any,
+    });
+
+    // busca os itens da fatura proposta (se existir)
+    const itensFacturaProposta = reconciliacao.facturaPropostaAlteracao
+      ? await this.invoiceItemRepo.find({
+        where: {
+          CodigoFactura: reconciliacao.facturaPropostaAlteracao.Codigo,
+        } as any,
+      })
+      : [];
+
+    return {
+      ...reconciliacao,
+      facturaOriginal: {
+        ...reconciliacao.facturaOriginal,
+        itens: itensFacturaOriginal,
+      },
+      facturaPropostaAlteracao: reconciliacao.facturaPropostaAlteracao
+        ? {
+          ...reconciliacao.facturaPropostaAlteracao,
+          itens: itensFacturaProposta,
+        }
+        : null,
+    };
   }
 }

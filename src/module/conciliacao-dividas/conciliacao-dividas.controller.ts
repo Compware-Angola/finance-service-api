@@ -32,7 +32,7 @@ export class ConciliacaoDividasController {
     @Body() dto: ValidarConciliacaoDividaDto,
     @Req() req: any,
   ) {
-    const userId = req.user.sub;
+    // const userId = req.user.sub;
     return this.service.validar(id, dto, 1);
   }
 

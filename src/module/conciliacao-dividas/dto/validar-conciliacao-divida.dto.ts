@@ -1,6 +1,6 @@
 
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsIn, IsOptional, IsString } from 'class-validator';
 
 export enum ReconciliacaoDecisaoEnum {
     APROVADO = 'APROVADO',
@@ -8,10 +8,12 @@ export enum ReconciliacaoDecisaoEnum {
 }
 
 export class ValidarConciliacaoDividaDto {
+    @ApiPropertyOptional({ enum: [ReconciliacaoDecisaoEnum.APROVADO, ReconciliacaoDecisaoEnum.REJEITADO] })
     @ApiProperty({ enum: ReconciliacaoDecisaoEnum })
     @IsEnum(ReconciliacaoDecisaoEnum, {
         message: 'decisao deve ser APROVADO ou REJEITADO.',
     })
+
     decisao: ReconciliacaoDecisaoEnum;
 
     @ApiProperty({

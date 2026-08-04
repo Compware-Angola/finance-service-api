@@ -277,7 +277,7 @@ export class InvoiceService {
       anoLetivo.codigo,
       invoiceData.polo_id ?? 1,
       tipoDocumentoSigla,
-      anoLetivo.designacao ?? "",
+      anoLetivo.designacao ?? '',
     );
 
     //4.1 Verificar a Isenção
@@ -944,6 +944,8 @@ WHERE fi.CodigoFactura = :invoiceId
       status,
     } = filterQuery;
 
+    console.log('FIltros', filterQuery);
+
     if (!academicYear) {
       throw new BadRequestException('Ano letivo são obrigatórios.');
     }
@@ -1090,20 +1092,17 @@ WHERE fi.CodigoFactura = :invoiceId
     const countSql = `
     SELECT COUNT(DISTINCT f.Codigo) AS TOTAL
     FROM FK2_FACTURA f
-    LEFT JOIN FK2_FACTURA_ITEMS fi
-           ON fi.CodigoFactura = f.Codigo
-    LEFT JOIN FK2_PAGAMENTO_POR_REFERENCIAS ppr
-           ON ppr.factura_codigo = f.Codigo
     WHERE
-        f.CodigoMatricula = :codigoMatricula
+        (:codigoMatricula IS NULL OR f.CodigoMatricula = :codigoMatricula)
+        AND (:codigoPreInscricao IS NULL OR f.codigo_preinscricao = :codigoPreInscricao)
         AND f.ano_lectivo = :academicYear
         AND f.estado <> 3
         AND (:status IS NULL OR f.estado = :status)
-        
-  `;
+`;
 
     const totalResult = await this.dataSource.query(countSql, {
-      codigoMatricula,
+      codigoMatricula: codigoMatricula ?? null,
+      codigoPreInscricao: codigoPreInscricao ?? null,
       academicYear,
       status: status ?? null,
     } as any);

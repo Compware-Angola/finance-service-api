@@ -757,7 +757,7 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     const finalPayload = {
       ...rest,
       totalGeral: invoice.TotalPreco || 0,
-      anoLectivo: anoLectivo ?? invoice.anoLectivo ?? anoCorrente,
+      anoLectivo: invoice.anoLectivo ?? invoice.anoLectivo ?? anoCorrente,
       codigoFactura: dto.codigoFactura,
       codigoPreInscricao:
         student?.codigo_preinscricao ??

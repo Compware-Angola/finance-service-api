@@ -49,6 +49,7 @@ export class ConciliacaoDividasService {
     const ESTADOS_BLOQUEADOS = [1, 3]; // ajuste conforme o enum real de estado da fatura
 
     for (const invoiceDto of invoices) {
+      // Busca a fatura original no banco
       const faturaOriginal = await this.invoiceRepo.findOne({
         where: { Codigo: invoiceDto.invoiceId },
       });
@@ -69,8 +70,7 @@ export class ConciliacaoDividasService {
         continue;
       }
 
-      // já existe uma conciliação PENDENTE envolvendo esta fatura?
-      // (como fatura original OU como fatura proposta de outra conciliação)
+      // Bloqueia se já existe conciliação PENDENTE envolvendo esta fatura
       const reconciliacaoPendente = await this.reconciliacaoRepo.findOne({
         where: [
           {
@@ -92,12 +92,14 @@ export class ConciliacaoDividasService {
         continue;
       }
 
+      // >>> AQUI busca TODOS os itens da fatura original (alterados + não alterados) <
       const itensOriginais = await this.invoiceItemRepo.find({
         where: { CodigoFactura: invoiceDto.invoiceId } as any,
       });
 
       const idsExistentes = new Set(itensOriginais.map((i: any) => i.codigo));
 
+      // Valida que todo item enviado no DTO realmente pertence a esta fatura
       for (const itemDto of invoiceDto.itens) {
         if (!idsExistentes.has(itemDto.InvoiceItemId)) {
           errors.push({
@@ -107,6 +109,7 @@ export class ConciliacaoDividasService {
         }
       }
 
+      // Guarda em memória pra reaproveitar na fase 2 (evita bater no banco de novo)
       faturasOriginais.set(invoiceDto.invoiceId, faturaOriginal);
       itensOriginaisPorFatura.set(invoiceDto.invoiceId, itensOriginais);
     }
@@ -134,13 +137,21 @@ export class ConciliacaoDividasService {
           invoiceDto.invoiceId,
         )!;
 
-        // mapa InvoiceItemId (original) -> novo valor conciliado
+        console.log(itensOriginais);
+
+
+        // Mapa InvoiceItemId (original) -> novo valor conciliado.
+        // Só contém entradas para os itens que o usuário quis MUDAR.
         const valoresConciliados = new Map<number, number>(
           invoiceDto.itens.map((i) => [i.InvoiceItemId, i.valor]),
         );
 
-        // monta os itens da NOVA fatura, herdando tudo do item original
-        // e só sobrescrevendo o valor (Total/preco) quando vier no DTO
+        // >>> AQUI é onde os itens não alterados entram <
+        // Percorre TODOS os itens originais (itensOriginais), não só os
+        // que vieram no DTO. Para cada item:
+        //   - se ele estiver em valoresConciliados -> usa o novo valor
+        //   - se NÃO estiver (ou seja, não foi alterado) -> mantém item.Total / item.preco originais
+        // Resultado: novosItens já sai com a fatura INTEIRA (alterados + não alterados).
         const novosItens = itensOriginais.map((item: any) => {
           const novoValor = valoresConciliados.get(item.codigo);
           const usarNovoValor = novoValor !== undefined;
@@ -148,8 +159,8 @@ export class ConciliacaoDividasService {
           return {
             CodigoProduto: item.CodigoProduto,
             Quantidade: item.Quantidade,
-            Total: usarNovoValor ? novoValor : item.Total,
-            preco: usarNovoValor ? novoValor : item.preco,
+            Total: usarNovoValor ? novoValor : item.Total,       // item não alterado mantém o Total original
+            preco: usarNovoValor ? novoValor : item.preco,       // item não alterado mantém o preco original
             obs: item.obs,
             taxaIva: item.taxaIva,
             valorIva: item.valorIva,
@@ -166,6 +177,9 @@ export class ConciliacaoDividasService {
           };
         });
 
+        // Soma o total usando SOMENTE novosItens, porque ele já contém
+        // TODOS os itens (alterados e não alterados). Somar de novo os
+        // "não alterados" duplicaria o valor deles no total.
         const novoTotalPreco = novosItens.reduce(
           (soma, item) => soma + (item.Total ?? 0),
           0,
@@ -188,10 +202,11 @@ export class ConciliacaoDividasService {
           codigo_anoLectivo: faturaOriginal.anoLectivo,
           codigo_preinscricao: faturaOriginal.codigoPreinscricao,
           tipo_documento_factura_id: faturaOriginal.tipoDocumentoFacturaId,
+          // itens JÁ contém tudo — alterados com novo valor, não alterados com valor original
           itens: novosItens,
         } as CreateInvoiceDto;
 
-        // cria a fatura+itens reaproveitando a MESMA transação
+        // Cria a fatura+itens reaproveitando a MESMA transação
         const faturaProposta = await this.invoiceService.create(
           createInvoiceDto,
           undefined, // referência: gera uma nova automaticamente
@@ -199,7 +214,7 @@ export class ConciliacaoDividasService {
           queryRunner.manager,
         );
 
-        // força o estado "aguarda aprovação" na fatura e nos itens,
+        // Força o estado "aguarda aprovação" na fatura e nos itens,
         // sobrescrevendo o que a lógica interna de isenção/pendente definiu
         await queryRunner.manager.update(
           Invoice,
@@ -248,7 +263,6 @@ export class ConciliacaoDividasService {
       await queryRunner.release();
     }
   }
-
   /**
    * Aprova ou rejeita uma proposta de conciliação de dívida.
    */

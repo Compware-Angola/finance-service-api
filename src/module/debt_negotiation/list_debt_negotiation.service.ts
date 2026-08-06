@@ -273,7 +273,7 @@ export class ListDebtNegotiationService {
     // Se ja esta na reconciliacao deve informar no user
     const isReconciliado = await this.reconciliacaoRepo.findOne({
       where: {
-        id: negociacaoId,
+        codigoNegociacaoDivida: negociacaoId,
       },
     });
     /* =============================================

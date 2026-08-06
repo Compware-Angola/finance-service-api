@@ -542,43 +542,133 @@ export class ConciliacaoDividasService {
    * Detalhe de uma reconciliação específica.
    */
   async findOne(id: number): Promise<any> {
-    const reconciliacao = await this.reconciliacaoRepo.findOne({
-      where: { id },
-      relations: ['facturaOriginal', 'facturaPropostaAlteracao'],
-    });
+    const sql = `
+    SELECT
+      r.CODIGO                 AS id,
+      r.STATUS                 AS status,
+      r.DESCRICAO_CRIACAO      AS descricao_criacao,
+      r.DESCRICAO_VALIDACAO    AS descricao_validacao,
+      r.CREATED_AT             AS created_at,
+      r.UPDATED_AT             AS updated_at,
+      r.CREATED_BY             AS created_by,
+      r.VALIDATED_BY           AS validated_by,
+      r.VALIDATED_AT           AS validated_at,
 
-    if (!reconciliacao) {
+      fo.CODIGO                AS factura_original_id,
+      fo.DESCRICAO             AS factura_original_descricao,
+      fo.REFERENCIA            AS factura_original_referencia,
+      fo.ESTADO                AS factura_original_estado,
+      fo.TOTALPRECO            AS factura_original_total_preco,
+      fo.VALORAPAGAR           AS factura_original_valor_apagar,
+      fo.DATAFACTURA           AS factura_original_data,
+      fo.ANO_LECTIVO           AS factura_original_ano_lectivo,
+
+      fp.CODIGO                AS factura_proposta_id,
+      fp.DESCRICAO             AS factura_proposta_descricao,
+      fp.REFERENCIA            AS factura_proposta_referencia,
+      fp.ESTADO                AS factura_proposta_estado,
+      fp.TOTALPRECO            AS factura_proposta_total_preco,
+      fp.VALORAPAGAR           AS factura_proposta_valor_apagar,
+      fp.DATAFACTURA           AS factura_proposta_data,
+
+      m.CODIGO                 AS codigo_matricula,
+      p.NOME_COMPLETO          AS nome_estudante,
+      c.CODIGO                 AS codigo_curso,
+      c.DESIGNACAO             AS curso,
+      f.DESIGNACAO             AS faculdade
+
+    FROM FK2_TB_RECONCILIACAO_NEGOCIACAO_DIVIDA r
+    INNER JOIN FK2_FACTURA fo
+      ON fo.CODIGO = r.FACTURA_ORIGINAL
+
+    LEFT JOIN FK2_FACTURA fp
+      ON fp.CODIGO = r.FACTURA_PROPOSTA_ALTERACAO
+
+    LEFT JOIN FK2_TB_MATRICULAS m
+      ON m.CODIGO = fo.CODIGOMATRICULA
+
+    LEFT JOIN FK2_TB_ADMISSAO a
+      ON a.CODIGO = m.CODIGO_ALUNO
+
+    LEFT JOIN FK2_TB_PREINSCRICAO p
+      ON p.CODIGO = a.PRE_INCRICAO
+
+    LEFT JOIN FK2_TB_CURSOS c
+      ON c.CODIGO = m.CODIGO_CURSO
+
+    LEFT JOIN FK2_TB_FACULDADE f
+      ON f.CODIGO = c.FACULDADE_ID
+
+    WHERE r.CODIGO = :id
+  `;
+
+    const result = await this.dataSource.query(sql, { id } as any);
+
+    if (!result.length) {
       throw new NotFoundException(
         `Reconciliação com código ${id} não encontrada.`,
       );
     }
 
-    // busca os itens da fatura original
+    const row = toLowerCaseKeys(result)[0];
+
     const itensFacturaOriginal = await this.invoiceItemRepo.find({
-      where: { CodigoFactura: reconciliacao.facturaOriginal.Codigo } as any,
+      where: {
+        CodigoFactura: row.factura_original_id,
+      } as any,
     });
 
-    // busca os itens da fatura proposta (se existir)
-    const itensFacturaProposta = reconciliacao.facturaPropostaAlteracao
+    const itensFacturaProposta = row.factura_proposta_id
       ? await this.invoiceItemRepo.find({
         where: {
-          CodigoFactura: reconciliacao.facturaPropostaAlteracao.Codigo,
+          CodigoFactura: row.factura_proposta_id,
         } as any,
       })
       : [];
 
     return {
-      ...reconciliacao,
+      id: row.id,
+      status: row.status,
+      descricaoCriacao: row.descricao_criacao,
+      descricaoValidacao: row.descricao_validacao,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      createdBy: row.created_by,
+      validatedBy: row.validated_by,
+      validatedAt: row.validated_at,
+
       facturaOriginal: {
-        ...reconciliacao.facturaOriginal,
+        codigo: row.factura_original_id,
+        descricao: row.factura_original_descricao,
+        referencia: row.factura_original_referencia,
+        estado: row.factura_original_estado,
+        totalPreco: Number(row.factura_original_total_preco ?? 0),
+        valorApagar: Number(row.factura_original_valor_apagar ?? 0),
+        data: row.factura_original_data,
+        anoLectivo: row.factura_original_ano_lectivo,
         itens: itensFacturaOriginal,
       },
-      facturaPropostaAlteracao: reconciliacao.facturaPropostaAlteracao
+
+      facturaPropostaAlteracao: row.factura_proposta_id
         ? {
-          ...reconciliacao.facturaPropostaAlteracao,
+          codigo: row.factura_proposta_id,
+          descricao: row.factura_proposta_descricao,
+          referencia: row.factura_proposta_referencia,
+          estado: row.factura_proposta_estado,
+          totalPreco: Number(row.factura_proposta_total_preco ?? 0),
+          valorApagar: Number(row.factura_proposta_valor_apagar ?? 0),
+          data: row.factura_proposta_data,
           itens: itensFacturaProposta,
         }
         : null,
+
+      estudante: {
+        codigoMatricula: row.codigo_matricula,
+        nome: row.nome_estudante,
+        codigoCurso: row.codigo_curso,
+        curso: row.curso,
+        faculdade: row.faculdade,
+      },
     };
   }
 }

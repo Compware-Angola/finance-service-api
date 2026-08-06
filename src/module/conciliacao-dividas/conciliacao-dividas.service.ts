@@ -36,7 +36,7 @@ export class ConciliacaoDividasService {
     createConciliacaoDividaDto: CreateConciliacaoDividaDto,
     createdBy: number,
   ) {
-    const { invoices, descricao } = createConciliacaoDividaDto;
+    const { invoices, descricao, codigoNegociacaoDivida } = createConciliacaoDividaDto;
 
     // ============================================================
     // 1. PRÉ-VALIDAÇÃO — confere TUDO antes de criar qualquer coisa
@@ -238,6 +238,7 @@ export class ConciliacaoDividasService {
             } as Invoice,
             descricaoCriacao: descricao,
             status: 'PENDENTE',
+            codigoNegociacaoDivida: codigoNegociacaoDivida,
             createdBy,
           },
         );

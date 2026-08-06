@@ -42,6 +42,13 @@ export class ReconciliacaoNegociacaoDivida {
     })
     descricaoCriacao: string;
 
+    @Column({
+        name: 'CODIGO_NEGOCIACAO_DIVIDA',
+        type: 'number',
+        nullable: true,
+    })
+    codigoNegociacaoDivida: number;
+
 
     @Column({
         name: 'DESCRICAO_VALIDACAO',

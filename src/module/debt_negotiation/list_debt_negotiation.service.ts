@@ -463,6 +463,8 @@ export class ListDebtNegotiationService {
         itens: itensPorFactura.get(faId) ?? [],
       };
     });
+    console.log(isReconciliado);
+
 
     return {
       ...negociacao,

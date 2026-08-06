@@ -63,6 +63,16 @@ export class CreateConciliacaoDividaDto {
     descricao?: string;
 
     @ApiProperty({
+        description: 'ID da negociação da dívida.',
+        example: 1,
+        required: true,
+    })
+    @IsInt()
+    @IsPositive()
+    @Type(() => Number)
+    codigoNegociacaoDivida: number;
+
+    @ApiProperty({
         description: 'Lista de faturas.',
         type: [InvoiceDto],
     })

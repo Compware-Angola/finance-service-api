@@ -47,6 +47,7 @@ import { NegotiationService } from './negotiation.service';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
 import { AlunoService } from '../aluno/aluno.service';
 import { TipoCandidatura } from '../invoice/entities/tipo.candidatura.entity';
+import { ReconciliacaoNegociacaoDivida } from '../conciliacao-dividas/entities/conciliacao-divida.entity';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { TipoCandidatura } from '../invoice/entities/tipo.candidatura.entity';
     }),
     TypeOrmModule.forFeature([
       Payment,
+      ReconciliacaoNegociacaoDivida,
       TbPreinscricao,
       TbPagamentosi,
       Invoice,
@@ -98,4 +100,4 @@ import { TipoCandidatura } from '../invoice/entities/tipo.candidatura.entity';
     AlunoService,
   ],
 })
-export class DebtNegotiationModule {}
+export class DebtNegotiationModule { }

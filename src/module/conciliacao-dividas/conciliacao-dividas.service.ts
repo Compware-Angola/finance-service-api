@@ -137,8 +137,6 @@ export class ConciliacaoDividasService {
           invoiceDto.invoiceId,
         )!;
 
-        console.log(itensOriginais);
-
 
         // Mapa InvoiceItemId (original) -> novo valor conciliado.
         // Só contém entradas para os itens que o usuário quis MUDAR.
@@ -176,6 +174,10 @@ export class ConciliacaoDividasService {
             valorATransportar: item.valorATransportar,
           };
         });
+
+
+        console.log(novosItens, 'NOVO');
+
 
         // Soma o total usando SOMENTE novosItens, porque ele já contém
         // TODOS os itens (alterados e não alterados). Somar de novo os

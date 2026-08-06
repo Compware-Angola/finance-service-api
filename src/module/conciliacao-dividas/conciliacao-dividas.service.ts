@@ -157,7 +157,7 @@ export class ConciliacaoDividasService {
           return {
             CodigoProduto: item.CodigoProduto,
             Quantidade: item.Quantidade,
-            Total: usarNovoValor ? novoValor : item.Total,       // item não alterado mantém o Total original
+            Total: usarNovoValor ? novoValor : item.total,       // item não alterado mantém o Total original
             preco: usarNovoValor ? novoValor : item.preco,       // item não alterado mantém o preco original
             obs: item.obs,
             taxaIva: item.taxaIva,

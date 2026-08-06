@@ -1,42 +1,567 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { CreateConciliacaoDividaDto } from './dto/create-conciliacao-divida.dto';
-import { UpdateConciliacaoDividaDto } from './dto/update-conciliacao-divida.dto';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { CreateConciliacaoDividaDto } from './dto/create-conciliacao-divida.dto';
 import { Invoice } from 'src/module/invoice/entities/invoice.entity';
-import { Repository } from 'typeorm';
+import { InvoiceItem } from 'src/module/invoice/entities/InvoiceIten.entity';
+import { InvoiceService } from 'src/module/invoice/invoice.service';
+import { CreateInvoiceDto } from 'src/module/invoice/dto/create-invoice.dto';
+import { ReconciliacaoNegociacaoDivida } from './entities/conciliacao-divida.entity';
+import { FindConciliacaoDividaDto } from './dto/find-conciliacao-divida.dto';
+import { PagedResult } from '../debt_negotiation/list_debt_negotiation.service';
+import { ReconciliacaoDecisaoEnum, ValidarConciliacaoDividaDto } from './dto/validar-conciliacao-divida.dto';
+import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+
+const ESTADO_FATURA_ELIMINADO = 3;
+const ESTADO_INVOICE_PENDENTE = 0
 
 @Injectable()
 export class ConciliacaoDividasService {
   constructor(
     @InjectRepository(Invoice)
     private readonly invoiceRepo: Repository<Invoice>,
+    @InjectRepository(InvoiceItem)
+    private readonly invoiceItemRepo: Repository<InvoiceItem>,
+    @InjectRepository(ReconciliacaoNegociacaoDivida)
+    private readonly reconciliacaoRepo: Repository<ReconciliacaoNegociacaoDivida>,
+    private readonly invoiceService: InvoiceService,
+    private readonly dataSource: DataSource,
   ) { }
-  async create(createConciliacaoDividaDto: CreateConciliacaoDividaDto) {
+
+  async create(
+    createConciliacaoDividaDto: CreateConciliacaoDividaDto,
+    createdBy: number,
+  ) {
     const { invoices, descricao } = createConciliacaoDividaDto;
 
+    // ============================================================
+    // 1. PRÉ-VALIDAÇÃO — confere TUDO antes de criar qualquer coisa
+    //    (evita criar fatura 1 e falhar na fatura 2 fora de transação)
+    // ============================================================
     const errors: { invoiceId: number; mensagem: string }[] = [];
+    const faturasOriginais = new Map<number, Invoice>();
+    const itensOriginaisPorFatura = new Map<number, InvoiceItem[]>();
 
-    for (const invoice of invoices) {
-      const faturaExistente = await this.invoiceRepo.findOne({
-        where: { Codigo: invoice.InvoiceId },
+    const ESTADOS_BLOQUEADOS = [1, 3]; // ajuste conforme o enum real de estado da fatura
+
+    for (const invoiceDto of invoices) {
+      const faturaOriginal = await this.invoiceRepo.findOne({
+        where: { Codigo: invoiceDto.invoiceId },
       });
 
-      if (!faturaExistente) {
+      if (!faturaOriginal) {
         errors.push({
-          invoiceId: invoice.InvoiceId,
-
-          mensagem: `A fatura ${invoice.InvoiceId} não foi encontrada.`,
+          invoiceId: invoiceDto.invoiceId,
+          mensagem: `A fatura ${invoiceDto.invoiceId} não foi encontrada.`,
         });
+        continue;
       }
+
+      if (ESTADOS_BLOQUEADOS.includes(faturaOriginal.estado)) {
+        errors.push({
+          invoiceId: invoiceDto.invoiceId,
+          mensagem: `A fatura ${invoiceDto.invoiceId} está com estado ${faturaOriginal.estado} e não pode ser conciliada.`,
+        });
+        continue;
+      }
+
+      // já existe uma conciliação PENDENTE envolvendo esta fatura?
+      // (como fatura original OU como fatura proposta de outra conciliação)
+      const reconciliacaoPendente = await this.reconciliacaoRepo.findOne({
+        where: [
+          {
+            facturaOriginal: { Codigo: invoiceDto.invoiceId },
+            status: 'PENDENTE',
+          },
+          {
+            facturaPropostaAlteracao: { Codigo: invoiceDto.invoiceId },
+            status: 'PENDENTE',
+          },
+        ],
+      });
+
+      if (reconciliacaoPendente) {
+        errors.push({
+          invoiceId: invoiceDto.invoiceId,
+          mensagem: `A fatura ${invoiceDto.invoiceId} já possui uma conciliação pendente e não pode ser conciliada novamente.`,
+        });
+        continue;
+      }
+
+      const itensOriginais = await this.invoiceItemRepo.find({
+        where: { CodigoFactura: invoiceDto.invoiceId } as any,
+      });
+
+      const idsExistentes = new Set(itensOriginais.map((i: any) => i.codigo));
+
+      for (const itemDto of invoiceDto.itens) {
+        if (!idsExistentes.has(itemDto.InvoiceItemId)) {
+          errors.push({
+            invoiceId: invoiceDto.invoiceId,
+            mensagem: `O item ${itemDto.InvoiceItemId} não pertence à fatura ${invoiceDto.invoiceId}.`,
+          });
+        }
+      }
+
+      faturasOriginais.set(invoiceDto.invoiceId, faturaOriginal);
+      itensOriginaisPorFatura.set(invoiceDto.invoiceId, itensOriginais);
     }
 
     if (errors.length > 0) {
       throw new BadRequestException({
-        message: 'Uma ou mais faturas não foram encontradas.',
+        message: 'Uma ou mais faturas/itens são inválidos.',
         errors,
       });
     }
 
-    return 'This action adds a new conciliacaoDivida';
+    // ============================================================
+    // 2. CRIAÇÃO — tudo dentro de UMA transação (rollback se algo falhar)
+    // ============================================================
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const resultados: ReconciliacaoNegociacaoDivida[] = [];
+
+      for (const invoiceDto of invoices) {
+        const faturaOriginal = faturasOriginais.get(invoiceDto.invoiceId)!;
+        const itensOriginais = itensOriginaisPorFatura.get(
+          invoiceDto.invoiceId,
+        )!;
+
+        // mapa InvoiceItemId (original) -> novo valor conciliado
+        const valoresConciliados = new Map<number, number>(
+          invoiceDto.itens.map((i) => [i.InvoiceItemId, i.valor]),
+        );
+
+        // monta os itens da NOVA fatura, herdando tudo do item original
+        // e só sobrescrevendo o valor (Total/preco) quando vier no DTO
+        const novosItens = itensOriginais.map((item: any) => {
+          const novoValor = valoresConciliados.get(item.codigo);
+          const usarNovoValor = novoValor !== undefined;
+
+          return {
+            CodigoProduto: item.CodigoProduto,
+            Quantidade: item.Quantidade,
+            Total: usarNovoValor ? novoValor : item.Total,
+            preco: usarNovoValor ? novoValor : item.preco,
+            obs: item.obs,
+            taxaIva: item.taxaIva,
+            valorIva: item.valorIva,
+            retencao: item.retencao,
+            incidencia: item.incidencia,
+            valorDesconto: item.valorDesconto,
+            descontoProduto: item.descontoProduto,
+            mes: item.mes,
+            multa: item.multa,
+            mesTempId: item.mesTempId,
+            codigo_anoLectivo: item.codigoAnoLectivo,
+            valorPago: 0,
+            valorATransportar: item.valorATransportar,
+          };
+        });
+
+        const novoTotalPreco = novosItens.reduce(
+          (soma, item) => soma + (item.Total ?? 0),
+          0,
+        );
+
+        const createInvoiceDto: CreateInvoiceDto = {
+          CodigoMatricula: faturaOriginal.CodigoMatricula,
+          Desconto: faturaOriginal.Desconto,
+          totalIVA: faturaOriginal.totalIVA,
+          TotalMulta: faturaOriginal.TotalMulta,
+          total_incidencia: faturaOriginal.totalIncidencia,
+          total_retencao: faturaOriginal.totalRetencao,
+          TotalPreco: novoTotalPreco,
+          ValorAPagar: novoTotalPreco,
+          Descricao:
+            descricao ?? `Proposta de conciliação da fatura ${faturaOriginal.Codigo}`,
+          codigo_descricao: faturaOriginal.codigoDescricao,
+          polo_id: faturaOriginal.poloId,
+          canal: faturaOriginal.canal,
+          codigo_anoLectivo: faturaOriginal.anoLectivo,
+          codigo_preinscricao: faturaOriginal.codigoPreinscricao,
+          tipo_documento_factura_id: faturaOriginal.tipoDocumentoFacturaId,
+          itens: novosItens,
+        } as CreateInvoiceDto;
+
+        // cria a fatura+itens reaproveitando a MESMA transação
+        const faturaProposta = await this.invoiceService.create(
+          createInvoiceDto,
+          undefined, // referência: gera uma nova automaticamente
+          undefined, // data de vencimento: gera uma nova automaticamente
+          queryRunner.manager,
+        );
+
+        // força o estado "aguarda aprovação" na fatura e nos itens,
+        // sobrescrevendo o que a lógica interna de isenção/pendente definiu
+        await queryRunner.manager.update(
+          Invoice,
+          { Codigo: faturaProposta.Codigo },
+          { estado: ESTADO_FATURA_ELIMINADO },
+        );
+        await queryRunner.manager.update(
+          InvoiceItem,
+          { CodigoFactura: faturaProposta.Codigo } as any,
+          { estado: ESTADO_FATURA_ELIMINADO } as any,
+        );
+
+        const reconciliacao = queryRunner.manager.create(
+          ReconciliacaoNegociacaoDivida,
+          {
+            facturaOriginal: { Codigo: faturaOriginal.Codigo } as Invoice,
+            facturaPropostaAlteracao: {
+              Codigo: faturaProposta.Codigo,
+            } as Invoice,
+            descricaoCriacao: descricao,
+            status: 'PENDENTE',
+            createdBy,
+          },
+        );
+
+        resultados.push(
+          await queryRunner.manager.save(
+            ReconciliacaoNegociacaoDivida,
+            reconciliacao,
+          ),
+        );
+      }
+
+      await queryRunner.commitTransaction();
+      return resultados;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+
+      if (err instanceof BadRequestException || err instanceof NotFoundException) {
+        throw err;
+      }
+      throw new BadRequestException(
+        'Erro ao criar a conciliação de negociação de dívida.',
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Aprova ou rejeita uma proposta de conciliação de dívida.
+   */
+  async validar(
+    id: number,
+    dto: ValidarConciliacaoDividaDto,
+    validatedBy: number,
+  ): Promise<{
+    message: string;
+    estadoFacturaOriginal: string | number;
+    estadoFacturaPropostaAlteracao: string | number;
+  }> {
+    const reconciliacao = await this.reconciliacaoRepo.findOne({
+      where: { id },
+      relations: ['facturaOriginal', 'facturaPropostaAlteracao'],
+    });
+
+    if (!reconciliacao) {
+      throw new NotFoundException(
+        `Reconciliação com código ${id} não encontrada.`,
+      );
+    }
+
+    if (reconciliacao.status !== 'PENDENTE') {
+      throw new BadRequestException(
+        `Esta reconciliação já foi ${reconciliacao.status.toLowerCase()} e não pode ser validada novamente.`,
+      );
+    }
+
+    if (
+      dto.decisao === ReconciliacaoDecisaoEnum.REJEITADO &&
+      !dto.descricaoValidacao
+    ) {
+      throw new BadRequestException(
+        'A descrição da validação é obrigatória ao rejeitar uma conciliação.',
+      );
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      if (dto.decisao === ReconciliacaoDecisaoEnum.APROVADO) {
+        // 1. Anula a fatura original (grava histórico de anulação)
+        await this.invoiceService.annulInvoice(
+          reconciliacao.facturaOriginal.Codigo,
+          validatedBy,
+          `Anulada por aprovação da conciliação #${reconciliacao.id}`,
+        );
+
+        // 2. Promove a fatura proposta para o estado ativo
+        await queryRunner.manager.update(
+          Invoice,
+          { Codigo: reconciliacao.facturaPropostaAlteracao.Codigo },
+          { estado: ESTADO_INVOICE_PENDENTE },
+        );
+        await queryRunner.manager.update(
+          InvoiceItem,
+          {
+            CodigoFactura: reconciliacao.facturaPropostaAlteracao.Codigo,
+          } as any,
+          { estado: ESTADO_INVOICE_PENDENTE } as any,
+        );
+      }
+      // Se REJEITADO: a fatura proposta permanece como está (inativa/estado 3)
+      // e a fatura original não é alterada.
+
+      reconciliacao.status = dto.decisao;
+      reconciliacao.descricaoValidacao = dto.descricaoValidacao ?? '';
+      reconciliacao.validatedBy = validatedBy;
+      reconciliacao.validatedAt = new Date();
+
+      await queryRunner.manager.save(
+        ReconciliacaoNegociacaoDivida,
+        reconciliacao,
+      );
+
+      await queryRunner.commitTransaction();
+      return {
+        message: 'Conciliação validada com sucesso.',
+        estadoFacturaOriginal: dto.decisao === ReconciliacaoDecisaoEnum.REJEITADO ? 'ANULADA' : ESTADO_INVOICE_PENDENTE,
+        estadoFacturaPropostaAlteracao: dto.decisao === ReconciliacaoDecisaoEnum.APROVADO ? ESTADO_INVOICE_PENDENTE : 'ANULADA',
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      if (err instanceof BadRequestException || err instanceof NotFoundException) {
+        throw err;
+      }
+      throw new BadRequestException(
+        'Erro ao validar a conciliação de negociação de dívida.',
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Lista todas as reconciliações, com filtros e paginação.
+   */
+  async findAll(
+    filter: FindConciliacaoDividaDto,
+  ): Promise<PagedResult<any>> {
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      facturaOriginalId,
+      facturaPropostaId,
+      createdBy,
+      codigoAnoLectivo,
+      codigoCurso,
+      codigoMatricula,
+      nome,
+    } = filter;
+
+    const offset = (page - 1) * limit;
+
+    const params = {
+      status: status ?? null,
+      facturaOriginalId: facturaOriginalId ?? null,
+      facturaPropostaId: facturaPropostaId ?? null,
+      createdBy: createdBy ?? null,
+      codigoAnoLectivo: codigoAnoLectivo ?? null,
+      codigoCurso: codigoCurso ?? null,
+      codigoMatricula: codigoMatricula ?? null,
+      nome: nome ?? null,
+    };
+
+    /* =============================================
+       QUERY PRINCIPAL PAGINADA
+       ============================================= */
+    const dataSql = `
+    SELECT
+      r.CODIGO                 AS id,
+      r.STATUS                 AS status,
+      r.DESCRICAO_CRIACAO      AS descricao_criacao,
+      r.DESCRICAO_VALIDACAO    AS descricao_validacao,
+      r.CREATED_AT             AS created_at,
+      r.UPDATED_AT             AS updated_at,
+      r.CREATED_BY             AS created_by,
+      r.VALIDATED_BY           AS validated_by,
+      r.VALIDATED_AT           AS validated_at,
+
+      fo.CODIGO                AS factura_original_id,
+      fo.DESCRICAO             AS factura_original_descricao,
+      fo.REFERENCIA            AS factura_original_referencia,
+      fo.ESTADO                AS factura_original_estado,
+      fo.TOTALPRECO            AS factura_original_total_preco,
+      fo.VALORAPAGAR           AS factura_original_valor_apagar,
+      fo.DATAFACTURA           AS factura_original_data,
+      fo.ANO_LECTIVO           AS factura_original_ano_lectivo,
+
+      fp.CODIGO                AS factura_proposta_id,
+      fp.DESCRICAO             AS factura_proposta_descricao,
+      fp.REFERENCIA            AS factura_proposta_referencia,
+      fp.ESTADO                AS factura_proposta_estado,
+      fp.TOTALPRECO            AS factura_proposta_total_preco,
+      fp.VALORAPAGAR           AS factura_proposta_valor_apagar,
+      fp.DATAFACTURA           AS factura_proposta_data,
+
+      m.codigo                 AS codigo_matricula,
+      p.NOME_COMPLETO           AS nome_estudante,
+      c.codigo                 AS codigo_curso,
+      c.designacao             AS curso,
+      f.DESIGNACAO             AS faculdade
+
+    FROM FK2_TB_RECONCILIACAO_NEGOCIACAO_DIVIDA r
+    INNER JOIN FK2_FACTURA fo          ON fo.CODIGO = r.FACTURA_ORIGINAL
+    LEFT  JOIN FK2_FACTURA fp          ON fp.CODIGO = r.FACTURA_PROPOSTA_ALTERACAO
+    LEFT  JOIN FK2_TB_MATRICULAS m     ON m.codigo  = fo.CODIGOMATRICULA
+    LEFT  JOIN FK2_TB_ADMISSAO a       ON a.codigo  = m.CODIGO_ALUNO
+    LEFT  JOIN FK2_TB_PREINSCRICAO p   ON p.codigo  = a.PRE_INCRICAO
+    LEFT  JOIN FK2_TB_CURSOS c         ON c.codigo  = m.CODIGO_CURSO
+    LEFT  JOIN FK2_TB_FACULDADE f      ON f.codigo  = c.FACULDADE_ID
+    WHERE 1=1
+      AND (:status IS NULL             OR r.STATUS      = :status)
+      AND (:facturaOriginalId IS NULL  OR fo.CODIGO     = :facturaOriginalId)
+      AND (:facturaPropostaId IS NULL  OR fp.CODIGO     = :facturaPropostaId)
+      AND (:createdBy IS NULL          OR r.CREATED_BY  = :createdBy)
+      AND (:codigoAnoLectivo IS NULL   OR fo.ANO_LECTIVO = :codigoAnoLectivo)
+      AND (:codigoCurso IS NULL        OR c.codigo      = :codigoCurso)
+      AND (:codigoMatricula IS NULL    OR m.codigo      = :codigoMatricula)
+      AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
+    ORDER BY r.CODIGO DESC
+    OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+    `;
+
+    const rawResults = await this.dataSource.query(dataSql, {
+      ...params,
+      offset,
+      limit,
+    } as any);
+
+    /* =============================================
+       QUERY DE CONTAGEM TOTAL
+       ============================================= */
+    const countSql = `
+    SELECT COUNT(*) AS TOTAL
+    FROM FK2_TB_RECONCILIACAO_NEGOCIACAO_DIVIDA r
+    INNER JOIN FK2_FACTURA fo          ON fo.CODIGO = r.FACTURA_ORIGINAL
+    LEFT  JOIN FK2_FACTURA fp          ON fp.CODIGO = r.FACTURA_PROPOSTA_ALTERACAO
+    LEFT  JOIN FK2_TB_MATRICULAS m     ON m.codigo  = fo.CODIGOMATRICULA
+    LEFT  JOIN FK2_TB_ADMISSAO a       ON a.codigo  = m.CODIGO_ALUNO
+    LEFT  JOIN FK2_TB_PREINSCRICAO p   ON p.codigo  = a.PRE_INCRICAO
+    LEFT  JOIN FK2_TB_CURSOS c         ON c.codigo  = m.CODIGO_CURSO
+    WHERE 1=1
+      AND (:status IS NULL             OR r.STATUS      = :status)
+      AND (:facturaOriginalId IS NULL  OR fo.CODIGO     = :facturaOriginalId)
+      AND (:facturaPropostaId IS NULL  OR fp.CODIGO     = :facturaPropostaId)
+      AND (:createdBy IS NULL          OR r.CREATED_BY  = :createdBy)
+      AND (:codigoAnoLectivo IS NULL   OR fo.ANO_LECTIVO = :codigoAnoLectivo)
+      AND (:codigoCurso IS NULL        OR c.codigo      = :codigoCurso)
+      AND (:codigoMatricula IS NULL    OR m.codigo      = :codigoMatricula)
+      AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
+    `;
+
+    const totalResult = await this.dataSource.query(countSql, params as any);
+    const total = Number(totalResult[0]?.TOTAL ?? 0);
+
+    /* =============================================
+       MONTA O RESULTADO FINAL
+       ============================================= */
+    const data = toLowerCaseKeys(rawResults).map((row: any) => ({
+      id: row.id,
+      status: row.status,
+      descricaoCriacao: row.descricao_criacao,
+      descricaoValidacao: row.descricao_validacao,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      createdBy: row.created_by,
+      validatedBy: row.validated_by,
+      validatedAt: row.validated_at,
+      facturaOriginal: {
+        codigo: row.factura_original_id,
+        descricao: row.factura_original_descricao,
+        referencia: row.factura_original_referencia,
+        estado: row.factura_original_estado,
+        totalPreco: Number(row.factura_original_total_preco ?? 0),
+        valorApagar: Number(row.factura_original_valor_apagar ?? 0),
+        data: row.factura_original_data,
+        anoLectivo: row.factura_original_ano_lectivo,
+      },
+      facturaPropostaAlteracao: row.factura_proposta_id
+        ? {
+          codigo: row.factura_proposta_id,
+          descricao: row.factura_proposta_descricao,
+          referencia: row.factura_proposta_referencia,
+          estado: row.factura_proposta_estado,
+          totalPreco: Number(row.factura_proposta_total_preco ?? 0),
+          valorApagar: Number(row.factura_proposta_valor_apagar ?? 0),
+          data: row.factura_proposta_data,
+        }
+        : null,
+      estudante: {
+        codigoMatricula: row.codigo_matricula,
+        nome: row.nome_estudante,
+        codigoCurso: row.codigo_curso,
+        curso: row.curso,
+        faculdade: row.faculdade,
+      },
+    }));
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Detalhe de uma reconciliação específica.
+   */
+  async findOne(id: number): Promise<any> {
+    const reconciliacao = await this.reconciliacaoRepo.findOne({
+      where: { id },
+      relations: ['facturaOriginal', 'facturaPropostaAlteracao'],
+    });
+
+    if (!reconciliacao) {
+      throw new NotFoundException(
+        `Reconciliação com código ${id} não encontrada.`,
+      );
+    }
+
+    // busca os itens da fatura original
+    const itensFacturaOriginal = await this.invoiceItemRepo.find({
+      where: { CodigoFactura: reconciliacao.facturaOriginal.Codigo } as any,
+    });
+
+    // busca os itens da fatura proposta (se existir)
+    const itensFacturaProposta = reconciliacao.facturaPropostaAlteracao
+      ? await this.invoiceItemRepo.find({
+        where: {
+          CodigoFactura: reconciliacao.facturaPropostaAlteracao.Codigo,
+        } as any,
+      })
+      : [];
+
+    return {
+      ...reconciliacao,
+      facturaOriginal: {
+        ...reconciliacao.facturaOriginal,
+        itens: itensFacturaOriginal,
+      },
+      facturaPropostaAlteracao: reconciliacao.facturaPropostaAlteracao
+        ? {
+          ...reconciliacao.facturaPropostaAlteracao,
+          itens: itensFacturaProposta,
+        }
+        : null,
+    };
   }
 }

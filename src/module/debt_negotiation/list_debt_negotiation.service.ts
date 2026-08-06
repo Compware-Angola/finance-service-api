@@ -1,7 +1,9 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { GetDebtNegotiationFilterDto } from './dto/find-deb-negotation.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
+import { InjectRepository } from '@nestjs/typeorm';
+import { ReconciliacaoNegociacaoDivida } from '../conciliacao-dividas/entities/conciliacao-divida.entity';
 
 export interface DebtNegotiationStats {
   totalDividas: number;
@@ -20,7 +22,12 @@ export interface PagedResult<T> {
 
 @Injectable()
 export class ListDebtNegotiationService {
-  constructor(private readonly dataSource: DataSource) { }
+  constructor(
+    private readonly dataSource: DataSource,
+    @InjectRepository(ReconciliacaoNegociacaoDivida)
+    private readonly reconciliacaoRepo: Repository<ReconciliacaoNegociacaoDivida>,
+  ) { }
+
   async findNegotiations(
     filter: GetDebtNegotiationFilterDto,
   ): Promise<PagedResult<any>> {
@@ -263,7 +270,12 @@ export class ListDebtNegotiationService {
     if (!negociacaoId || Number.isNaN(negociacaoId)) {
       throw new BadRequestException('ID da negociação inválido.');
     }
-
+    // Se ja esta na reconciliacao deve informar no user
+    const isReconciliado = await this.reconciliacaoRepo.findOne({
+      where: {
+        id: negociacaoId,
+      },
+    });
     /* =============================================
        DADOS DA NEGOCIAÇÃO
        ============================================= */
@@ -308,62 +320,17 @@ export class ListDebtNegotiationService {
     const negociacao = toLowerCaseKeys(negociacaoResult)[0];
 
     /* =============================================
-       REGRA: FATURA NA NEGOCIAÇÃO x FLUXO NORMAL
-       Se a negociação foi criada ANTES de 1 de Maio
-       (do ano em que foi criada), a factura é
-       considerada "na negociação" e deve ser buscada
-       diretamente pelo campo CODIGO_FATURA da própria
-       negociação. Caso contrário, segue o fluxo normal
-       (busca via FK2_TB_NEGOCIACAO_FACTURA).
-       ============================================= */
-    const dataCriacao = new Date(negociacao.data_criacao);
-    const anoReferencia = dataCriacao.getFullYear();
-
-    // Mês em JS é 0-based: Maio = índice 4
-    const limiteMaio = new Date(anoReferencia, 4, 1, 0, 0, 0);
-
-    const facturaEstaNaNegociacao = dataCriacao < limiteMaio;
-
-    /* =============================================
        FACTURAS RELACIONADAS À NEGOCIAÇÃO
+       Query única: busca via tabela de relacionamento
+       (FK2_TB_NEGOCIACAO_FACTURA) e, apenas quando
+       essa estrutura não tiver nenhum registro para a
+       negociação, complementa com a busca direta pela
+       FK2_FATURA usando o CODIGO_FATURA da negociação
+       (NOT EXISTS evita duplicar quando já existe
+       relacionamento).
        ============================================= */
-    let facturasRaw: any[] = [];
-
-    if (facturaEstaNaNegociacao) {
-      // Fluxo "na negociação": busca direta pela FK2_FATURA
-      // usando o CODIGO_FATURA já presente na negociação
-      if (negociacao.codigo_factura) {
-        const facturaDiretaSql = `
-        SELECT
-          fa.CODIGO                   AS factura_id,
-          fa.DATAFACTURA              AS factura_data,
-          fa.TOTALPRECO               AS factura_total_preco,
-          fa.VALORAPAGAR              AS factura_valor_apagar,
-          fa.VALORENTREGUE            AS factura_valor_entregue,
-          fa.DESCONTO                 AS factura_desconto,
-          fa.TOTALIVA                 AS factura_total_iva,
-          fa.TOTALMULTA               AS factura_total_multa,
-          fa.TOTAL_INCIDENCIA         AS factura_total_incidencia,
-          fa.TOTAL_RETENCAO           AS factura_total_retencao,
-          fa.VALORAPAGAREXTENSO       AS factura_valor_apagar_extenso,
-          fa.DESCRICAO                AS factura_descricao,
-          fa.REFERENCIA               AS factura_referencia,
-          fa.DATAVENCIMENTO           AS factura_data_vencimento,
-          fa.ESTADO                   AS factura_estado,
-          fa.ANO_LECTIVO              AS factura_ano_lectivo
-        FROM FK2_FACTURA fa
-        WHERE fa.CODIGO = :codigoFactura
-      `;
-
-        facturasRaw = await this.dataSource.query(facturaDiretaSql, {
-          codigoFactura: negociacao.codigo_factura,
-        } as any);
-      }
-    } else {
-      // Fluxo normal: busca via tabela de relacionamento
-      const facturasSql = `
+    const facturasSql = `
       SELECT
-        nf.CODIGO_NEGOCIACAO,
         fa.CODIGO                   AS factura_id,
         fa.DATAFACTURA              AS factura_data,
         fa.TOTALPRECO               AS factura_total_preco,
@@ -379,18 +346,52 @@ export class ListDebtNegotiationService {
         fa.REFERENCIA               AS factura_referencia,
         fa.DATAVENCIMENTO           AS factura_data_vencimento,
         fa.ESTADO                   AS factura_estado,
-        fa.ANO_LECTIVO              AS factura_ano_lectivo
+        fa.ANO_LECTIVO              AS factura_ano_lectivo,
+        0                            AS esta_na_negociacao
       FROM FK2_TB_NEGOCIACAO_FACTURA nf
-      LEFT JOIN FK2_FACTURA fa ON fa.CODIGO = nf.CODIGO_FACTURA
+      INNER JOIN FK2_FACTURA fa ON fa.CODIGO = nf.CODIGO_FACTURA
       WHERE nf.CODIGO_NEGOCIACAO = :negociacaoId
         AND nf.DELETED_AT IS NULL
-      ORDER BY fa.CODIGO
+
+      UNION ALL
+
+      SELECT
+        fa.CODIGO                   AS factura_id,
+        fa.DATAFACTURA              AS factura_data,
+        fa.TOTALPRECO               AS factura_total_preco,
+        fa.VALORAPAGAR              AS factura_valor_apagar,
+        fa.VALORENTREGUE            AS factura_valor_entregue,
+        fa.DESCONTO                 AS factura_desconto,
+        fa.TOTALIVA                 AS factura_total_iva,
+        fa.TOTALMULTA               AS factura_total_multa,
+        fa.TOTAL_INCIDENCIA         AS factura_total_incidencia,
+        fa.TOTAL_RETENCAO           AS factura_total_retencao,
+        fa.VALORAPAGAREXTENSO       AS factura_valor_apagar_extenso,
+        fa.DESCRICAO                AS factura_descricao,
+        fa.REFERENCIA               AS factura_referencia,
+        fa.DATAVENCIMENTO           AS factura_data_vencimento,
+        fa.ESTADO                   AS factura_estado,
+        fa.ANO_LECTIVO              AS factura_ano_lectivo,
+        1                            AS esta_na_negociacao
+      FROM FK2_NEGOCIACAO_DIVIDAS nd
+      INNER JOIN FK2_FACTURA fa ON fa.CODIGO = nd.CODIGO_FATURA
+      WHERE nd.id = :negociacaoId
+        AND NOT EXISTS (
+          SELECT 1
+          FROM FK2_TB_NEGOCIACAO_FACTURA nf2
+          WHERE nf2.CODIGO_NEGOCIACAO = :negociacaoId
+            AND nf2.DELETED_AT IS NULL
+        )
+
+      ORDER BY factura_id
     `;
 
-      facturasRaw = await this.dataSource.query(facturasSql, {
-        negociacaoId,
-      } as any);
-    }
+    const facturasRaw: any[] = await this.dataSource.query(facturasSql, {
+      negociacaoId,
+    } as any);
+
+    const facturaEstaNaNegociacao = facturasRaw.length > 0
+      && Number(facturasRaw[0].ESTA_NA_NEGOCIACAO) === 1;
 
     const facturaIds = facturasRaw
       .map((f) => Number(f.FACTURA_ID))
@@ -467,6 +468,7 @@ export class ListDebtNegotiationService {
       ...negociacao,
       facturas,
       esta_na_negociacao: facturaEstaNaNegociacao,
+      isReconciliado: !!isReconciliado,
     };
   }
 }

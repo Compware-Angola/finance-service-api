@@ -800,22 +800,24 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
         `UPDATE FK2_FACTURA SET estado = :estados WHERE Codigo = :codigo`,
         { estados, codigo: dto.codigoFactura } as any,
       );
+      console.log(
+        'Ver  dados: ',
+        this.hasMatchingSigla(itens, ['tdm', 'ipucricular(anual)']),
+      );
 
       // 3. Siglas anuais
-      if (this.hasMatchingSigla(itens, ['tdm', 'ipucricular(anual)'])) {
+      if (this.hasMatchingSigla(itens, ['TDM', 'IPUCRICULAR(ANUAL)'])) {
         await this.handleAnual(queryRunner, invoice);
       }
 
       // 4. Siglas semestrais
-      if (
-        this.hasMatchingSigla(itens, ['SEMESTRAL'], { caseSensitive: true })
-      ) {
+      if (this.hasMatchingSigla(itens, ['SEMESTRAL'])) {
         await this.handleSemestral(queryRunner, invoice);
       }
 
       // 5. TdEdA
       let tdaResult: { success: boolean; message?: string } | null = null;
-      if (this.hasMatchingSigla(itens, ['TdEdA'], { caseSensitive: true })) {
+      if (this.hasMatchingSigla(itens, ['TdEdA'])) {
         tdaResult = await this.handleTda(invoice);
       }
 
@@ -972,21 +974,28 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
 
   // ── Privados ────────────────────────────────────────────────────────────────
 
+  private normalizeSigla(value: unknown): string {
+    return String(value ?? '')
+      .trim() // Remove espaços no início e no fim
+      .replace(/\s+/g, '') // Remove todos os espaços
+      .normalize('NFD') // Separa caracteres acentuados
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .toUpperCase(); // Converte para maiúsculas
+  }
+
   private hasMatchingSigla(
     itens: any[],
     siglas: string[],
-    options?: { caseSensitive?: boolean; field?: string },
+    options?: { field?: string },
   ): boolean {
     const field = options?.field ?? 'SiglaProduto';
-    const caseSensitive = options?.caseSensitive ?? false;
+
+    const siglasNormalizadas = siglas.map((s) => this.normalizeSigla(s));
 
     return itens.some((item) => {
-      const siglaItem: string = item[field] ?? item.SIGLAPRODUTO ?? '';
-      return siglas.some((s) =>
-        caseSensitive
-          ? siglaItem === s
-          : siglaItem.toLowerCase() === s.toLowerCase(),
-      );
+      const siglaItem = this.normalizeSigla(item[field] ?? item.SIGLAPRODUTO);
+
+      return siglasNormalizadas.includes(siglaItem);
     });
   }
 

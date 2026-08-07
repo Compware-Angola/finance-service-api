@@ -543,64 +543,64 @@ export class ConciliacaoDividasService {
    */
   async findOne(id: number): Promise<any> {
     const sql = `
-    SELECT
-      r.CODIGO                 AS id,
-      r.STATUS                 AS status,
-      r.DESCRICAO_CRIACAO      AS descricao_criacao,
-      r.DESCRICAO_VALIDACAO    AS descricao_validacao,
-      r.CREATED_AT             AS created_at,
-      r.UPDATED_AT             AS updated_at,
-      r.CREATED_BY             AS created_by,
-      r.VALIDATED_BY           AS validated_by,
-      r.VALIDATED_AT           AS validated_at,
+  SELECT
+    r.CODIGO                 AS id,
+    r.STATUS                 AS status,
+    r.DESCRICAO_CRIACAO      AS descricao_criacao,
+    r.DESCRICAO_VALIDACAO    AS descricao_validacao,
+    r.CREATED_AT             AS created_at,
+    r.UPDATED_AT             AS updated_at,
+    r.CREATED_BY             AS created_by,
+    r.VALIDATED_BY           AS validated_by,
+    r.VALIDATED_AT           AS validated_at,
 
-      fo.CODIGO                AS factura_original_id,
-      fo.DESCRICAO             AS factura_original_descricao,
-      fo.REFERENCIA            AS factura_original_referencia,
-      fo.ESTADO                AS factura_original_estado,
-      fo.TOTALPRECO            AS factura_original_total_preco,
-      fo.VALORAPAGAR           AS factura_original_valor_apagar,
-      fo.DATAFACTURA           AS factura_original_data,
-      fo.ANO_LECTIVO           AS factura_original_ano_lectivo,
+    fo.CODIGO                AS factura_original_id,
+    fo.DESCRICAO             AS factura_original_descricao,
+    fo.REFERENCIA            AS factura_original_referencia,
+    fo.ESTADO                AS factura_original_estado,
+    fo.TOTALPRECO            AS factura_original_total_preco,
+    fo.VALORAPAGAR           AS factura_original_valor_apagar,
+    fo.DATAFACTURA           AS factura_original_data,
+    fo.ANO_LECTIVO           AS factura_original_ano_lectivo,
 
-      fp.CODIGO                AS factura_proposta_id,
-      fp.DESCRICAO             AS factura_proposta_descricao,
-      fp.REFERENCIA            AS factura_proposta_referencia,
-      fp.ESTADO                AS factura_proposta_estado,
-      fp.TOTALPRECO            AS factura_proposta_total_preco,
-      fp.VALORAPAGAR           AS factura_proposta_valor_apagar,
-      fp.DATAFACTURA           AS factura_proposta_data,
+    fp.CODIGO                AS factura_proposta_id,
+    fp.DESCRICAO             AS factura_proposta_descricao,
+    fp.REFERENCIA            AS factura_proposta_referencia,
+    fp.ESTADO                AS factura_proposta_estado,
+    fp.TOTALPRECO            AS factura_proposta_total_preco,
+    fp.VALORAPAGAR           AS factura_proposta_valor_apagar,
+    fp.DATAFACTURA           AS factura_proposta_data,
 
-      m.CODIGO                 AS codigo_matricula,
-      p.NOME_COMPLETO          AS nome_estudante,
-      c.CODIGO                 AS codigo_curso,
-      c.DESIGNACAO             AS curso,
-      f.DESIGNACAO             AS faculdade
+    m.CODIGO                 AS codigo_matricula,
+    p.NOME_COMPLETO          AS nome_estudante,
+    c.CODIGO                 AS codigo_curso,
+    c.DESIGNACAO             AS curso,
+    f.DESIGNACAO             AS faculdade
 
-    FROM FK2_TB_RECONCILIACAO_NEGOCIACAO_DIVIDA r
-    INNER JOIN FK2_FACTURA fo
-      ON fo.CODIGO = r.FACTURA_ORIGINAL
+  FROM FK2_TB_RECONCILIACAO_NEGOCIACAO_DIVIDA r
+  INNER JOIN FK2_FACTURA fo
+    ON fo.CODIGO = r.FACTURA_ORIGINAL
 
-    LEFT JOIN FK2_FACTURA fp
-      ON fp.CODIGO = r.FACTURA_PROPOSTA_ALTERACAO
+  LEFT JOIN FK2_FACTURA fp
+    ON fp.CODIGO = r.FACTURA_PROPOSTA_ALTERACAO
 
-    LEFT JOIN FK2_TB_MATRICULAS m
-      ON m.CODIGO = fo.CODIGOMATRICULA
+  LEFT JOIN FK2_TB_MATRICULAS m
+    ON m.CODIGO = fo.CODIGOMATRICULA
 
-    LEFT JOIN FK2_TB_ADMISSAO a
-      ON a.CODIGO = m.CODIGO_ALUNO
+  LEFT JOIN FK2_TB_ADMISSAO a
+    ON a.CODIGO = m.CODIGO_ALUNO
 
-    LEFT JOIN FK2_TB_PREINSCRICAO p
-      ON p.CODIGO = a.PRE_INCRICAO
+  LEFT JOIN FK2_TB_PREINSCRICAO p
+    ON p.CODIGO = a.PRE_INCRICAO
 
-    LEFT JOIN FK2_TB_CURSOS c
-      ON c.CODIGO = m.CODIGO_CURSO
+  LEFT JOIN FK2_TB_CURSOS c
+    ON c.CODIGO = m.CODIGO_CURSO
 
-    LEFT JOIN FK2_TB_FACULDADE f
-      ON f.CODIGO = c.FACULDADE_ID
+  LEFT JOIN FK2_TB_FACULDADE f
+    ON f.CODIGO = c.FACULDADE_ID
 
-    WHERE r.CODIGO = :id
-  `;
+  WHERE r.CODIGO = :id
+`;
 
     const result = await this.dataSource.query(sql, { id } as any);
 
@@ -612,18 +612,54 @@ export class ConciliacaoDividasService {
 
     const row = toLowerCaseKeys(result)[0];
 
-    const itensFacturaOriginal = await this.invoiceItemRepo.find({
-      where: {
-        CodigoFactura: row.factura_original_id,
-      } as any,
-    });
+    /* =============================================
+       ITENS DAS FACTURAS (ORIGINAL E PROPOSTA)
+       Busca única trazendo a descrição do serviço
+       via JOIN com FK2_TB_TIPO_SERVICOS
+       ============================================= */
+    const facturaIds = [row.factura_original_id, row.factura_proposta_id]
+      .filter((v) => v !== null && v !== undefined);
 
+    const itensPorFactura = new Map<number, any[]>();
+
+    if (facturaIds.length > 0) {
+      const itensSql = `
+      SELECT
+        fi.CODIGOFACTURA     AS codigo_factura,
+        fi.CODIGO            AS item_id,
+        s.DESCRICAO          AS item_descricao,
+        fi.QUANTIDADE        AS item_quantidade,
+        s.PRECO              AS item_preco_unitario,
+        fi.TOTAL             AS item_valor_total,
+        mt.DESIGNACAO        AS mes_designacao
+      FROM FK2_FACTURA_ITEMS fi
+      LEFT JOIN FK2_TB_TIPO_SERVICOS s ON s.CODIGO = fi.CODIGOPRODUTO
+      LEFT JOIN FK2_MES_TEMP mt ON mt.ID = fi.MES_TEMP_ID
+      WHERE fi.CODIGOFACTURA IN (${facturaIds.join(',')})
+      ORDER BY fi.CODIGOFACTURA, fi.CODIGO
+    `;
+
+      const itensRaw: any[] = await this.dataSource.query(itensSql);
+
+      for (const item of itensRaw) {
+        const faId = Number(item.CODIGO_FACTURA);
+        if (!itensPorFactura.has(faId)) {
+          itensPorFactura.set(faId, []);
+        }
+        itensPorFactura.get(faId)!.push({
+          codigo: item.ITEM_ID,
+          descricao: item.ITEM_DESCRICAO,
+          quantidade: Number(item.ITEM_QUANTIDADE ?? 0),
+          preco_unitario: Number(item.ITEM_PRECO_UNITARIO ?? 0),
+          valor_total: Number(item.ITEM_VALOR_TOTAL ?? 0),
+          mes_designacao: item.MES_DESIGNACAO,
+        });
+      }
+    }
+
+    const itensFacturaOriginal = itensPorFactura.get(Number(row.factura_original_id)) ?? [];
     const itensFacturaProposta = row.factura_proposta_id
-      ? await this.invoiceItemRepo.find({
-        where: {
-          CodigoFactura: row.factura_proposta_id,
-        } as any,
-      })
+      ? itensPorFactura.get(Number(row.factura_proposta_id)) ?? []
       : [];
 
     return {

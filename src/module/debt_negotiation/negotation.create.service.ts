@@ -121,7 +121,7 @@ export class CreateDebtNegotiationService {
         totalIVA: dto.totalIVA ?? 0,
         total_incidencia: dto.total_incidencia ?? 0,
         total_retencao: dto.total_retencao ?? 0,
-        TotalMulta: totalMulta,
+        TotalMulta: isTotal ? totalMulta : primeiroValorApagar,
         canal: 1,
         CodigoMatricula: aluno.matricula,
         codigo_preinscricao: aluno.codigo_inscricao,
@@ -245,7 +245,7 @@ export class CreateDebtNegotiationService {
         valorRestante,
         codigo_matricula: aluno.matricula,
         codigo_ano_lectivo: anoLectivo.codigo,
-        codigo_fatura: faturaEntrada.Codigo,
+        codigo_fatura: undefined,
         qtd_prestacoes: qtd_meses,
         tipo_negociacao_id,
         valorPrestacoes: valorPrestacaoMensal,
@@ -257,7 +257,7 @@ export class CreateDebtNegotiationService {
         estado: 1,
       } as DeepPartial<DebtNegotiation>);
       await queryRunner.manager.save(negociacao);
-console.log(negociacao)
+      console.log(negociacao)
       // 13. Registar faturas na tabela de relação
       await queryRunner.manager.query(
         `INSERT INTO FK2_TB_NEGOCIACAO_FACTURA (CODIGO_FACTURA, CODIGO_NEGOCIACAO, CREATED_AT) VALUES (:codigo_factura, :codigo_negociacao, SYSDATE)`,

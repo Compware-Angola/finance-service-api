@@ -1,9 +1,12 @@
-import { DataSource } from "typeorm";
+import { DataSource, Repository } from "typeorm";
 import { toLowerCaseKeys } from "../util/toLowerCaseKeys";
 import { GetDebtDtoNew } from "./dto/find-debit.dto";
 import { MonthlyFeesDiscountUtilService } from "../shared/monthly_fees/monthly_fees.discount.Util.service";
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, Inject } from "@nestjs/common";
 import { GetAllDebtNegotiationsResponse } from "./types/types";
+import { DebtNegotiation } from "./entities/debt_negotiation.entity";
+import { Invoice } from "../invoice/entities/invoice.entity";
+import { InjectRepository } from "@nestjs/typeorm";
 
 
 
@@ -13,6 +16,11 @@ export class NegotiationService {
     constructor(
         private readonly dataSource: DataSource,
         private readonly monthlyFeeDiscount: MonthlyFeesDiscountUtilService,
+
+        @InjectRepository(DebtNegotiation)
+        private readonly negotiationRepo: Repository<DebtNegotiation>,
+        @InjectRepository(Invoice)
+        private readonly invoiceRepo: Repository<Invoice>,
     ) { }
 
     async getAllDebtNegotiations(
@@ -47,8 +55,15 @@ export class NegotiationService {
         if (!codigo_matricula) return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0 };
         const aluno = await this.obterDadosCompletosAluno(codigo_matricula);
         if (aluno.estado_matricula.toUpperCase() == 'DIPLOMADO') return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0 };
+        // Verificar Se o Elunn  tem negociacao feita , ve o tipo de negociacao e ver se pagou a primeira parcela caso for 50% e cobrar ele outros 50% apos passar 5 Meses
 
+        const statusNegociacao = await this.verificarNegociacaoExistente(codigo_matricula);
 
+        console.log(statusNegociacao);
+
+        if (statusNegociacao.bloquear) {
+            return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0 };
+        }
         // ====================== FILTRO DE ANO LECTIVO ======================
         const filtroAnoLectivo = `
   ${codAnoLectivo
@@ -135,7 +150,7 @@ export class NegotiationService {
             status: 'pending',
             is_Negotation: true
         });
-        console.log(generated);
+
 
         const data = [...results, ...generated];
         const recorrencias = await this.mapRecorrenciasAdicionais(
@@ -355,5 +370,102 @@ export class NegotiationService {
             default:
                 return designacao;
         }
+    }
+    // ============================================================
+    // VERIFICAÇÃO DE NEGOCIAÇÃO EXISTENTE
+    // ============================================================
+
+    /**
+     * Verifica se o aluno já tem uma negociação de dívida ativa e,
+     * caso tenha, decide se deve ser cobrado (e o quê).
+     *
+     * O tipo (TOTAL ou PARCELADO) é confirmado pela quantidade de
+     * faturas ligadas em FK2_TB_NEGOCIACAO_FACTURA:
+     *   - 1 fatura  -> TOTAL (100%)
+     *   - >1 fatura -> PARCELADO (50% entrada + 50% saldo)
+     *
+     * Regras:
+     *  - TOTAL paga                          -> não cobrar nada (dívida quitada)
+     *  - PARCELADO, entrada paga, < 5 meses  -> não cobrar nada ainda
+     *  - PARCELADO, entrada paga, >= 5 meses -> cobrar só o saldo restante
+     *  - PARCELADO, entrada NÃO paga         -> segue fluxo normal (cobra tudo)
+     *  - Sem negociação                      -> segue fluxo normal
+     */
+    private async verificarNegociacaoExistente(
+        codigo_matricula: number,
+    ): Promise<{
+        bloquear: boolean;
+        apenasSaldo: boolean;
+        negociacao?: DebtNegotiation;
+        codigoFaturaSaldo?: number;
+    }> {
+        const negociacao = await this.negotiationRepo.findOne({
+            where: {
+                codigo_matricula,
+                estado: 1, // negociação ativa
+            },
+            order: { created_at: 'DESC' },
+        });
+
+        if (!negociacao) {
+            return { bloquear: false, apenasSaldo: false };
+        }
+
+        // Busca todas as faturas ligadas a essa negociação
+        const faturasLigadas: { CODIGO_FACTURA: number }[] = await this.dataSource.query(
+            `SELECT CODIGO_FACTURA FROM FK2_TB_NEGOCIACAO_FACTURA WHERE CODIGO_NEGOCIACAO = :codigo_negociacao`,
+            { codigo_negociacao: negociacao.id } as any,
+        );
+
+        const isParcelado = faturasLigadas.length > 1;
+
+        if (!isParcelado) {
+            // Negociação TOTAL -> só existe 1 fatura
+            const codigoFaturaUnica = faturasLigadas[0]?.CODIGO_FACTURA ?? negociacao.codigo_fatura;
+            const faturaUnica = await this.invoiceRepo.findOne({ where: { Codigo: codigoFaturaUnica } });
+
+            const paga = faturaUnica?.estado === 1;
+            if (paga) {
+                return { bloquear: true, apenasSaldo: false, negociacao };
+            }
+            return { bloquear: false, apenasSaldo: false };
+        }
+
+        // PARCELADO -> não sabemos qual das duas é "entrada" pela ordem,
+        // então buscamos as duas e vemos qual está paga
+        const [fatura1, fatura2] = await Promise.all(
+            faturasLigadas.map(f =>
+                this.invoiceRepo.findOne({ where: { Codigo: f.CODIGO_FACTURA } }),
+            ),
+        );
+
+        const faturaPaga = [fatura1, fatura2].find(f => f?.estado === 1);
+        const faturaNaoPaga = [fatura1, fatura2].find(f => f?.Codigo !== faturaPaga?.Codigo);
+
+        if (!faturaPaga) {
+            // Nenhuma das duas está paga -> segue fluxo normal, cobra tudo
+            return { bloquear: false, apenasSaldo: false };
+        }
+
+        // Uma delas está paga = essa é a "entrada". A outra é o "saldo".
+        const codigoFaturaSaldo = faturaNaoPaga?.Codigo;
+
+        // Se a outra (saldo) também estiver paga, dívida já quitada por completo
+        if (faturaNaoPaga?.estado === 1) {
+            return { bloquear: true, apenasSaldo: false, negociacao };
+        }
+
+        // Entrada paga, saldo ainda não -> verificar os 5 meses de carência
+        const dataNegociacao = new Date(negociacao.created_at);
+        const hoje = new Date();
+        const mesesDecorridos =
+            (hoje.getFullYear() - dataNegociacao.getFullYear()) * 12 +
+            (hoje.getMonth() - dataNegociacao.getMonth());
+
+        if (mesesDecorridos < 5) {
+            return { bloquear: true, apenasSaldo: false, negociacao };
+        }
+
+        return { bloquear: false, apenasSaldo: true, negociacao, codigoFaturaSaldo };
     }
 }

@@ -7,13 +7,17 @@ import { GetAllDebtNegotiationsResponse } from "./types/types";
 import { DebtNegotiation } from "./entities/debt_negotiation.entity";
 import { Invoice } from "../invoice/entities/invoice.entity";
 import { InjectRepository } from "@nestjs/typeorm";
+import { AnoLectivoUtil } from "../util/current-academic-year";
 
 
 
 
 @Injectable()
 export class NegotiationService {
+    private anoAtualPrincipal: number;
+
     constructor(
+        private readonly anoLectivoUtil: AnoLectivoUtil,
         private readonly dataSource: DataSource,
         private readonly monthlyFeeDiscount: MonthlyFeesDiscountUtilService,
 
@@ -21,7 +25,12 @@ export class NegotiationService {
         private readonly negotiationRepo: Repository<DebtNegotiation>,
         @InjectRepository(Invoice)
         private readonly invoiceRepo: Repository<Invoice>,
-    ) { }
+
+    ) { this.initAnoAtual(); }
+    //MELHORARA: DEVERA PASSAR O ANO LECTIVO COMO PARAMETRO NO DTO ou passar  o tipo de  cantidatura ao trazer o ativo
+    private async initAnoAtual(): Promise<void> {
+        this.anoAtualPrincipal = await this.anoLectivoUtil.getAnoAtualId();
+    }
 
     async getAllDebtNegotiations(
         paginationQuery: GetDebtDtoNew,
@@ -57,7 +66,7 @@ export class NegotiationService {
         if (aluno.estado_matricula.toUpperCase() == 'DIPLOMADO') return { Mensalidades: [], OutrosServicos: [], anoAtual: 0, totalIVA: 0, percentagem_retencao: 0, totalDivida: 0, total_incidencia: 0, total_retencao: 0, size: 0, desconto: 0, precoTotal: 0 };
         // Verificar Se o Elunn  tem negociacao feita , ve o tipo de negociacao e ver se pagou a primeira parcela caso for 50% e cobrar ele outros 50% apos passar 5 Meses
 
-        const statusNegociacao = await this.verificarNegociacaoExistente(codigo_matricula);
+        const statusNegociacao = await this.verificarNegociacaoExistente(codigo_matricula, this.anoAtualPrincipal);
 
         console.log(statusNegociacao);
 
@@ -393,19 +402,22 @@ export class NegotiationService {
      */
     private async verificarNegociacaoExistente(
         codigo_matricula: number,
+        codigo_ano_lectivo: number
     ): Promise<{
         bloquear: boolean;
         apenasSaldo: boolean;
         negociacao?: DebtNegotiation;
         codigoFaturaSaldo?: number;
     }> {
+        console.log('codigo_matricula', codigo_matricula);
+        console.log('codigo_ano_lectivo', codigo_ano_lectivo);
         const negociacao = await this.negotiationRepo.findOne({
             where: {
-                codigo_matricula,
-                estado: 1, // negociação ativa
+                codigo_matricula: codigo_matricula,
+                codigo_ano_lectivo: codigo_ano_lectivo,
             },
-            order: { created_at: 'DESC' },
         });
+        console.log('negociacao', negociacao);
 
         if (!negociacao) {
             return { bloquear: false, apenasSaldo: false };

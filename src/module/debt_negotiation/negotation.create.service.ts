@@ -17,6 +17,7 @@ import { InvoiceItemDto } from '../invoice/dto/create-invoice-itens.dto';
 import { safeNumber } from '../util/formate-number';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { MensalidadeItemDto, ServicoItemDto } from './dto/util.dto';
+import { generateDueDate } from '../util/generate-due-date';
 
 type AlunoInfo = {
   matricula: number;
@@ -161,6 +162,7 @@ export class CreateDebtNegotiationService {
           : 'Negociação de Dívida - Entrada 50%',
         TotalPreco: dto.totalDivida ?? dto.precoTotal ?? 0,
         ValorAPagar: primeiroValorApagar,
+        dataVencimento: generateDueDate(3),
         itens: itensFatura1,
       } as CreateInvoiceDto);
 
@@ -173,6 +175,7 @@ export class CreateDebtNegotiationService {
           Descricao: 'Negociação de Dívida - Saldo Restante (Parcelado)',
           TotalPreco: valorRestante,
           ValorAPagar: valorRestante,
+          dataVencimento: generateDueDate(150),
           itens: itensFatura2,
         } as CreateInvoiceDto);
       }

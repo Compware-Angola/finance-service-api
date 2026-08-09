@@ -715,6 +715,87 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       throw new NotFoundException(`Fatura ${dto.codigoFactura} não encontrada`);
     }
 
+    // 2.5 Impedir pagamento do saldo (2ª prestação) sem a entrada (1ª prestação) paga
+    //
+    // Regra de negócio: numa negociação PARCELADO existem duas faturas
+    // (entrada + saldo, ligadas via FK2_TB_NEGOCIACAO_FACTURA). O saldo só
+    // pode ser pago depois de a entrada estar totalmente liquidada — não
+    // faz sentido permitir pagar a prestação "dos 5 meses" e deixar a
+    // entrada em aberto.
+    const faturasDaNegociacao = await this.dataSource.query(
+      `SELECT f.Codigo, f.estado, f.dataVencimento, nf.CREATED_AT
+       FROM FK2_TB_NEGOCIACAO_FACTURA nf
+       INNER JOIN FK2_FACTURA f ON f.Codigo = nf.CODIGO_FACTURA
+       WHERE nf.CODIGO_NEGOCIACAO = (
+         SELECT CODIGO_NEGOCIACAO
+         FROM FK2_TB_NEGOCIACAO_FACTURA
+         WHERE CODIGO_FACTURA = :codigoFactura
+       )
+       ORDER BY nf.CREATED_AT ASC`,
+      { codigoFactura: dto.codigoFactura } as any,
+    );
+
+    if (faturasDaNegociacao?.length > 1) {
+      // A entrada é identificada por duas evidências combinadas:
+      //  a) foi a primeira linha inserida em FK2_TB_NEGOCIACAO_FACTURA
+      //     (createDebtNegotiation regista-a antes da de saldo);
+      //  b) tem dataVencimento mais próxima (entrada = generateDueDate(3),
+      //     saldo = generateDueDate(150)).
+      // Se as duas evidências não baterem, algo está inconsistente na
+      // negociação e é mais seguro travar do que assumir uma ordem errada.
+      const [candidataPorOrdem, ...restantes] = faturasDaNegociacao;
+      const candidataPorData = [...faturasDaNegociacao].sort(
+        (a, b) =>
+          new Date(a.dataVencimento).getTime() -
+          new Date(b.dataVencimento).getTime(),
+      )[0];
+
+      if (candidataPorOrdem.Codigo !== candidataPorData.Codigo) {
+        throw new BadRequestException(
+          `Inconsistência detetada na negociação de dívida da fatura ${dto.codigoFactura}: ` +
+          `a ordem de criação das faturas não corresponde à ordem das datas de vencimento. ` +
+          `Verifique a negociação antes de prosseguir com o pagamento.`,
+        );
+      }
+
+      const faturaEntrada = candidataPorOrdem;
+      const isPagandoSaldo = faturaEntrada.Codigo !== dto.codigoFactura;
+
+      if (isPagandoSaldo) {
+        // estado = 1 => fatura totalmente paga (mesma convenção usada
+        // mais abaixo, no passo "2. Atualizar estado da fatura principal")
+        if (faturaEntrada.estado !== 1) {
+          const vencimentoFormatado = faturaEntrada.dataVencimento
+            ? new Date(faturaEntrada.dataVencimento).toLocaleDateString(
+              'pt-PT',
+            )
+            : 'data não definida';
+
+          throw new BadRequestException(
+            `Não é possível pagar a 2ª prestação (saldo) sem primeiro liquidar a 1ª prestação (entrada), ` +
+            `com vencimento em ${vencimentoFormatado}.`,
+          );
+        }
+      } else {
+        // Está a pagar a própria entrada: se a fatura de saldo já estiver
+        // vencida (dataVencimento no passado) e a entrada ainda não foi
+        // paga a tempo, avisa — mas não bloqueia, para não impedir o
+        // aluno de regularizar uma dívida em atraso.
+        const faturaSaldo = restantes[0];
+        if (
+          faturaSaldo?.dataVencimento &&
+          new Date(faturaSaldo.dataVencimento).getTime() < Date.now() &&
+          faturaSaldo.estado !== 1
+        ) {
+          console.warn(
+            `Fatura de saldo ${faturaSaldo.Codigo} já está vencida (${new Date(
+              faturaSaldo.dataVencimento,
+            ).toLocaleDateString('pt-PT')}) e ainda não foi paga.`,
+          );
+        }
+      }
+    }
+
     const negotation = await this.dataSource.query(
       `SELECT * FROM FK2_NEGOCIACAO_DIVIDAS n WHERE n.CODIGO_FATURA = :codigoFactura`,
       { codigoFactura: dto.codigoFactura } as any,

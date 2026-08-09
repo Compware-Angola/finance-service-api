@@ -417,7 +417,7 @@ export class NegotiationService {
                 codigo_ano_lectivo: codigo_ano_lectivo,
             },
         });
-        console.log('negociacao', negociacao);
+
 
         if (!negociacao) {
             return { bloquear: false, apenasSaldo: false };
@@ -468,16 +468,22 @@ export class NegotiationService {
         }
 
         // Entrada paga, saldo ainda não -> verificar os 5 meses de carência
-        const dataNegociacao = new Date(negociacao.created_at);
-        const hoje = new Date();
-        const mesesDecorridos =
-            (hoje.getFullYear() - dataNegociacao.getFullYear()) * 12 +
-            (hoje.getMonth() - dataNegociacao.getMonth());
-
-        if (mesesDecorridos < 5) {
+        //Verificar se a data da primeira factura é menor que a data de hoje
+        if (!faturaNaoPaga?.dataVencimento) {
             return { bloquear: true, apenasSaldo: false, negociacao };
         }
 
+        const dataVencimento = new Date(faturaNaoPaga.dataVencimento);
+        const diaVencimento = dataVencimento.getDate();
+        const diaHoje = new Date().getDate();
+        console.log('diaVencimento', diaVencimento);
+        console.log('diaHoje', diaHoje);
+        console.log('dataVencimento', dataVencimento);
+
+        // Se o dia de vencimento for menor que o dia de hoje, significa que a fatura venceu
+        if (diaVencimento < diaHoje) {
+            return { bloquear: true, apenasSaldo: false, negociacao };
+        }
         return { bloquear: false, apenasSaldo: true, negociacao, codigoFaturaSaldo };
     }
 }

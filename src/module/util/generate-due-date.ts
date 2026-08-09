@@ -8,7 +8,7 @@
 export async function generateDueDate(days: number, fromDate: Date = new Date()): Promise<string> {
   const dueDate = new Date(fromDate);
   dueDate.setDate(fromDate.getDate() + days);
-  
+
   // Formatar como 'YYYY-MM-DD'
   const year = dueDate.getFullYear();
   const month = String(dueDate.getMonth() + 1).padStart(2, '0');

@@ -162,7 +162,7 @@ export class CreateDebtNegotiationService {
           : 'Negociação de Dívida - Entrada 50%',
         TotalPreco: dto.totalDivida ?? dto.precoTotal ?? 0,
         ValorAPagar: primeiroValorApagar,
-        dataVencimento: generateDueDate(3),
+        dataVencimento: new Date(await generateDueDate(3)),
         itens: itensFatura1,
       } as CreateInvoiceDto);
 
@@ -175,7 +175,7 @@ export class CreateDebtNegotiationService {
           Descricao: 'Negociação de Dívida - Saldo Restante (Parcelado)',
           TotalPreco: valorRestante,
           ValorAPagar: valorRestante,
-          dataVencimento: generateDueDate(150),
+          dataVencimento: new Date(await generateDueDate(150)),
           itens: itensFatura2,
         } as CreateInvoiceDto);
       }

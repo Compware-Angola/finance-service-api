@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { generateDueDate } from './module/util/generate-due-date';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -42,6 +43,7 @@ async function bootstrap() {
   // Porta
   const port = process.env.PORT as any;
   await app.listen(port);
+
 
   console.log(`🚀 API Listening on port ${port}.`);
   console.log(`📖 Swagger Docs available at ${await app.getUrl()}/api/docs`);

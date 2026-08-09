@@ -734,6 +734,8 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
        ORDER BY nf.CREATED_AT ASC`,
       { codigoFactura: dto.codigoFactura } as any,
     );
+    console.log(faturasDaNegociacao);
+
 
     if (faturasDaNegociacao?.length > 1) {
       // A entrada é identificada por duas evidências combinadas:

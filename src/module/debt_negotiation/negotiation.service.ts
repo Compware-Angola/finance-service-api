@@ -409,15 +409,12 @@ export class NegotiationService {
         negociacao?: DebtNegotiation;
         codigoFaturaSaldo?: number;
     }> {
-        console.log('codigo_matricula', codigo_matricula);
-        console.log('codigo_ano_lectivo', codigo_ano_lectivo);
         const negociacao = await this.negotiationRepo.findOne({
             where: {
                 codigo_matricula: codigo_matricula,
                 codigo_ano_lectivo: codigo_ano_lectivo,
             },
         });
-
 
         if (!negociacao) {
             return { bloquear: false, apenasSaldo: false };
@@ -468,20 +465,31 @@ export class NegotiationService {
         }
 
         // Entrada paga, saldo ainda não -> verificar os 5 meses de carência
-        //Verificar se a data da primeira factura é menor que a data de hoje
+        // Só pode pagar o saldo quando a sua dataVencimento já tiver chegado
+        // (ou passado). Antes disso, bloqueia.
         if (!faturaNaoPaga?.dataVencimento) {
             return { bloquear: true, apenasSaldo: false, negociacao };
         }
 
         const dataVencimento = new Date(faturaNaoPaga.dataVencimento);
-        const diaVencimento = dataVencimento.getDate();
-        const diaHoje = new Date().getDate();
-        console.log('diaVencimento', diaVencimento);
-        console.log('diaHoje', diaHoje);
-        console.log('dataVencimento', dataVencimento);
+        const hoje = new Date();
 
-        // Se o dia de vencimento for menor que o dia de hoje, significa que a fatura venceu
-        if (diaVencimento < diaHoje) {
+        // Comparar só a data (ano/mês/dia), ignorando a hora, para não
+        // depender de timezone/hora exata de execução.
+        const dataVencimentoSemHora = new Date(
+            dataVencimento.getFullYear(),
+            dataVencimento.getMonth(),
+            dataVencimento.getDate(),
+        );
+        const hojeSemHora = new Date(
+            hoje.getFullYear(),
+            hoje.getMonth(),
+            hoje.getDate(),
+        );
+
+        // Se a data de vencimento ainda não chegou, bloqueia o pagamento
+        // do saldo (não pode pagar "os 5 meses" antes do prazo).
+        if (dataVencimentoSemHora.getTime() > hojeSemHora.getTime()) {
             return { bloquear: true, apenasSaldo: false, negociacao };
         }
         return { bloquear: false, apenasSaldo: true, negociacao, codigoFaturaSaldo };

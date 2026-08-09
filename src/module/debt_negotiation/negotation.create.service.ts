@@ -162,9 +162,9 @@ export class CreateDebtNegotiationService {
           : 'Negociação de Dívida - Entrada 50%',
         TotalPreco: dto.totalDivida ?? dto.precoTotal ?? 0,
         ValorAPagar: primeiroValorApagar,
-        dataVencimento: new Date(await generateDueDate(3)),
+
         itens: itensFatura1,
-      } as CreateInvoiceDto);
+      } as CreateInvoiceDto, undefined, await generateDueDate(3), queryRunner.manager);
 
       // 9. Criar fatura de saldo restante (apenas parcelado)
       let faturaSaldo: Invoice | null = null;
@@ -175,9 +175,8 @@ export class CreateDebtNegotiationService {
           Descricao: 'Negociação de Dívida - Saldo Restante (Parcelado)',
           TotalPreco: valorRestante,
           ValorAPagar: valorRestante,
-          dataVencimento: new Date(await generateDueDate(150)),
           itens: itensFatura2,
-        } as CreateInvoiceDto);
+        } as CreateInvoiceDto, undefined, await generateDueDate(150), queryRunner.manager);
       }
 
       // 10. Anular faturas antigas e redirecionar avaliações

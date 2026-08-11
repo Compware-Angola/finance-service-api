@@ -5,9 +5,9 @@ import { MonthlyFeesFilterDto } from '../../shared/monthly_fees/dto/monthly-fees
 import { InjectRepository } from '@nestjs/typeorm';
 import { MesTemp } from '../payment-references/entities/mes-temp.entity';
 import { MonthlyFeesStatisticFilterDto } from '../../shared/monthly_fees/dto/monthly-fees-statistic.dto';
-import { MonthlyFeesDiscountUtilService } from 'src/module/shared/monthly_fees/monthly_fees.discount.Util.service';
+import { MonthlyFeesDiscountUtilService } from 'src/modules/shared/monthly_fees/monthly_fees.discount.Util.service';
 import { MonthlyFeePosGraduationService } from './monthly-fee-posgraduation.service';
-import { AnoLectivoUtil } from 'src/module/util/current-academic-year';
+import { AnoLectivoUtil } from 'src/modules/util/current-academic-year';
 import { ApplicationType } from 'src/enum/application-type';
 
 @Injectable()
@@ -19,7 +19,7 @@ export class MonthlyFeesService {
     private readonly monthlyFeeDiscount: MonthlyFeesDiscountUtilService,
     private readonly monthlyFeePosGraduationService: MonthlyFeePosGraduationService,
     private readonly anoLectivoUtilService: AnoLectivoUtil,
-  ) {}
+  ) { }
 
   async findMonthlyFees(
     paginationQuery: MonthlyFeesFilterDto,

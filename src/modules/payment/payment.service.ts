@@ -875,10 +875,7 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
         `UPDATE FK2_FACTURA SET estado = :estados WHERE Codigo = :codigo`,
         { estados, codigo: dto.codigoFactura } as any,
       );
-      console.log(
-        'Ver  dados: ',
-        this.hasMatchingSigla(itens, ['tdm', 'ipucricular(anual)']),
-      );
+
 
       // 3. Siglas anuais
       if (this.hasMatchingSigla(itens, ['TDM', 'IPUCRICULAR(ANUAL)'])) {

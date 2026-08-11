@@ -3,7 +3,7 @@ import { CreatePagamentosBolsaInstituicaoDto } from './dto/create-pagamentos_bol
 import { UpdatePagamentosBolsaInstituicaoDto } from './dto/update-pagamentos_bolsa_instituicao.dto';
 import { DataSource } from 'typeorm';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
-import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
+import { toLowerCaseKeys } from 'src/modules/util/toLowerCaseKeys';
 import { FindPagamentoBolsaDto } from './dto/find-pagamento-bolsa.dto';
 import { FindEstudantesPorBolsaDto } from './dto/find-estudantes-por-bolsa.dto';
 

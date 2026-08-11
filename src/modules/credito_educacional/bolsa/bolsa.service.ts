@@ -4,7 +4,7 @@ import { UpdateBolsaDto } from './dto/update-bolsa.dto';
 
 import { DataSource } from 'typeorm';
 import { FindBolsaDto } from './dto/find-bolsa.dto';
-import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
+import { toLowerCaseKeys } from 'src/modules/util/toLowerCaseKeys';
 import { FindBolsaDropdownDto } from './dto/find-bolsa-dropdown.dto';
 
 @Injectable()
@@ -260,31 +260,31 @@ export class BolsaService {
     };
   }
 
-async findDropdown(query: FindBolsaDropdownDto) {
-  const { designacao, codigoInstituicao } = query;
+  async findDropdown(query: FindBolsaDropdownDto) {
+    const { designacao, codigoInstituicao } = query;
 
-  const conditions: string[] = ['A.STATUS = 1'];
-  const params: Record<string, any> = {};
+    const conditions: string[] = ['A.STATUS = 1'];
+    const params: Record<string, any> = {};
 
-  if (designacao?.trim()) {
-    conditions.push(`
+    if (designacao?.trim()) {
+      conditions.push(`
       UPPER(A.DESIGNACAO)
       LIKE '%' || UPPER(:designacao) || '%'
     `);
 
-    params.designacao = designacao.trim();
-  }
+      params.designacao = designacao.trim();
+    }
 
-  if (codigoInstituicao) {
-    conditions.push(
-      'A.CODIGO_INSTITUICAO = :codigoInstituicao',
-    );
+    if (codigoInstituicao) {
+      conditions.push(
+        'A.CODIGO_INSTITUICAO = :codigoInstituicao',
+      );
 
-    params.codigoInstituicao = codigoInstituicao;
-  }
+      params.codigoInstituicao = codigoInstituicao;
+    }
 
-  const result = await this.dataSource.query(
-    `
+    const result = await this.dataSource.query(
+      `
     SELECT
       A.CODIGO,
       A.DESIGNACAO
@@ -292,11 +292,11 @@ async findDropdown(query: FindBolsaDropdownDto) {
     WHERE ${conditions.join('\nAND ')}
     ORDER BY A.DESIGNACAO
     `,
-    params as any,
-  );
+      params as any,
+    );
 
-  return toLowerCaseKeys(result);
-}
+    return toLowerCaseKeys(result);
+  }
 
   async switchStatus(id: number, utilizadorId: number) {
     const bolsa = await this.findOne(id);

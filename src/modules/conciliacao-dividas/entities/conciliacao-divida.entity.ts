@@ -1,4 +1,4 @@
-import { Invoice } from 'src/module/invoice/entities/invoice.entity';
+import { Invoice } from 'src/modules/invoice/entities/invoice.entity';
 import {
     Column,
     CreateDateColumn,

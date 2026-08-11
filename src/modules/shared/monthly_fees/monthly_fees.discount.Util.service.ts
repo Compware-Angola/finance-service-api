@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { obterMulta } from 'src/module/util/obter-multa';
+import { obterMulta } from 'src/modules/util/obter-multa';
 import {
   BolseiroResult,
   CalcularDescontoParams,
@@ -8,11 +8,11 @@ import {
   MesTempResponse,
   ObterBolseiroParams,
 } from './types';
-import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
-import { formatDisplay } from 'src/module/util/format-date';
+import { toLowerCaseKeys } from 'src/modules/util/toLowerCaseKeys';
+import { formatDisplay } from 'src/modules/util/format-date';
 
 import { TestMonthlyDTO } from './dto/test-monthly.dto';
-import { resolverDescontobolseiro } from 'src/module/util/calcular-desconto-bolseiro';
+import { resolverDescontobolseiro } from 'src/modules/util/calcular-desconto-bolseiro';
 @Injectable()
 export class MonthlyFeesDiscountUtilService {
   constructor(private dataSource: DataSource) { }

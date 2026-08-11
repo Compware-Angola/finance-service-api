@@ -6,10 +6,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { CreateConciliacaoDividaDto } from './dto/create-conciliacao-divida.dto';
-import { Invoice } from 'src/module/invoice/entities/invoice.entity';
-import { InvoiceItem } from 'src/module/invoice/entities/InvoiceIten.entity';
-import { InvoiceService } from 'src/module/invoice/invoice.service';
-import { CreateInvoiceDto } from 'src/module/invoice/dto/create-invoice.dto';
+import { Invoice } from 'src/modules/invoice/entities/invoice.entity';
+import { InvoiceItem } from 'src/modules/invoice/entities/InvoiceIten.entity';
+import { InvoiceService } from 'src/modules/invoice/invoice.service';
+import { CreateInvoiceDto } from 'src/modules/invoice/dto/create-invoice.dto';
 import { ReconciliacaoNegociacaoDivida } from './entities/conciliacao-divida.entity';
 import { FindConciliacaoDividaDto } from './dto/find-conciliacao-divida.dto';
 import { PagedResult } from '../debt_negotiation/list_debt_negotiation.service';

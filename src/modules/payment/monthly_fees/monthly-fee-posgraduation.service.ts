@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
-import { resolverDescontobolseiro } from 'src/module/util/calcular-desconto-bolseiro';
+import { toLowerCaseKeys } from 'src/modules/util/toLowerCaseKeys';
+import { resolverDescontobolseiro } from 'src/modules/util/calcular-desconto-bolseiro';
 import { PostgraduatePaymentDTO } from './dto/monthly-fee-posgraduation.dto';
 import {
   PostgraduateBolseiroResult,
@@ -14,7 +14,7 @@ import {
 
 @Injectable()
 export class MonthlyFeePosGraduationService {
-  constructor(private dataSource: DataSource) {}
+  constructor(private dataSource: DataSource) { }
 
   private async obterDadosCompletosAlunoPosGraduacao(codigoMatricula: number) {
     const sql = `

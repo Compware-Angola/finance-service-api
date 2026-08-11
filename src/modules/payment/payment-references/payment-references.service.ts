@@ -19,10 +19,10 @@ import { DataSource, DeepPartial, EntityManager, Repository } from 'typeorm';
 import { RegisterPaymentReferenceDto } from './dto/register-payment-reference.dto';
 import { InvoiceItem } from '../../invoice/entities/InvoiceIten.entity';
 import { MesTemp } from './entities/mes-temp.entity';
-import { AcademicYear } from 'src/module/invoice/entities/academic.year.entity';
+import { AcademicYear } from 'src/modules/invoice/entities/academic.year.entity';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { InvoiceItemDto } from 'src/module/invoice/dto/create-invoice-itens.dto';
+import { InvoiceItemDto } from 'src/modules/invoice/dto/create-invoice-itens.dto';
 
 @Injectable()
 export class PaymentReferencesService {

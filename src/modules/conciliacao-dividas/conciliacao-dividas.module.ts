@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConciliacaoDividasService } from './conciliacao-dividas.service';
 import { ConciliacaoDividasController } from './conciliacao-dividas.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Invoice } from 'src/module/invoice/entities/invoice.entity';
+import { Invoice } from 'src/modules/invoice/entities/invoice.entity';
 import { InvoiceItem } from '../invoice/entities/InvoiceIten.entity';
 import { ReconciliacaoNegociacaoDivida } from './entities/conciliacao-divida.entity';
 import { InvoiceService } from '../invoice/invoice.service';

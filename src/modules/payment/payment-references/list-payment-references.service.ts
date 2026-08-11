@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { GetPaymentRefenceFilterDto } from './dto/get-payment-referenc-filter.dto';
-import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys';
+import { toLowerCaseKeys } from 'src/modules/util/toLowerCaseKeys';
 
 export interface PagedResult<T> {
   data: T[];
@@ -13,7 +13,7 @@ export interface PagedResult<T> {
 
 @Injectable()
 export class ListPaymentRefenceService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(private readonly dataSource: DataSource) { }
 
   async list(filter: GetPaymentRefenceFilterDto): Promise<PagedResult<any>> {
     const {

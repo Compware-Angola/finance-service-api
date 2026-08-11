@@ -5,7 +5,7 @@ import { CreateTipoCreditoDto, FilterTipoCreditoDto } from './dto/create-tipo_cr
 import { TipoCredito } from './entities/tipo_credito.entity'
 
 import { UpdateTipoCreditoDto } from './dto/update-tipo_credito.dto'
-import { toLowerCaseKeys } from 'src/module/util/toLowerCaseKeys'
+import { toLowerCaseKeys } from 'src/modules/util/toLowerCaseKeys'
 
 @Injectable()
 export class TipoCreditoService {

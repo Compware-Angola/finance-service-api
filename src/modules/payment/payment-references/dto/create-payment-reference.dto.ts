@@ -12,7 +12,7 @@ import {
 import { Type } from 'class-transformer'
 import { NotifyInfoDto } from './notify-info.dto'
 import { EnrollmentInfoDto } from './enrollment-info.dto'
-import { InvoiceItemDto } from 'src/module/invoice/dto/create-invoice-itens.dto'
+import { InvoiceItemDto } from 'src/modules/invoice/dto/create-invoice-itens.dto'
 
 export class CreatePaymentReferenceDto {
   @ApiProperty({
@@ -49,7 +49,7 @@ export class CreatePaymentReferenceDto {
   @IsOptional()
   notify?: NotifyInfoDto
 
-    @ApiProperty({
+  @ApiProperty({
     description: 'Informações de matrícula ou pré-inscrição (opcional)',
     type: () => EnrollmentInfoDto,
     required: false,
@@ -60,20 +60,20 @@ export class CreatePaymentReferenceDto {
   enrollment?: EnrollmentInfoDto
 
 
-    // --------------------------------------------------------------------------------
-    // ITENS DA FATURA (ARRAY)
-    // --------------------------------------------------------------------------------
-  
-    @ApiProperty({
-      description: 'Lista de itens ou serviços incluídos na fatura.',
-      type: [InvoiceItemDto],
-      required: true,
-    })
-    @IsArray()
-    @ArrayMinSize(1)
-    @ValidateNested({ each: true })
-    @Type(() => InvoiceItemDto)
-    itens?: InvoiceItemDto[];
-  
+  // --------------------------------------------------------------------------------
+  // ITENS DA FATURA (ARRAY)
+  // --------------------------------------------------------------------------------
+
+  @ApiProperty({
+    description: 'Lista de itens ou serviços incluídos na fatura.',
+    type: [InvoiceItemDto],
+    required: true,
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => InvoiceItemDto)
+  itens?: InvoiceItemDto[];
+
 
 }

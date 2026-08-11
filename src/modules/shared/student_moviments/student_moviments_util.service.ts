@@ -2,14 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { DataSource, QueryRunner } from 'typeorm';
 import { CreateStudentMovimentDTO } from './dto/create-student-moviments.dto';
 import { StudentMovimentOperationType } from 'src/enum/student-moviment-operation-type.enum';
-import { AlunoService } from 'src/module/aluno/aluno.service';
+import { AlunoService } from 'src/modules/aluno/aluno.service';
 
 @Injectable()
 export class StudentMovimentUtilService {
   constructor(
     private dataSource: DataSource,
     private alunoService: AlunoService,
-  ) {}
+  ) { }
 
   async registrarMovimento(
     dto: CreateStudentMovimentDTO,

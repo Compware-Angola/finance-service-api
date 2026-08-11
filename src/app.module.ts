@@ -1,34 +1,34 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { InvoiceModule } from './module/invoice/invoice.module';
-import { PaymentReferencesModule } from './module/payment/payment-references/payment-references.module';
-import { WebhookModule } from './module/webhook/webhook.module';
-import { PaymentModule } from './module/payment/payment.module';
+import { InvoiceModule } from './modules/invoice/invoice.module';
+import { PaymentReferencesModule } from './modules/payment/payment-references/payment-references.module';
+import { WebhookModule } from './modules/webhook/webhook.module';
+import { PaymentModule } from './modules/payment/payment.module';
 import { BullModule } from '@nestjs/bullmq';
-import { DebtNegotiationModule } from './module/debt_negotiation/debt_negotiation.module';
+import { DebtNegotiationModule } from './modules/debt_negotiation/debt_negotiation.module';
 import { BullMQWorkerService } from './bullmq-worker.service';
 
 import { ScheduleModule } from '@nestjs/schedule';
-import { DisciplineModule } from './module/discipline/discipline.module';
-import { TypeServiceModule } from './module/type_service/type_service.module';
-import { AlunoModule } from './module/aluno/aluno.module';
+import { DisciplineModule } from './modules/discipline/discipline.module';
+import { TypeServiceModule } from './modules/type_service/type_service.module';
+import { AlunoModule } from './modules/aluno/aluno.module';
 import { HttpModule } from '@nestjs/axios';
-import { SharedModule } from './module/shared/shared.module';
+import { SharedModule } from './modules/shared/shared.module';
 
-import { DiscountModule } from './module/discount/discount.module';
-import { IsencaoModule } from './module/isencao/isencao.module';
+import { DiscountModule } from './modules/discount/discount.module';
+import { IsencaoModule } from './modules/isencao/isencao.module';
 
 
-import { PaymentTfcModule } from './module/payment-tfc/payment-tfc.module';
-import { FormaPagamentoModule } from './module/forma-pagamento/forma-pagamento.module';
-import { CashRegistersModule } from './module/cash-registers/cash-registers.module';
-import { UtilizadorModule } from './module/utilizadores/utilizador.module';
-import { CreditoEducacionalModule } from './module/credito_educacional/credito_educacional.module';
-import { TipoCreditoModule } from './module/credito_educacional/tipo_credito/tipo_credito.module';
-import { BolsaModule } from './module/credito_educacional/bolsa/bolsa.module';
-import { InstitutionalContractModule } from './module/institutional-contract/institutional-contract.module';
-import { ConciliacaoDividasModule } from './module/conciliacao-dividas/conciliacao-dividas.module';
+import { PaymentTfcModule } from './modules/payment-tfc/payment-tfc.module';
+import { FormaPagamentoModule } from './modules/forma-pagamento/forma-pagamento.module';
+import { CashRegistersModule } from './modules/cash-registers/cash-registers.module';
+import { UtilizadorModule } from './modules/utilizadores/utilizador.module';
+import { CreditoEducacionalModule } from './modules/credito_educacional/credito_educacional.module';
+import { TipoCreditoModule } from './modules/credito_educacional/tipo_credito/tipo_credito.module';
+import { BolsaModule } from './modules/credito_educacional/bolsa/bolsa.module';
+import { InstitutionalContractModule } from './modules/institutional-contract/institutional-contract.module';
+import { ConciliacaoDividasModule } from './modules/conciliacao-dividas/conciliacao-dividas.module';
 
 @Module({
   imports: [

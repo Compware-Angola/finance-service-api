@@ -678,7 +678,8 @@ export class CashRegistersService {
         codigo_abertura: openingCode,
       },
     });
-    return { openingCode };
+
+    return { message: 'Código enviado para o email do operador com sucesso' };
   }
 
   async blockMyCashRegister(operatorId: number) {

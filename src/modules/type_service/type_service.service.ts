@@ -20,7 +20,7 @@ export interface ServicoProcessado {
 }
 @Injectable()
 export class TypeServiceService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(private readonly dataSource: DataSource) { }
   async findTipoServicosDropdown({
     sigla,
     codigoAnoLectivo,
@@ -674,7 +674,7 @@ WHERE TS.CODIGO_ANO_LECTIVO = :codigoAnoLectivo
           descricao: item.descricao ?? null,
           tipoServico: item.tipoServico ?? null,
 
-          estado: (item.estado ?? true) ? 'Ativo' : 'Inativo',
+          estado: 'Ativo',
 
           data: item.data
             ? new Date(item.data).toISOString().split('T')[0]

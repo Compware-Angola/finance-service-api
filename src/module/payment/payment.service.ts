@@ -28,6 +28,7 @@ import { PdfExportHelper } from 'src/common/helpers/export/pdf-export.helper';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
 import { StudentMovimentOperationType } from 'src/enum/student-moviment-operation-type.enum';
 import { fixToInt } from '../util/round';
+import { Invoice } from '../invoice/entities/invoice.entity';
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ export enum PaymentStatus {
   CONCLUIDO = 'concluido',
   PENDENTE = 'pendente',
 }
-
+const POSTGRADUATE_ACRONYMS = ['MST', 'DTR'] as const;
 type InvoiceContext = {
   anoLectivo: number;
   CodigoMatricula: number | null;
@@ -889,6 +890,15 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       if (this.hasMatchingSigla(itens, ['SEMESTRAL'])) {
         await this.handleSemestral(queryRunner, invoice);
       }
+      if (invoice.CodigoMatricula && this.hasMatchingSigla(itens, ['TdMPP'])) {
+        await this.processPostGraduate(queryRunner, { ...invoice, CodigoMatricula: invoice.CodigoMatricula }, itens);
+      }
+
+      if (invoice.CodigoMatricula && this.hasMatchingSigla(itens, ['PROP'])) {
+        await this.processPostGraduate(queryRunner, { ...invoice, CodigoMatricula: invoice.CodigoMatricula }, itens);
+      }
+
+
 
       // 5. TdEdA
       let tdaResult: { success: boolean; message?: string } | null = null;
@@ -958,6 +968,7 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
             ? { error: true, message: tdaResult.message }
             : { error: false },
       };
+
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -1046,7 +1057,11 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       })
       .getOne();
   }
-
+  async findMestTemp(codigoAnoLectivo: number, prestacao: number) {
+    const sql = `SELECT * FROM FK2_MES_TEMP  WHERE ANO_LECTIVO = :codigoAnoLectivo AND PRESTACAO = :prestacao`;
+    const [result] = await this.dataSource.query(sql, { codigoAnoLectivo, prestacao } as any);
+    return result ? toLowerCaseKeys(result) : null;
+  }
   // ── Privados ────────────────────────────────────────────────────────────────
 
   private normalizeSigla(value: unknown): string {
@@ -1303,6 +1318,70 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       offset += rows.length;
 
       if (rows.length < batchSize) break;
+    }
+  }
+
+  private async findPostGraduateCandidateTypeAcronymByEnrollmentCode(codigoMatricula: number): Promise<string | null> {
+    const sql = `
+      SELECT tc.SIGLA FROM FK2_TB_MATRICULAS mt
+      INNER JOIN FK2_TB_ADMISSAO ad 
+on ad.CODIGO = mt.CODIGO_ALUNO
+      INNER JOIN FK2_TB_PREINSCRICAO pre 
+on pre.CODIGO = ad.PRE_INCRICAO
+      INNER JOIN FK2_TB_TIPO_CANDIDATURA tc on tc.ID = pre.CODIGO_TIPO_CANDIDATURA
+      WHERE mt.CODIGO = :codigoMatricula
+`
+    const result = await this.dataSource.query(sql, { codigoMatricula } as any)
+
+    return result?.length > 0 ? result[0].SIGLA.toUpperCase() : null;
+  }
+  private async hasActiveConfirmation(codMatricula: number, anoLectivo: number) {
+    const sql = `SELECT CODIGO from FK2_TB_CONFIRMACOES
+       WHERE CODIGO_MATRICULA = :codMatricula
+       AND CODIGO_ANO_LECTIVO = :anoLectivo
+       AND estado = 1`
+    const result = await this.dataSource.query(sql, { codMatricula, anoLectivo } as any)
+
+    return result?.length > 0;
+  }
+  private async checkServiceBelongingToStudent(sigla: string, codigoAnoLectivo: number, codigoCandidatura: number[]) {
+    const sql = `SELECT 1
+FROM FK2_TB_TIPO_SERVICOS
+WHERE UPPER(SIGLA) = UPPER(:sigla)
+AND TIPO_CANDIDATURA IN (${codigoCandidatura.join(',')})
+AND CODIGO_ANO_LECTIVO = :codigoAnoLectivo
+`
+    const result = await this.dataSource.query(sql, { sigla, codigoAnoLectivo } as any)
+
+    return result?.length > 0;
+  }
+
+  private async CheckFisrtMonthly(codigoFactura: number, anoLectivo: number) {
+    const sql = ` SELECT mesTemp.ID FROM FK2_FACTURA_ITEMS itmens
+INNER JOIN FK2_MES_TEMP mesTemp
+on mesTemp.ID = itmens.MES_TEMP_ID
+
+WHERE itmens.CODIGOFACTURA = :codigoFactura AND itmens.CODIGO_ANOLECTIVO = :anoLectivo AND mesTemp.PRESTACAO = 1`
+    const result = await this.dataSource.query(sql, { codigoFactura, anoLectivo } as any)
+    return result?.length > 0;
+  }
+  private async processPostGraduate(queryRunner: QueryRunner, invoice: Invoice & { CodigoMatricula: number }, itens: any) {
+    const [acronym, hasActiveConfirmation, hasTaxaMatriculaPosGraduacao, firstMonthly] = await Promise.all([
+      this.findPostGraduateCandidateTypeAcronymByEnrollmentCode(invoice.CodigoMatricula),
+      this.hasActiveConfirmation(invoice.CodigoMatricula, invoice.anoLectivo),
+      this.checkServiceBelongingToStudent('TdMPP', invoice.anoLectivo, [2, 3]),
+      this.CheckFisrtMonthly(invoice.Codigo, invoice.anoLectivo)
+    ])
+    if (acronym && POSTGRADUATE_ACRONYMS.includes(acronym.toUpperCase() as typeof POSTGRADUATE_ACRONYMS[number]) && !hasActiveConfirmation) {
+      const hasItemTdMPP = this.hasMatchingSigla(itens, ['TdMPP']);
+      if (hasTaxaMatriculaPosGraduacao && hasItemTdMPP) {
+        await this.handleAnual(queryRunner, invoice);
+        return
+      }
+      if (!hasTaxaMatriculaPosGraduacao && firstMonthly) {
+        await this.handleAnual(queryRunner, invoice);
+        return
+      }
     }
   }
 }

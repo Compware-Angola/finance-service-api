@@ -209,4 +209,11 @@ export class PaymentController {
       ip,
     });
   }
+
+  @Get('mes-temp/:codigoAnoLectivo/:prestacao')
+  @ApiOperation({ summary: 'Buscar mesTemp por anolectivo e prestacao' })
+  @ApiResponse({ status: 200, description: 'MesTemp encontrado com sucesso.' })
+  async getMesTemp(@Param('codigoAnoLectivo', ParseIntPipe) codigoAnoLectivo: number, @Param('prestacao', ParseIntPipe) prestacao: number) {
+    return this.paymentService.findMestTemp(codigoAnoLectivo, prestacao);
+  }
 }

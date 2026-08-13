@@ -7,13 +7,12 @@ import {
 } from '@nestjs/common';
 import { Worker, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
-import { CreatePaymentReferencesProcessor } from './module/jobs/create-payment-references.processor';
-import { InvoiceProcessor } from './module/jobs/invoice-servico.processor';
+import { CreatePaymentReferencesProcessor } from './modules/jobs/create-payment-references.processor';
+import { InvoiceProcessor } from './modules/jobs/invoice-servico.processor';
 
 @Injectable()
 export class BullMQWorkerService
-  implements OnModuleInit, OnModuleDestroy, OnApplicationShutdown
-{
+  implements OnModuleInit, OnModuleDestroy, OnApplicationShutdown {
   private readonly logger = new Logger(BullMQWorkerService.name);
   private workers: Worker[] = [];
   private queueEvents: QueueEvents[] = [];
@@ -21,7 +20,7 @@ export class BullMQWorkerService
   constructor(
     private readonly paymentProcessor: CreatePaymentReferencesProcessor,
     private readonly invoiceProcessor: InvoiceProcessor,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     this.connection = new Redis({

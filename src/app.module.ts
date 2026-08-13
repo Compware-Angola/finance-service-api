@@ -19,7 +19,6 @@ import { SharedModule } from './modules/shared/shared.module';
 import { DiscountModule } from './modules/discount/discount.module';
 import { IsencaoModule } from './modules/isencao/isencao.module';
 
-
 import { PaymentTfcModule } from './modules/payment-tfc/payment-tfc.module';
 import { FormaPagamentoModule } from './modules/forma-pagamento/forma-pagamento.module';
 import { CashRegistersModule } from './modules/cash-registers/cash-registers.module';
@@ -29,6 +28,7 @@ import { TipoCreditoModule } from './modules/credito_educacional/tipo_credito/ti
 import { BolsaModule } from './modules/credito_educacional/bolsa/bolsa.module';
 import { InstitutionalContractModule } from './modules/institutional-contract/institutional-contract.module';
 import { ConciliacaoDividasModule } from './modules/conciliacao-dividas/conciliacao-dividas.module';
+import { SiglaTipoServicosModule } from './modules/siglas-service/siglas-service.module';
 
 @Module({
   imports: [
@@ -57,7 +57,8 @@ import { ConciliacaoDividasModule } from './modules/conciliacao-dividas/concilia
 
         // ✅ Garantir timezone antes da criação da pool Oracle
         process.env.TZ = config.get<string>('TZ') || 'Africa/Luanda';
-        process.env.ORA_SDTZ = config.get<string>('ORA_SDTZ') || 'Africa/Luanda';
+        process.env.ORA_SDTZ =
+          config.get<string>('ORA_SDTZ') || 'Africa/Luanda';
 
         return {
           type: 'oracle' as const,
@@ -67,7 +68,6 @@ import { ConciliacaoDividasModule } from './modules/conciliacao-dividas/concilia
           password: config.get<string>('DB_PASSWORD'),
           sid: config.get<string>('DB_SID'),
           timezone: config.get<string>('TZ') || 'Africa/Luanda',
-
 
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: false,
@@ -118,7 +118,8 @@ import { ConciliacaoDividasModule } from './modules/conciliacao-dividas/concilia
     BolsaModule,
     InstitutionalContractModule,
     ConciliacaoDividasModule,
+    SiglaTipoServicosModule,
   ],
   providers: [BullMQWorkerService],
 })
-export class AppModule { }
+export class AppModule {}

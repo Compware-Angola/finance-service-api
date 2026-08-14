@@ -1,0 +1,35 @@
+name: Criar Tags de Rollback
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  snapshot-rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rotaciona histórico de rollback
+        run: |
+          git fetch --tags
+
+          if git rev-parse rollback-3 >/dev/null 2>&1; then
+            git tag -d rollback-3
+            git push origin :refs/tags/rollback-3
+          fi
+
+          if git rev-parse rollback-2 >/dev/null 2>&1; then
+            git tag rollback-3 rollback-2
+            git push origin rollback-3 --force
+          fi
+
+          if git rev-parse rollback-1 >/dev/null 2>&1; then
+            git tag rollback-2 rollback-1
+            git push origin rollback-2 --force
+          fi
+
+          git tag -f rollback-1 ${{ github.event.before }}
+          git push origin rollback-1 --force

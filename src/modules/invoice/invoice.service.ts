@@ -676,7 +676,7 @@ FROM (
             THEN (
                 SELECT LISTAGG(d.DESIGNACAO, ' , ')
                        WITHIN GROUP (ORDER BY d.DESIGNACAO)
-                FROM FK2_TB_HISTORICO_INSCRICOES_AVALIACOES hia
+                FROM FK2_INSCRICAO_AVALIACOES hia
                 LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO gca
                        ON gca.CODIGO = hia.CODIGO_GRADE_ALUNO
                 LEFT JOIN FK2_TB_GRADE_CURRICULAR gc
@@ -897,7 +897,7 @@ WHERE rn BETWEEN :startRow AND :endRow
         THEN (
             SELECT LISTAGG(d.DESIGNACAO, ' , ')
                    WITHIN GROUP (ORDER BY d.DESIGNACAO)
-            FROM FK2_TB_HISTORICO_INSCRICOES_AVALIACOES hia
+            FROM FK2_INSCRICAO_AVALIACOES hia
             LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO gca
                    ON gca.CODIGO = hia.CODIGO_GRADE_ALUNO
             LEFT JOIN FK2_TB_GRADE_CURRICULAR gc

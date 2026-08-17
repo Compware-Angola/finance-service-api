@@ -11,4 +11,12 @@ export class SiglaTipoServico {
 
   @Column({ name: 'DESCRICAO', type: 'varchar2', length: 300, nullable: false })
   descricao!: string;
+
+  @Column({
+    name: 'TIPO_CANDIDATURA',
+    type: 'number',
+    nullable: false,
+    default: 1,
+  })
+  tipo_candidatura!: number;
 }

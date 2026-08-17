@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, MaxLength } from 'class-validator';
 
 export class CreateSiglaTipoServicoDto {
   @IsString()
@@ -10,4 +10,8 @@ export class CreateSiglaTipoServicoDto {
   @IsNotEmpty()
   @MaxLength(300)
   descricao!: string;
+
+  @IsNumber()
+  @IsNotEmpty()
+  tipo_candidatura!: number;
 }

@@ -12,17 +12,28 @@ import { BullModule } from '@nestjs/bullmq';
 import { CreatePaymentReferencesProcessor } from 'src/modules/jobs/create-payment-references.processor';
 import { ListPaymentRefenceController } from './list-payment-references.controller';
 import { ListPaymentRefenceService } from './list-payment-references.service';
+import { AppyPayUtil } from '../../util/appypay/appy-pay-util';
 
 @Module({
   imports: [
     InvoiceModule,
-    TypeOrmModule.forFeature([PaymentReferences, InvoiceItem, MesTemp, AcademicYear]),
+    TypeOrmModule.forFeature([
+      PaymentReferences,
+      InvoiceItem,
+      MesTemp,
+      AcademicYear,
+    ]),
     BullModule.registerQueue({
       name: 'payment_reference_service',
     }),
   ],
   controllers: [PaymentReferencesController, ListPaymentRefenceController],
-  providers: [PaymentReferencesService, CreatePaymentReferencesProcessor, ListPaymentRefenceService],
+  providers: [
+    PaymentReferencesService,
+    CreatePaymentReferencesProcessor,
+    ListPaymentRefenceService,
+    AppyPayUtil,
+  ],
   exports: [PaymentReferencesService, CreatePaymentReferencesProcessor],
 })
-export class PaymentReferencesModule { }
+export class PaymentReferencesModule {}

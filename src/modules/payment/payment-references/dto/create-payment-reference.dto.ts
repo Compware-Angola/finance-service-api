@@ -49,31 +49,5 @@ export class CreatePaymentReferenceDto {
   @IsOptional()
   notify?: NotifyInfoDto
 
-  @ApiProperty({
-    description: 'Informações de matrícula ou pré-inscrição (opcional)',
-    type: () => EnrollmentInfoDto,
-    required: false,
-  })
-  @ValidateNested()
-  @Type(() => EnrollmentInfoDto)
-  @IsOptional()
-  enrollment?: EnrollmentInfoDto
-
-
-  // --------------------------------------------------------------------------------
-  // ITENS DA FATURA (ARRAY)
-  // --------------------------------------------------------------------------------
-
-  @ApiProperty({
-    description: 'Lista de itens ou serviços incluídos na fatura.',
-    type: [InvoiceItemDto],
-    required: true,
-  })
-  @IsArray()
-  @ArrayMinSize(1)
-  @ValidateNested({ each: true })
-  @Type(() => InvoiceItemDto)
-  itens?: InvoiceItemDto[];
-
 
 }

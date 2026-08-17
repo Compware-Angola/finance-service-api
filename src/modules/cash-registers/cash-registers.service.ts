@@ -45,7 +45,7 @@ export class CashRegistersService {
     private readonly httpService: HttpService,
     private readonly dataSource: DataSource,
     private readonly paymentAnalyticsService: PaymentAnalyticsService,
-  ) { }
+  ) {}
 
   async findAll(filters?: ListCashRegistersDto) {
     const { page = 1, limit = 10 } = filters || {};
@@ -190,12 +190,13 @@ export class CashRegistersService {
       const unvalidatedCashRegister = await movementRepository.findOne({
         where: {
           operatorId,
-          adminStatus: AdminStatus.PENDING
-
+          adminStatus: AdminStatus.PENDING,
         },
       });
       if (unvalidatedCashRegister) {
-        throw new BadRequestException('Antes de atribuir um novo caixa ao operador, é necessário validar o movimento do ultimo caixa');
+        throw new BadRequestException(
+          'Antes de atribuir um novo caixa ao operador, é necessário validar o movimento do ultimo caixa',
+        );
       }
       const operatorCashRegister = await cashRegisterRepository.findOne({
         where: {
@@ -678,7 +679,7 @@ export class CashRegistersService {
         codigo_abertura: openingCode,
       },
     });
-
+    console.log(`Código de abertura : ${openingCode}`);
     return { message: 'Código enviado para o email do operador com sucesso' };
   }
 
@@ -724,19 +725,21 @@ export class CashRegistersService {
     return toLowerCaseKeys(data) as { email: string; nome: string };
   }
   private returnCashRegisterObj(cashRegister: CashRegister | null) {
-    return cashRegister ? {
-      id: cashRegister.id,
-      name: cashRegister.name,
-      status: cashRegister.status,
-      blocked: cashRegister.blocked,
-      operatorId: cashRegister.operatorId,
-      createdBy: cashRegister.createdBy,
-      updatedBy: cashRegister.updatedBy,
-      deletedBy: cashRegister.deletedBy,
-      createdAt: cashRegister.createdAt,
-      updatedAt: cashRegister.updatedAt,
-      deletedAt: cashRegister.deletedAt,
-    } : null;
+    return cashRegister
+      ? {
+          id: cashRegister.id,
+          name: cashRegister.name,
+          status: cashRegister.status,
+          blocked: cashRegister.blocked,
+          operatorId: cashRegister.operatorId,
+          createdBy: cashRegister.createdBy,
+          updatedBy: cashRegister.updatedBy,
+          deletedBy: cashRegister.deletedBy,
+          createdAt: cashRegister.createdAt,
+          updatedAt: cashRegister.updatedAt,
+          deletedAt: cashRegister.deletedAt,
+        }
+      : null;
   }
 }
 

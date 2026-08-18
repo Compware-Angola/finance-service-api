@@ -326,9 +326,9 @@ export class ConciliacaoDividasService {
         await queryRunner.manager.update(
           InvoiceItem,
           {
-            CodigoFactura: reconciliacao.facturaPropostaAlteracao.Codigo,
+            CodigoFactura: reconciliacao.facturaOriginal.Codigo,
           } as any,
-          { estado: ESTADO_INVOICE_PENDENTE } as any,
+          { estado: ESTADO_FATURA_ELIMINADO } as any,
         );
       }
       // Se REJEITADO: a fatura proposta permanece como está (inativa/estado 3)
@@ -631,7 +631,10 @@ export class ConciliacaoDividasService {
         fi.QUANTIDADE        AS item_quantidade,
         s.PRECO              AS item_preco_unitario,
         fi.TOTAL             AS item_valor_total,
-        mt.DESIGNACAO        AS mes_designacao
+        mt.DESIGNACAO        AS mes_designacao,
+        fi.MULTA             AS item_multa,
+        fi.VALOR_DESCONTO    AS item_valor_desconto,
+        fi.DESCONTOPRODUTO   AS item_desconto_produto
       FROM FK2_FACTURA_ITEMS fi
       LEFT JOIN FK2_TB_TIPO_SERVICOS s ON s.CODIGO = fi.CODIGOPRODUTO
       LEFT JOIN FK2_MES_TEMP mt ON mt.ID = fi.MES_TEMP_ID
@@ -653,6 +656,9 @@ export class ConciliacaoDividasService {
           preco_unitario: Number(item.ITEM_PRECO_UNITARIO ?? 0),
           valor_total: Number(item.ITEM_VALOR_TOTAL ?? 0),
           mes_designacao: item.MES_DESIGNACAO,
+          multa: Number(item.ITEM_MULTA ?? 0),
+          valor_desconto: Number(item.ITEM_VALOR_DESCONTO ?? 0),
+          desconto_produto: Number(item.ITEM_DESCONTO_PRODUTO ?? 0),
         });
       }
     }

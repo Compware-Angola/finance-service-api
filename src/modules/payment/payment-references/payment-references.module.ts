@@ -9,6 +9,7 @@ import { InvoiceItem } from '../../invoice/entities/InvoiceIten.entity';
 import { MesTemp } from './entities/mes-temp.entity';
 import { AcademicYear } from 'src/modules/invoice/entities/academic.year.entity';
 import { BullModule } from '@nestjs/bullmq';
+import { QueueName } from 'src/common/constants/queue.constant';
 import { CreatePaymentReferencesProcessor } from 'src/modules/jobs/create-payment-references.processor';
 import { ListPaymentRefenceController } from './list-payment-references.controller';
 import { ListPaymentRefenceService } from './list-payment-references.service';
@@ -24,7 +25,7 @@ import { AppyPayUtil } from '../../util/appypay/appy-pay-util';
       AcademicYear,
     ]),
     BullModule.registerQueue({
-      name: 'payment_reference_service',
+      name: QueueName.PAYMENT_REFERENCE_SERVICE,
     }),
   ],
   controllers: [PaymentReferencesController, ListPaymentRefenceController],

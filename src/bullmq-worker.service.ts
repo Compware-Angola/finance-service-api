@@ -9,6 +9,7 @@ import { Worker, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
 import { CreatePaymentReferencesProcessor } from './modules/jobs/create-payment-references.processor';
 import { InvoiceProcessor } from './modules/jobs/invoice-servico.processor';
+import { QueueName } from './common/constants/queue.constant';
 
 @Injectable()
 export class BullMQWorkerService
@@ -43,8 +44,11 @@ export class BullMQWorkerService
     });
 
     const queues = [
-      { name: 'payment_reference_service', processor: this.paymentProcessor },
-      { name: 'invoice_service', processor: this.invoiceProcessor },
+      {
+        name: QueueName.PAYMENT_REFERENCE_SERVICE,
+        processor: this.paymentProcessor,
+      },
+      { name: QueueName.INVOICE_SERVICE, processor: this.invoiceProcessor },
     ];
 
     for (const { name, processor } of queues) {

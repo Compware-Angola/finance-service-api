@@ -7,6 +7,7 @@ import { InvoiceItem } from '../invoice/entities/InvoiceIten.entity';
 import { ReconciliacaoNegociacaoDivida } from './entities/conciliacao-divida.entity';
 import { InvoiceService } from '../invoice/invoice.service';
 import { BullModule } from '@nestjs/bullmq';
+import { QueueName } from 'src/common/constants/queue.constant';
 import { StudentMovimentUtilService } from '../shared/student_moviments/student_moviments_util.service';
 import { TypeInvoiceDocument } from '../invoice/entities/type.invoice.document.entity';
 import { AcademicYear } from '../invoice/entities/academic.year.entity';
@@ -18,7 +19,7 @@ import { CompanyKey } from 'src/common/config/security/key-company';
 
   imports: [
     BullModule.registerQueue({
-      name: 'invoice_service',
+      name: QueueName.INVOICE_SERVICE,
     }),
     TypeOrmModule.forFeature([Invoice, InvoiceItem, ReconciliacaoNegociacaoDivida, TypeInvoiceDocument, AcademicYear])],
   controllers: [ConciliacaoDividasController],

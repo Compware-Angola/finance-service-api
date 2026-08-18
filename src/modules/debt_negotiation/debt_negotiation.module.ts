@@ -4,6 +4,7 @@ import { DebtNegotiationService } from './debt_negotiation.service';
 import { DebtNegotiationController } from './debt_negotiation.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
+import { QueueName } from 'src/common/constants/queue.constant';
 
 // Entidades
 import { Payment } from '../payment/entities/payment.entity';
@@ -52,7 +53,7 @@ import { ReconciliacaoNegociacaoDivida } from '../conciliacao-dividas/entities/c
 @Module({
   imports: [
     BullModule.registerQueue({
-      name: 'invoice_service',
+      name: QueueName.INVOICE_SERVICE,
     }),
     TypeOrmModule.forFeature([
       Payment,

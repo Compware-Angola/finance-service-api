@@ -28,6 +28,7 @@ import { generateDueDate } from '../util/generate-due-date';
 import { InvoiceItem } from './entities/InvoiceIten.entity';
 import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
+import { QueueName } from 'src/common/constants/queue.constant';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { InvoiceSearchDto } from './dto/get-invoice.dto';
 import { normalizeParam } from '../util/normalize-util';
@@ -47,7 +48,7 @@ type ExemptionType = { CODIGO: number; SIGLA: string };
 export class InvoiceService {
   private readonly logger = new Logger(InvoiceService.name);
   constructor(
-    @InjectQueue('invoice_service')
+    @InjectQueue(QueueName.INVOICE_SERVICE)
     private readonly invoiceQueue: Queue,
     private readonly studentMovimentUtilService: StudentMovimentUtilService,
     @InjectRepository(Invoice)

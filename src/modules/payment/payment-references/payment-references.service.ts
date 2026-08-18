@@ -22,6 +22,7 @@ import { MesTemp } from './entities/mes-temp.entity';
 import { AcademicYear } from 'src/modules/invoice/entities/academic.year.entity';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { QueueName } from 'src/common/constants/queue.constant';
 import { InvoiceItemDto } from 'src/modules/invoice/dto/create-invoice-itens.dto';
 
 @Injectable()
@@ -29,7 +30,7 @@ export class PaymentReferencesService {
   private readonly logger = new Logger(PaymentReferencesService.name);
 
   constructor(
-    @InjectQueue('payment_reference_service')
+    @InjectQueue(QueueName.PAYMENT_REFERENCE_SERVICE)
     private readonly paymentReferenceQueue: Queue,
     @InjectRepository(MesTemp)
     private readonly mesTempRepository: Repository<MesTemp>,

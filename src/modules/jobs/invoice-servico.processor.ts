@@ -1,7 +1,8 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { InvoiceService } from '../invoice/invoice.service';
-@Processor('invoice_service')
+import { QueueName } from 'src/common/constants/queue.constant';
+@Processor(QueueName.INVOICE_SERVICE)
 export class InvoiceProcessor extends WorkerHost {
   constructor(
     private readonly invoiceService: InvoiceService,

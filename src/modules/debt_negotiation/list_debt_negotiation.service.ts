@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource, Repository } from 'typeorm';
 import { GetDebtNegotiationFilterDto } from './dto/find-deb-negotation.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
@@ -26,7 +30,7 @@ export class ListDebtNegotiationService {
     private readonly dataSource: DataSource,
     @InjectRepository(ReconciliacaoNegociacaoDivida)
     private readonly reconciliacaoRepo: Repository<ReconciliacaoNegociacaoDivida>,
-  ) { }
+  ) {}
 
   async findNegotiations(
     filter: GetDebtNegotiationFilterDto,
@@ -88,7 +92,7 @@ export class ListDebtNegotiationService {
     AND (:faculdadeId IS NULL      OR c.FACULDADE_ID        = :faculdadeId)
     AND (:codigoMatricula IS NULL  OR m.codigo             = :codigoMatricula)
     AND (:nome IS NULL OR fn_remove_acentos(UPPER(p.NOME_COMPLETO)) LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%')
-  ORDER BY nd.CREATED_AT ASC
+  ORDER BY nd.id DESC
   OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
   `;
 
@@ -110,7 +114,9 @@ export class ListDebtNegotiationService {
 
     if (rawResults.length > 0) {
       // Extrai os IDs das negociações da página atual
-      const negociacaoIds: number[] = rawResults.map((r: any) => Number(r.ID ?? r.id));
+      const negociacaoIds: number[] = rawResults.map((r: any) =>
+        Number(r.ID ?? r.id),
+      );
 
       // Uma única query que traz facturas + itens para todas as negociações da página
       const facturasSql = `
@@ -132,10 +138,10 @@ export class ListDebtNegotiationService {
         fa.DATAVENCIMENTO           AS factura_data_vencimento,
         fa.ESTADO                   AS factura_estado,
         fa.ANO_LECTIVO              AS factura_ano_lectivo
-  
+
       FROM FK2_TB_NEGOCIACAO_FACTURA nf
       LEFT JOIN FK2_FACTURA fa        ON fa.CODIGO = nf.CODIGO_FACTURA
-      
+
       WHERE nf.CODIGO_NEGOCIACAO IN (${negociacaoIds.join(',')})
         AND nf.DELETED_AT IS NULL
       ORDER BY nf.CODIGO_NEGOCIACAO, fa.CODIGO
@@ -146,7 +152,6 @@ export class ListDebtNegotiationService {
       // Agrupa: negociacaoId → [facturas com seus itens]
       // Estrutura intermediária: Map<negociacaoId, Map<facturaId, { ...dadosFactura, itens: [...] }>>
       const negociacaoFacturasTemp = new Map<number, Map<number, any>>();
-
 
       for (const row of facturasRaw) {
         const negId = Number(row.CODIGO_NEGOCIACAO);
@@ -174,11 +179,9 @@ export class ListDebtNegotiationService {
             referencia: row.FACTURA_REFERENCIA,
             data_vencimento: row.FACTURA_DATA_VENCIMENTO,
             estado: row.FACTURA_ESTADO,
-            ano_lectivo: row.FACTURA_ANO_LECTIVO
+            ano_lectivo: row.FACTURA_ANO_LECTIVO,
           });
         }
-
-
       }
 
       // Converte para o Map final: negociacaoId → array de facturas
@@ -259,7 +262,9 @@ export class ListDebtNegotiationService {
       totalPages,
       stats: {
         totalDividas: Number(statsResult?.TOTAL_DIVIDAS ?? 0),
-        totalPrimeiroValorApagar: Number(statsResult?.TOTAL_PRIMEIRO_VALOR_APAGAR ?? 0),
+        totalPrimeiroValorApagar: Number(
+          statsResult?.TOTAL_PRIMEIRO_VALOR_APAGAR ?? 0,
+        ),
         totalRestante: Number(statsResult?.TOTAL_RESTANTE ?? 0),
       },
     };
@@ -390,8 +395,8 @@ export class ListDebtNegotiationService {
       negociacaoId,
     } as any);
 
-    const facturaEstaNaNegociacao = facturasRaw.length > 0
-      && Number(facturasRaw[0].ESTA_NA_NEGOCIACAO) === 1;
+    const facturaEstaNaNegociacao =
+      facturasRaw.length > 0 && Number(facturasRaw[0].ESTA_NA_NEGOCIACAO) === 1;
 
     const facturaIds = facturasRaw
       .map((f) => Number(f.FACTURA_ID))
@@ -470,7 +475,6 @@ export class ListDebtNegotiationService {
       };
     });
     console.log(isReconciliado);
-
 
     return {
       ...negociacao,

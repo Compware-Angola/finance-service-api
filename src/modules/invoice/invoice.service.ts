@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -11,6 +12,7 @@ import {
   DeepPartial,
   EntityManager,
   IsNull,
+  Not,
   Repository,
 } from 'typeorm';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -123,6 +125,85 @@ export class InvoiceService {
       await queryRunner.release();
     }
   }
+
+  async createForCandidatura(
+    createInvoiceDto: CreateInvoiceDto,
+  ): Promise<Invoice> {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const preinscricaoId = createInvoiceDto.codigo_preinscricao;
+
+      // 1) Trava a linha da preinscrição (tabela pai). Qualquer outra transação
+      // tentando criar fatura para a MESMA preinscrição fica bloqueada aqui
+      // até esta transação terminar. Liberado automaticamente no commit/rollback.
+      const locked = await queryRunner.manager.query(
+        `SELECT codigo FROM FK2_TB_PREINSCRICAO WHERE codigo = :id FOR UPDATE`,
+        [preinscricaoId],
+      );
+
+      if (!locked || locked.length === 0) {
+        throw new NotFoundException('Preinscrição não encontrada.');
+      }
+
+      // 2) Agora, dentro do lock, verifica se já existe fatura válida
+      const existing = await queryRunner.manager.findOne(Invoice, {
+        where: {
+          codigoPreinscricao: preinscricaoId,
+          anoLectivo: createInvoiceDto.codigo_anoLectivo,
+          codigoDescricao: createInvoiceDto.codigo_descricao,
+        },
+      });
+
+      if (existing) {
+        throw new ConflictException(
+          'Já existe uma fatura para esta candidatura. Recarregue a página.',
+        );
+      }
+
+      // 3) Cria normalmente
+      const result = await this.createInternal(
+        createInvoiceDto,
+        undefined,
+        undefined,
+        queryRunner.manager,
+      );
+
+      await queryRunner.commitTransaction();
+      return result;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+
+      if (
+        err instanceof NotFoundException ||
+        err instanceof BadRequestException ||
+        err instanceof ConflictException
+      ) {
+        throw err;
+      }
+
+      if (err?.code === 1) {
+        // ORA-00001: unique constraint violated — ver índice único abaixo
+        this.logger.warn(
+          `Tentativa de fatura duplicada para preinscricao ${createInvoiceDto.codigo_preinscricao}`,
+        );
+        throw new ConflictException(
+          'Já existe uma fatura para esta candidatura.',
+        );
+      }
+
+      this.logger.error('Erro ao criar fatura de candidatura', err?.stack);
+      throw new InternalServerErrorException(
+        'Erro interno ao criar fatura. Verifique os dados e tente novamente.',
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async annulInvoice(
     Codigo: number,
     CodigoUtilizador: number,

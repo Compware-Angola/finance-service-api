@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -11,6 +12,7 @@ import {
   DeepPartial,
   EntityManager,
   IsNull,
+  Not,
   Repository,
 } from 'typeorm';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -28,6 +30,7 @@ import { generateDueDate } from '../util/generate-due-date';
 import { InvoiceItem } from './entities/InvoiceIten.entity';
 import { Queue } from 'bullmq';
 import { InjectQueue } from '@nestjs/bullmq';
+import { QueueName } from 'src/common/constants/queue.constant';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 import { InvoiceSearchDto } from './dto/get-invoice.dto';
 import { normalizeParam } from '../util/normalize-util';
@@ -47,7 +50,7 @@ type ExemptionType = { CODIGO: number; SIGLA: string };
 export class InvoiceService {
   private readonly logger = new Logger(InvoiceService.name);
   constructor(
-    @InjectQueue('invoice_service')
+    @InjectQueue(QueueName.INVOICE_SERVICE)
     private readonly invoiceQueue: Queue,
     private readonly studentMovimentUtilService: StudentMovimentUtilService,
     @InjectRepository(Invoice)
@@ -123,6 +126,85 @@ export class InvoiceService {
       await queryRunner.release();
     }
   }
+
+  async createForCandidatura(
+    createInvoiceDto: CreateInvoiceDto,
+  ): Promise<Invoice> {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const preinscricaoId = createInvoiceDto.codigo_preinscricao;
+
+      // 1) Trava a linha da preinscrição (tabela pai). Qualquer outra transação
+      // tentando criar fatura para a MESMA preinscrição fica bloqueada aqui
+      // até esta transação terminar. Liberado automaticamente no commit/rollback.
+      const locked = await queryRunner.manager.query(
+        `SELECT codigo FROM FK2_TB_PREINSCRICAO WHERE codigo = :id FOR UPDATE`,
+        [preinscricaoId],
+      );
+
+      if (!locked || locked.length === 0) {
+        throw new NotFoundException('Preinscrição não encontrada.');
+      }
+
+      // 2) Agora, dentro do lock, verifica se já existe fatura válida
+      const existing = await queryRunner.manager.findOne(Invoice, {
+        where: {
+          codigoPreinscricao: preinscricaoId,
+          anoLectivo: createInvoiceDto.codigo_anoLectivo,
+          codigoDescricao: createInvoiceDto.codigo_descricao,
+        },
+      });
+
+      if (existing) {
+        throw new ConflictException(
+          'Já existe uma fatura para esta candidatura. Recarregue a página.',
+        );
+      }
+
+      // 3) Cria normalmente
+      const result = await this.createInternal(
+        createInvoiceDto,
+        undefined,
+        undefined,
+        queryRunner.manager,
+      );
+
+      await queryRunner.commitTransaction();
+      return result;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+
+      if (
+        err instanceof NotFoundException ||
+        err instanceof BadRequestException ||
+        err instanceof ConflictException
+      ) {
+        throw err;
+      }
+
+      if (err?.code === 1) {
+        // ORA-00001: unique constraint violated — ver índice único abaixo
+        this.logger.warn(
+          `Tentativa de fatura duplicada para preinscricao ${createInvoiceDto.codigo_preinscricao}`,
+        );
+        throw new ConflictException(
+          'Já existe uma fatura para esta candidatura.',
+        );
+      }
+
+      this.logger.error('Erro ao criar fatura de candidatura', err?.stack);
+      throw new InternalServerErrorException(
+        'Erro interno ao criar fatura. Verifique os dados e tente novamente.',
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async annulInvoice(
     Codigo: number,
     CodigoUtilizador: number,
@@ -658,10 +740,11 @@ FROM (
         COALESCE(p1.Nome_Completo, p2.Nome_Completo) AS nome_aluno,
         COALESCE(p1.BILHETE_IDENTIDADE, p2.BILHETE_IDENTIDADE)  AS bi_aluno,
         c.designacao                      AS curso,
+        c_cand.designacao                 AS curso_candidatura,
         po.designacao                     AS polo,
         ano.Designacao                    AS ano_lectivo,
         ano.codigo                        AS codigo_ano_lectivo,
-
+        per.DESIGNACAO                   AS turno,
         LISTAGG(ts.Descricao, ' • ')
             WITHIN GROUP (ORDER BY ts.Descricao) AS servicos,
 
@@ -714,11 +797,16 @@ FROM (
     LEFT JOIN FK2_TB_CURSOS c
            ON c.codigo = m.Codigo_Curso
 
+    LEFT JOIN FK2_TB_CURSOS c_cand
+       ON c_cand.codigo = COALESCE(p1.CURSO_CANDIDATURA, p2.CURSO_CANDIDATURA)
+
     LEFT JOIN FK2_POLOS po
            ON po.id = f.polo_id
 
     LEFT JOIN FK2_TB_ANO_LECTIVO ano
            ON ano.Codigo = f.ano_lectivo
+     LEFT JOIN FK2_TB_PERIODOS per
+           ON per.Codigo = p2.CODIGO_TURNO
 
     LEFT JOIN (
         SELECT
@@ -830,8 +918,10 @@ FROM (
         p1.Nome_Completo,
         p1.BILHETE_IDENTIDADE,
         p2.BILHETE_IDENTIDADE,
+        per.DESIGNACAO,
         p2.Nome_Completo,
         c.designacao,
+        c_cand.designacao,
         po.designacao,
         ano.Designacao,
         ano.codigo,

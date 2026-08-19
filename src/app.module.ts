@@ -29,6 +29,8 @@ import { BolsaModule } from './modules/credito_educacional/bolsa/bolsa.module';
 import { InstitutionalContractModule } from './modules/institutional-contract/institutional-contract.module';
 import { ConciliacaoDividasModule } from './modules/conciliacao-dividas/conciliacao-dividas.module';
 import { SiglaTipoServicosModule } from './modules/siglas-service/siglas-service.module';
+import { BullConfigModule } from './common/bull/bull.module';
+import { databaseOptionsFactory } from './common/config/database.factory';
 
 @Module({
   imports: [
@@ -52,46 +54,8 @@ import { SiglaTipoServicosModule } from './modules/siglas-service/siglas-service
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const isSSL = config.get<string>('DB_SSL') === 'true';
-
-        // ✅ Garantir timezone antes da criação da pool Oracle
-        process.env.TZ = config.get<string>('TZ') || 'Africa/Luanda';
-        process.env.ORA_SDTZ =
-          config.get<string>('ORA_SDTZ') || 'Africa/Luanda';
-
-        return {
-          type: 'oracle' as const,
-          host: config.get<string>('DB_HOST'),
-          port: config.get<number>('DB_PORT', 1521),
-          username: config.get<string>('DB_USERNAME'),
-          password: config.get<string>('DB_PASSWORD'),
-          sid: config.get<string>('DB_SID'),
-          timezone: config.get<string>('TZ') || 'Africa/Luanda',
-
-          entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          synchronize: false,
-          logging: ['query', 'error'],
-
-          extra: {
-            disableInsertDefaultValues: true,
-            ...(isSSL ? { ssl: { rejectUnauthorized: true } } : {}),
-          },
-        };
-      },
-    }),
-
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        prefix: config.get<string>('BULL_PREFIX') || 'dev',
-        connection: {
-          host: config.get<string>('REDIS_HOST') || 'localhost',
-          port: config.get<number>('REDIS_PORT') || 6379,
-          // password: config.get<string>('REDIS_PASSWORD'),
-        },
-      }),
+      useFactory: (config: ConfigService) =>
+        databaseOptionsFactory(config, __dirname + '/**/*.entity{.ts,.js}'),
     }),
     InvoiceModule,
     PaymentReferencesModule,
@@ -119,6 +83,7 @@ import { SiglaTipoServicosModule } from './modules/siglas-service/siglas-service
     InstitutionalContractModule,
     ConciliacaoDividasModule,
     SiglaTipoServicosModule,
+    BullConfigModule,
   ],
   providers: [BullMQWorkerService],
 })

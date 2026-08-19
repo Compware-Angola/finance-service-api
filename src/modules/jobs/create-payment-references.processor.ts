@@ -1,7 +1,8 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { PaymentReferencesService } from '../payment/payment-references/payment-references.service';
-@Processor('payment_reference_service')
+import { QueueName } from 'src/common/constants/queue.constant';
+@Processor(QueueName.PAYMENT_REFERENCE_SERVICE)
 export class CreatePaymentReferencesProcessor extends WorkerHost {
   constructor(
     // Inject the service where the logic lives

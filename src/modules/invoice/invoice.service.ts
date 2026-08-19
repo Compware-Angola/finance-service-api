@@ -745,6 +745,7 @@ FROM (
         ano.Designacao                    AS ano_lectivo,
         ano.codigo                        AS codigo_ano_lectivo,
         per.DESIGNACAO                   AS turno,
+        can.DESIGNACAO                   AS candidatura,
         LISTAGG(ts.Descricao, ' • ')
             WITHIN GROUP (ORDER BY ts.Descricao) AS servicos,
 
@@ -805,8 +806,11 @@ FROM (
 
     LEFT JOIN FK2_TB_ANO_LECTIVO ano
            ON ano.Codigo = f.ano_lectivo
+
      LEFT JOIN FK2_TB_PERIODOS per
            ON per.Codigo = p2.CODIGO_TURNO
+      LEFT JOIN FK2_TB_TIPO_CANDIDATURA can
+           ON can.Id = p2.CODIGO_TIPO_CANDIDATURA
 
     LEFT JOIN (
         SELECT
@@ -922,6 +926,7 @@ FROM (
         p2.Nome_Completo,
         c.designacao,
         c_cand.designacao,
+        can.DESIGNACAO,
         po.designacao,
         ano.Designacao,
         ano.codigo,

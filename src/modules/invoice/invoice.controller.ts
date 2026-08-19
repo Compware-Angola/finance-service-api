@@ -63,6 +63,21 @@ export class InvoiceController {
     return this.invoiceService.create(createInvoiceDto);
   }
 
+  @Post('candidatura')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary:
+      'Cria a fatura de taxa de admissão/inscrição para uma candidatura (idempotente)',
+  })
+  @ApiResponse({ status: 201, description: 'Fatura criada com sucesso.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Já existe uma fatura para esta candidatura.',
+  })
+  async createForCandidatura(@Body() createInvoiceDto: CreateInvoiceDto) {
+    return this.invoiceService.createForCandidatura(createInvoiceDto);
+  }
+
   // ------------------------------------
   // 2. FIND ALL (GET) - COM PAGINAÇÃO
   // ------------------------------------

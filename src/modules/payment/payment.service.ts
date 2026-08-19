@@ -462,11 +462,11 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       SELECT COUNT(*) AS TOTAL
       FROM FK2_TB_PAGAMENTOS pg
       INNER JOIN FK2_FACTURA fac         ON fac.codigo = pg.codigo_factura
-      INNER JOIN FK2_TB_MATRICULAS mac   ON mac.codigo = fac.CODIGOMATRICULA
-      INNER JOIN FK2_TB_ADMISSAO adm     ON adm.codigo = mac.CODIGO_ALUNO
-      INNER JOIN FK2_TB_PREINSCRICAO pre ON pre.codigo = adm.PRE_INCRICAO
-      INNER JOIN FK2_TB_CURSOS cur       ON cur.codigo = mac.codigo_curso
-      INNER JOIN FK2_TB_CAIXAS cai       ON cai.codigo = pg.caixa_id
+      LEFT JOIN FK2_TB_MATRICULAS mac   ON mac.codigo = fac.CODIGOMATRICULA
+      LEFT JOIN FK2_TB_ADMISSAO adm     ON adm.codigo = mac.CODIGO_ALUNO
+      LEFT JOIN FK2_TB_PREINSCRICAO pre ON pre.codigo = adm.PRE_INCRICAO
+      LEFT JOIN FK2_TB_CURSOS cur       ON cur.codigo = mac.codigo_curso
+      LEFT JOIN FK2_TB_CAIXAS cai       ON cai.codigo = pg.caixa_id
       WHERE ${whereClause}
     `;
 
@@ -474,6 +474,8 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       this.dataSource.query(sql, params),
       this.dataSource.query(sqlCount, params),
     ]);
+
+    console.log('Cont', countResult);
 
     const total = Number(countResult[0].TOTAL);
 
@@ -761,14 +763,12 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
         // mais abaixo, no passo "2. Atualizar estado da fatura principal")
         if (faturaEntrada.estado !== 1) {
           const vencimentoFormatado = faturaEntrada.datavencimento
-            ? new Date(faturaEntrada.datavencimento).toLocaleDateString(
-              'pt-PT',
-            )
+            ? new Date(faturaEntrada.datavencimento).toLocaleDateString('pt-PT')
             : 'data não definida';
 
           throw new BadRequestException(
             `Não é possível pagar a 2ª prestação (saldo) sem primeiro liquidar a 1ª prestação (entrada), ` +
-            `com vencimento em ${vencimentoFormatado}.`,
+              `com vencimento em ${vencimentoFormatado}.`,
           );
         }
       } else {
@@ -877,7 +877,6 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
         { estados, codigo: dto.codigoFactura } as any,
       );
 
-
       // 3. Siglas anuais
       if (this.hasMatchingSigla(itens, ['TDM', 'IPUCRICULAR(ANUAL)'])) {
         await this.handleAnual(queryRunner, invoice);
@@ -888,14 +887,20 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
         await this.handleSemestral(queryRunner, invoice);
       }
       if (invoice.CodigoMatricula && this.hasMatchingSigla(itens, ['TdMPP'])) {
-        await this.processPostGraduate(queryRunner, { ...invoice, CodigoMatricula: invoice.CodigoMatricula }, itens);
+        await this.processPostGraduate(
+          queryRunner,
+          { ...invoice, CodigoMatricula: invoice.CodigoMatricula },
+          itens,
+        );
       }
 
       if (invoice.CodigoMatricula && this.hasMatchingSigla(itens, ['PROP'])) {
-        await this.processPostGraduate(queryRunner, { ...invoice, CodigoMatricula: invoice.CodigoMatricula }, itens);
+        await this.processPostGraduate(
+          queryRunner,
+          { ...invoice, CodigoMatricula: invoice.CodigoMatricula },
+          itens,
+        );
       }
-
-
 
       // 5. TdEdA
       let tdaResult: { success: boolean; message?: string } | null = null;
@@ -965,7 +970,6 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
             ? { error: true, message: tdaResult.message }
             : { error: false },
       };
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -1056,7 +1060,10 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
   }
   async findMestTemp(codigoAnoLectivo: number, prestacao: number) {
     const sql = `SELECT * FROM FK2_MES_TEMP  WHERE ANO_LECTIVO = :codigoAnoLectivo AND PRESTACAO = :prestacao`;
-    const [result] = await this.dataSource.query(sql, { codigoAnoLectivo, prestacao } as any);
+    const [result] = await this.dataSource.query(sql, {
+      codigoAnoLectivo,
+      prestacao,
+    } as any);
     return result ? toLowerCaseKeys(result) : null;
   }
   // ── Privados ────────────────────────────────────────────────────────────────
@@ -1318,7 +1325,9 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     }
   }
 
-  private async findPostGraduateCandidateTypeAcronymByEnrollmentCode(codigoMatricula: number): Promise<string | null> {
+  private async findPostGraduateCandidateTypeAcronymByEnrollmentCode(
+    codigoMatricula: number,
+  ): Promise<string | null> {
     const sql = `
       SELECT tc.SIGLA FROM FK2_TB_MATRICULAS mt
       INNER JOIN FK2_TB_ADMISSAO ad 
@@ -1327,28 +1336,41 @@ on ad.CODIGO = mt.CODIGO_ALUNO
 on pre.CODIGO = ad.PRE_INCRICAO
       INNER JOIN FK2_TB_TIPO_CANDIDATURA tc on tc.ID = pre.CODIGO_TIPO_CANDIDATURA
       WHERE mt.CODIGO = :codigoMatricula
-`
-    const result = await this.dataSource.query(sql, { codigoMatricula } as any)
+`;
+    const result = await this.dataSource.query(sql, { codigoMatricula } as any);
 
     return result?.length > 0 ? result[0].SIGLA.toUpperCase() : null;
   }
-  private async hasActiveConfirmation(codMatricula: number, anoLectivo: number) {
+  private async hasActiveConfirmation(
+    codMatricula: number,
+    anoLectivo: number,
+  ) {
     const sql = `SELECT CODIGO from FK2_TB_CONFIRMACOES
        WHERE CODIGO_MATRICULA = :codMatricula
        AND CODIGO_ANO_LECTIVO = :anoLectivo
-       AND estado = 1`
-    const result = await this.dataSource.query(sql, { codMatricula, anoLectivo } as any)
+       AND estado = 1`;
+    const result = await this.dataSource.query(sql, {
+      codMatricula,
+      anoLectivo,
+    } as any);
 
     return result?.length > 0;
   }
-  private async checkServiceBelongingToStudent(sigla: string, codigoAnoLectivo: number, codigoCandidatura: number[]) {
+  private async checkServiceBelongingToStudent(
+    sigla: string,
+    codigoAnoLectivo: number,
+    codigoCandidatura: number[],
+  ) {
     const sql = `SELECT 1
 FROM FK2_TB_TIPO_SERVICOS
 WHERE UPPER(SIGLA) = UPPER(:sigla)
 AND TIPO_CANDIDATURA IN (${codigoCandidatura.join(',')})
 AND CODIGO_ANO_LECTIVO = :codigoAnoLectivo
-`
-    const result = await this.dataSource.query(sql, { sigla, codigoAnoLectivo } as any)
+`;
+    const result = await this.dataSource.query(sql, {
+      sigla,
+      codigoAnoLectivo,
+    } as any);
 
     return result?.length > 0;
   }
@@ -1358,26 +1380,46 @@ AND CODIGO_ANO_LECTIVO = :codigoAnoLectivo
 INNER JOIN FK2_MES_TEMP mesTemp
 on mesTemp.ID = itmens.MES_TEMP_ID
 
-WHERE itmens.CODIGOFACTURA = :codigoFactura AND itmens.CODIGO_ANOLECTIVO = :anoLectivo AND mesTemp.PRESTACAO = 1`
-    const result = await this.dataSource.query(sql, { codigoFactura, anoLectivo } as any)
+WHERE itmens.CODIGOFACTURA = :codigoFactura AND itmens.CODIGO_ANOLECTIVO = :anoLectivo AND mesTemp.PRESTACAO = 1`;
+    const result = await this.dataSource.query(sql, {
+      codigoFactura,
+      anoLectivo,
+    } as any);
     return result?.length > 0;
   }
-  private async processPostGraduate(queryRunner: QueryRunner, invoice: Invoice & { CodigoMatricula: number }, itens: any) {
-    const [acronym, hasActiveConfirmation, hasTaxaMatriculaPosGraduacao, firstMonthly] = await Promise.all([
-      this.findPostGraduateCandidateTypeAcronymByEnrollmentCode(invoice.CodigoMatricula),
+  private async processPostGraduate(
+    queryRunner: QueryRunner,
+    invoice: Invoice & { CodigoMatricula: number },
+    itens: any,
+  ) {
+    const [
+      acronym,
+      hasActiveConfirmation,
+      hasTaxaMatriculaPosGraduacao,
+      firstMonthly,
+    ] = await Promise.all([
+      this.findPostGraduateCandidateTypeAcronymByEnrollmentCode(
+        invoice.CodigoMatricula,
+      ),
       this.hasActiveConfirmation(invoice.CodigoMatricula, invoice.anoLectivo),
       this.checkServiceBelongingToStudent('TdMPP', invoice.anoLectivo, [2, 3]),
-      this.CheckFisrtMonthly(invoice.Codigo, invoice.anoLectivo)
-    ])
-    if (acronym && POSTGRADUATE_ACRONYMS.includes(acronym.toUpperCase() as typeof POSTGRADUATE_ACRONYMS[number]) && !hasActiveConfirmation) {
+      this.CheckFisrtMonthly(invoice.Codigo, invoice.anoLectivo),
+    ]);
+    if (
+      acronym &&
+      POSTGRADUATE_ACRONYMS.includes(
+        acronym.toUpperCase() as (typeof POSTGRADUATE_ACRONYMS)[number],
+      ) &&
+      !hasActiveConfirmation
+    ) {
       const hasItemTdMPP = this.hasMatchingSigla(itens, ['TdMPP']);
       if (hasTaxaMatriculaPosGraduacao && hasItemTdMPP) {
         await this.handleAnual(queryRunner, invoice);
-        return
+        return;
       }
       if (!hasTaxaMatriculaPosGraduacao && firstMonthly) {
         await this.handleAnual(queryRunner, invoice);
-        return
+        return;
       }
     }
   }

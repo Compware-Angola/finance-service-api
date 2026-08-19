@@ -659,6 +659,7 @@ FROM (
         COALESCE(p1.Nome_Completo, p2.Nome_Completo) AS nome_aluno,
         COALESCE(p1.BILHETE_IDENTIDADE, p2.BILHETE_IDENTIDADE)  AS bi_aluno,
         c.designacao                      AS curso,
+        c_cand.designacao                 AS curso_candidatura,
         po.designacao                     AS polo,
         ano.Designacao                    AS ano_lectivo,
         ano.codigo                        AS codigo_ano_lectivo,
@@ -714,6 +715,9 @@ FROM (
 
     LEFT JOIN FK2_TB_CURSOS c
            ON c.codigo = m.Codigo_Curso
+
+    LEFT JOIN FK2_TB_CURSOS c_cand
+       ON c_cand.codigo = COALESCE(p1.CURSO_CANDIDATURA, p2.CURSO_CANDIDATURA)
 
     LEFT JOIN FK2_POLOS po
            ON po.id = f.polo_id
@@ -833,6 +837,7 @@ FROM (
         p2.BILHETE_IDENTIDADE,
         p2.Nome_Completo,
         c.designacao,
+        c_cand.designacao,
         po.designacao,
         ano.Designacao,
         ano.codigo,

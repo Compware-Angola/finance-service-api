@@ -663,7 +663,7 @@ FROM (
         po.designacao                     AS polo,
         ano.Designacao                    AS ano_lectivo,
         ano.codigo                        AS codigo_ano_lectivo,
-
+        per.DESIGNACAO                   AS turno,
         LISTAGG(ts.Descricao, ' • ')
             WITHIN GROUP (ORDER BY ts.Descricao) AS servicos,
 
@@ -724,6 +724,8 @@ FROM (
 
     LEFT JOIN FK2_TB_ANO_LECTIVO ano
            ON ano.Codigo = f.ano_lectivo
+     LEFT JOIN FK2_TB_PERIODOS per
+           ON per.Codigo = p2.CODIGO_TURNO
 
     LEFT JOIN (
         SELECT
@@ -835,6 +837,7 @@ FROM (
         p1.Nome_Completo,
         p1.BILHETE_IDENTIDADE,
         p2.BILHETE_IDENTIDADE,
+        per.DESIGNACAO,
         p2.Nome_Completo,
         c.designacao,
         c_cand.designacao,

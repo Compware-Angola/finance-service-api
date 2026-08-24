@@ -12,6 +12,38 @@ import {
   ContratoBolsaEstatisticasQueryDto,
   ListContratoBolsaQueryDto,
 } from './dto/ListContratoBolsaQueryDto';
+import { CsvExportHelper } from 'src/common/helpers/export/csv-export.helper';
+import { PdfExportHelper } from 'src/common/helpers/export/pdf-export.helper';
+import { ExcelExportHelper } from 'src/common/helpers/export/excel-export.helper';
+
+type ContratoBolsaExportRow = Record<string, unknown> & {
+  codigo_contrato?: number;
+  instituicao?: string;
+  data_inicio?: Date | string;
+  data_fim?: Date | string;
+  estado?: number;
+  bolsa?: string;
+  numero_maximo_estudante?: number;
+  tipo_credito?: string;
+  tipo_desconto?: string;
+  valor_desconto?: number;
+  estado_formatado?: string;
+  data_inicio_formatada?: string;
+  data_fim_formatada?: string;
+};
+
+const CONTRATO_BOLSA_EXPORT_HEADERS = [
+  'Contrato',
+  'Instituicao',
+  'Data Inicio',
+  'Data Fim',
+  'Estado',
+  'Credito Educacional',
+  'Nº Maximo Estudantes',
+  'Tipo Credito',
+  'Tipo Desconto',
+];
+
 @Injectable()
 export class InstitutionalContractService {
   constructor(private readonly dataSource: DataSource) {}
@@ -273,7 +305,7 @@ export class InstitutionalContractService {
 
       if (!existente || existente.length === 0) {
         throw new NotFoundException(
-          `Não foi encontrado contrato de bolsa com código ${id}`,
+          `Não foi encontrado contrato de Crédito Educacional com código ${id}`,
         );
       }
 
@@ -293,8 +325,8 @@ export class InstitutionalContractService {
         success: true,
         message:
           novoEstado === 1
-            ? 'Contrato de bolsa ativado com sucesso'
-            : 'Contrato de bolsa desativado com sucesso',
+            ? 'Contrato de Crédito Educacional ativado com sucesso'
+            : 'Contrato de Crédito Educacional desativado com sucesso',
         data: {
           codigoContrato: id,
           estado: novoEstado,
@@ -302,9 +334,12 @@ export class InstitutionalContractService {
       };
     } catch (error: any) {
       await queryRunner.rollbackTransaction();
-      console.error('Erro ao alternar estado do contrato de bolsa:', error);
+      console.error(
+        'Erro ao alternar estado do contrato de Crédito Educacional:',
+        error,
+      );
       throw new BadRequestException(
-        `Falha ao alternar estado do contrato de bolsa: ${error.message}`,
+        `Falha ao alternar estado do contrato de Crédito Educacional: ${error.message}`,
       );
     } finally {
       await queryRunner.release();
@@ -474,5 +509,163 @@ export class InstitutionalContractService {
     }
 
     return mapa;
+  }
+
+  async *exportContratoBolsa(
+    filtros: ListContratoBolsaQueryDto,
+  ): AsyncGenerator<string> {
+    yield* CsvExportHelper.generate(
+      CONTRATO_BOLSA_EXPORT_HEADERS,
+      this.iterateContratoBolsaRows(filtros),
+      (row) => this.mapContratoBolsaExportRow(row),
+    );
+  }
+
+  async writeContratoBolsaPdf(
+    filtros: ListContratoBolsaQueryDto,
+    document: PDFKit.PDFDocument,
+  ): Promise<void> {
+    await PdfExportHelper.writeTable(
+      document,
+      this.iterateContratoBolsaRows(filtros),
+      {
+        title: 'Contratos de Credito Educacional',
+        columns: [
+          { label: 'Contrato', key: 'codigo_contrato', width: 45 },
+          { label: 'Instituicao', key: 'instituicao', width: 120 },
+          { label: 'Inicio', key: 'data_inicio_formatada', width: 60 },
+          { label: 'Fim', key: 'data_fim_formatada', width: 60 },
+          { label: 'Estado', key: 'estado_formatado', width: 45 },
+          { label: 'Credito Educacional', key: 'bolsa', width: 105 },
+          { label: 'Nº Max.', key: 'numero_maximo_estudante', width: 45 },
+          { label: 'Tipo Credito', key: 'tipo_credito', width: 80 },
+        ],
+      },
+    );
+  }
+
+  async writeContratoBolsaExcel(
+    filtros: ListContratoBolsaQueryDto,
+  ): Promise<Buffer> {
+    return ExcelExportHelper.buildWorkbookBuffer(
+      this.iterateContratoBolsaRows(filtros),
+      {
+        title: 'Contratos de Credito Educacional',
+        sheetName: 'Contratos Bolsa',
+        columns: [
+          { label: 'Contrato', key: 'codigo_contrato', width: 14 },
+          { label: 'Instituicao', key: 'instituicao', width: 32 },
+          { label: 'Data Inicio', key: 'data_inicio_formatada', width: 16 },
+          { label: 'Data Fim', key: 'data_fim_formatada', width: 16 },
+          { label: 'Estado', key: 'estado_formatado', width: 14 },
+          { label: 'Credito Educacional', key: 'bolsa', width: 30 },
+          {
+            label: 'Nº Maximo Estudantes',
+            key: 'numero_maximo_estudante',
+            width: 20,
+          },
+          { label: 'Tipo Credito', key: 'tipo_credito', width: 22 },
+          { label: 'Tipo Desconto', key: 'tipo_desconto', width: 22 },
+        ],
+      },
+    );
+  }
+
+  private async *iterateContratoBolsaRows(
+    filtros: ListContratoBolsaQueryDto,
+  ): AsyncGenerator<ContratoBolsaExportRow[]> {
+    const batchSize = 500;
+    let page = 1;
+
+    while (true) {
+      const response = await this.listarContratosBolsa({
+        ...filtros,
+        page,
+        limit: batchSize,
+      });
+
+      if (!response.data.length) break;
+
+      yield this.flattenContratosParaExportacao(response.data);
+
+      if (
+        response.data.length < batchSize ||
+        page * batchSize >= response.total
+      ) {
+        break;
+      }
+
+      page += 1;
+    }
+  }
+
+  private flattenContratosParaExportacao(
+    contratos: any[],
+  ): ContratoBolsaExportRow[] {
+    const linhas: ContratoBolsaExportRow[] = [];
+
+    for (const contrato of contratos) {
+      const base = {
+        codigo_contrato: contrato.codigoContrato,
+        instituicao: contrato.instituicao,
+        data_inicio: contrato.dataInicio,
+        data_fim: contrato.dataFim,
+        estado: contrato.estado,
+        estado_formatado: this.formatEstado(contrato.estado),
+        data_inicio_formatada: this.formatData(contrato.dataInicio),
+        data_fim_formatada: this.formatData(contrato.dataFim),
+      };
+
+      if (!contrato.bolsas || contrato.bolsas.length === 0) {
+        linhas.push({
+          ...base,
+          bolsa: '',
+          numero_maximo_estudante: undefined,
+          tipo_credito: '',
+          tipo_desconto: '',
+          valor_desconto: undefined,
+        });
+        continue;
+      }
+
+      for (const item of contrato.bolsas) {
+        linhas.push({
+          ...base,
+          bolsa: item.designacao,
+          numero_maximo_estudante: item.numeroMaximoEstudante,
+          tipo_credito: item.tipoCredito,
+          tipo_desconto: item.tipoDesconto,
+          valor_desconto: item.valorDesconto,
+        });
+      }
+    }
+
+    return linhas;
+  }
+
+  private mapContratoBolsaExportRow(row: ContratoBolsaExportRow): unknown[] {
+    return [
+      row.codigo_contrato,
+      row.instituicao,
+      row.data_inicio_formatada,
+      row.data_fim_formatada,
+      row.estado_formatado,
+      row.bolsa,
+      row.numero_maximo_estudante,
+      row.tipo_credito,
+      row.tipo_desconto,
+    ];
+  }
+
+  private formatEstado(estado?: number): string {
+    return Number(estado) === 1 ? 'Ativo' : 'Inativo';
+  }
+
+  private formatData(data?: Date | string): string {
+    if (!data) return '';
+    const dataObj = data instanceof Date ? data : new Date(data);
+    if (isNaN(dataObj.getTime())) return '';
+
+    return new Intl.DateTimeFormat('pt-AO').format(dataObj);
   }
 }

@@ -7,16 +7,18 @@ import {
   Param,
   Delete,
   Query,
+  Res,
   ParseIntPipe,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { InstitutionalContractService } from './institutional-contract.service';
 import { CreateContratoBolsaDto } from './dto/CreateContratoBolsaDto';
 import { UpdateContratoBolsaDto } from './dto/UpdateContratoBolsaDto';
-import { FindCreditoEducacionalDto } from '../credito_educacional/dto/find-credito-educacional.dto';
 import {
   ContratoBolsaEstatisticasQueryDto,
   ListContratoBolsaQueryDto,
 } from './dto/ListContratoBolsaQueryDto';
+import { HttpExportHelper } from 'src/common/helpers/export/http-export.helper';
 
 @Controller('institutional-contract')
 export class InstitutionalContractController {
@@ -38,6 +40,58 @@ export class InstitutionalContractController {
     );
   }
 
+  @Get('export')
+  async exportContratoBolsa(
+    @Query() findInstitutionalContractDto: ListContratoBolsaQueryDto,
+    @Res() response: Response,
+  ) {
+    await HttpExportHelper.streamCsv(
+      response,
+      'contratos-credito-educacional',
+      this.institutionalContractService.exportContratoBolsa(
+        findInstitutionalContractDto,
+      ),
+    );
+  }
+
+  @Get('export/pdf')
+  async exportContratoBolsaPdf(
+    @Query() findInstitutionalContractDto: ListContratoBolsaQueryDto,
+    @Res() response: Response,
+  ) {
+    await HttpExportHelper.streamPdf(
+      response,
+      'contratos-credito-educacional',
+      (document) =>
+        this.institutionalContractService.writeContratoBolsaPdf(
+          findInstitutionalContractDto,
+          document,
+        ),
+    );
+  }
+
+  @Get('export/excel')
+  async exportContratoBolsaExcel(
+    @Query() findInstitutionalContractDto: ListContratoBolsaQueryDto,
+    @Res() response: Response,
+  ) {
+    await HttpExportHelper.streamExcel(
+      response,
+      'contratos-credito-educacional',
+      () =>
+        this.institutionalContractService.writeContratoBolsaExcel(
+          findInstitutionalContractDto,
+        ),
+    );
+  }
+
+  @Get('estatisticas')
+  async getEstatisticas(@Query() query: ContratoBolsaEstatisticasQueryDto) {
+    return this.institutionalContractService.obterEstatisticasContratosBolsa(
+      query,
+    );
+  }
+
   @Patch(':id')
   update(
     @Param('id') id: number,
@@ -56,11 +110,5 @@ export class InstitutionalContractController {
   @Delete(':id')
   remove(@Param('id') id: number) {
     return this.institutionalContractService.deleteContratoBolsa(+id);
-  }
-  @Get('estatisticas')
-  async getEstatisticas(@Query() query: ContratoBolsaEstatisticasQueryDto) {
-    return this.institutionalContractService.obterEstatisticasContratosBolsa(
-      query,
-    );
   }
 }

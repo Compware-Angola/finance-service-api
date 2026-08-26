@@ -349,6 +349,7 @@ export class PaymentService {
       nome,
       dataInicio,
       dataFim,
+      tipoServico,
       n_operacao_bancaria2,
       n_operacao_bancaria,
       page = 1,
@@ -402,6 +403,19 @@ export class PaymentService {
         LIKE '%' || fn_remove_acentos(UPPER(:nome)) || '%'
       `);
       params.nome = nome;
+    }
+
+    if (tipoServico) {
+      conditions.push(`
+    EXISTS (
+      SELECT 1
+      FROM FK2_FACTURA_ITEMS fi
+      INNER JOIN FK2_TB_TIPO_SERVICOS ts ON ts.Codigo = fi.CodigoProduto
+      WHERE fi.CodigoFactura = fac.codigo
+        AND LOWER(ts.SIGLA) = LOWER(:tipoServico)
+    )
+  `);
+      params.tipoServico = tipoServico;
     }
 
     const whereClause = conditions.join(' AND ');

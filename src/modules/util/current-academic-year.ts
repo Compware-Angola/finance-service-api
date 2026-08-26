@@ -18,8 +18,7 @@ export class AnoLectivoUtil {
     try {
       const anoAtivo = await this.anoLectivoRepo.findOne({
         where: {
-          estado: 'Ativo',
-          status: 1,
+          faseAnoLectivo: 'ACTIVO',
           codigoTipoCandidatura: tipo_cand,
         },
         select: ['codigo'],

@@ -72,10 +72,11 @@ export class AlunoService {
     }
 
     const whereClause =
-      conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
 
     const baseQuery = `
     FROM FK2_HISTORICO_MOVIMENTO_CONTA_ESTUDANTE hm
+    WHERE hm.ESTADO <> 1
     ${whereClause}
   `;
 

@@ -1,75 +1,75 @@
 export interface DebtNegotiationItem {
-    mes_temp_id: number;
+  mes_temp_id: number;
 
-    mes: string;
+  mes: string;
 
-    data_inicial: Date | string;
+  data_inicial: Date | string;
 
-    data_final: Date | string;
+  data_final: Date | string;
 
-    data_limite: Date | string;
+  data_limite: Date | string;
 
-    semestre: number;
+  semestre: number;
 
-    data_final_desconto: Date | string | null;
+  data_final_desconto: Date | string | null;
 
-    id_item: number;
+  id_item: number;
 
-    id_tipo_servico: number;
+  id_tipo_servico: number;
 
-    descricao_servico: string;
+  descricao_servico: string;
 
-    tipo_servico: string;
+  tipo_servico: string;
 
-    mensalidade: number;
+  mensalidade: number;
 
-    desconto: number;
+  desconto: number;
 
-    multa: number;
+  multa: number;
 
-    total_item: number;
+  total_item: number;
 
-    valor_pago: number;
+  valor_pago: number;
 
-    total: number;
+  total: number;
 
-    total_preco: number;
+  total_preco: number;
 
-    codigo_matricula: number;
+  codigo_matricula: number;
 
-    ano_lectivo_fatura: number;
+  ano_lectivo_fatura: number;
 
-    reference: string;
+  reference: string;
 
-    valorapagar: number;
+  valorapagar: number;
 
-    valorentregue: number;
+  valorentregue: number;
 
-    data_vencimento: Date | string;
+  data_vencimento: Date | string;
 
-    codigo_factura: number;
+  codigo_factura: number;
 
-    total_preco_fatura: number;
+  total_preco_fatura: number;
 
-    estado_fatura: string;
+  estado_fatura: string;
 
-    data_operacao: Date | string | null;
+  data_operacao: Date | string | null;
 
-    data_pagamento: Date | string | null;
+  data_pagamento: Date | string | null;
 
-    status_pagamento: number;
+  status_pagamento: number;
 }
 export type GetAllDebtNegotiationsResponse = {
-    Mensalidades: DebtNegotiationItem[];
-    OutrosServicos: DebtNegotiationItem[];
-    anoAtual: number;
-    totalIVA: number;
-    percentagem_retencao: number;
-    totalDivida: number;
-    total_incidencia: number;
-    total_retencao: number;
-    size: number;
-    desconto: number;
-    precoTotal: number;
-
-}
+  Mensalidades: DebtNegotiationItem[];
+  OutrosServicos: DebtNegotiationItem[];
+  anoAtual: number;
+  designacao: string;
+  totalIVA: number;
+  percentagem_retencao: number;
+  totalDivida: number;
+  total_incidencia: number;
+  total_retencao: number;
+  size: number;
+  desconto: number;
+  precoTotal: number;
+};

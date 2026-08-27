@@ -35,6 +35,15 @@ export class AnoLectivoUtil {
     }
   }
 
+  async getDesignacaoAnoLectivo(anoLectivoId: number): Promise<string> {
+    const ano = await this.anoLectivoRepo.findOne({
+      where: { codigo: anoLectivoId },
+      select: ['designacao'],
+    });
+
+    return ano?.designacao ?? '';
+  }
+
   async getSiglaTipoCandidaturaPorAno(
     anoLectivoId: number,
   ): Promise<string | null> {

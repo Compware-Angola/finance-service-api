@@ -892,6 +892,7 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       );
 
       // 3. Siglas anuais
+
       if (this.hasMatchingSigla(itens, ['TDM', 'IPUCRICULAR(ANUAL)'])) {
         await this.handleAnual(queryRunner, invoice);
       }
@@ -1122,14 +1123,15 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
         codMatricula: invoice.CodigoMatricula,
       } as any,
     );
-
     await queryRunner.query(
       `UPDATE FK2_TB_GRADE_CURRICULAR_ALUNO
-       SET CODIGO_STATUS_GRADE_CURRICULAR = :estado
+       SET CODIGO_STATUS_GRADE_CURRICULAR = :estado,
+           ESTADO = :status
        WHERE codigo_matricula = :codMatricula
        AND codigo_ano_lectivo = :anoLectivo`,
       {
         estado: 2,
+        status: 1,
         codMatricula: invoice.CodigoMatricula,
         anoLectivo: invoice.anoLectivo,
       } as any,
@@ -1344,9 +1346,9 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
   ): Promise<string | null> {
     const sql = `
       SELECT tc.SIGLA FROM FK2_TB_MATRICULAS mt
-      INNER JOIN FK2_TB_ADMISSAO ad 
+      INNER JOIN FK2_TB_ADMISSAO ad
 on ad.CODIGO = mt.CODIGO_ALUNO
-      INNER JOIN FK2_TB_PREINSCRICAO pre 
+      INNER JOIN FK2_TB_PREINSCRICAO pre
 on pre.CODIGO = ad.PRE_INCRICAO
       INNER JOIN FK2_TB_TIPO_CANDIDATURA tc on tc.ID = pre.CODIGO_TIPO_CANDIDATURA
       WHERE mt.CODIGO = :codigoMatricula

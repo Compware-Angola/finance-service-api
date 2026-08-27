@@ -18,8 +18,7 @@ export class AnoLectivoUtil {
     try {
       const anoAtivo = await this.anoLectivoRepo.findOne({
         where: {
-          estado: 'Ativo',
-          status: 1,
+          faseAnoLectivo: 'ACTIVO',
           codigoTipoCandidatura: tipo_cand,
         },
         select: ['codigo'],
@@ -34,6 +33,15 @@ export class AnoLectivoUtil {
 
       return this.FALLBACK_ANO_ID;
     }
+  }
+
+  async getDesignacaoAnoLectivo(anoLectivoId: number): Promise<string> {
+    const ano = await this.anoLectivoRepo.findOne({
+      where: { codigo: anoLectivoId },
+      select: ['designacao'],
+    });
+
+    return ano?.designacao ?? '';
   }
 
   async getSiglaTipoCandidaturaPorAno(

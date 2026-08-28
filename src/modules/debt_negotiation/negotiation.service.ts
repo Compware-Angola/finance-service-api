@@ -161,6 +161,7 @@ export class NegotiationService {
       fi.preco                                      AS total_preco,
       NVL(TO_NUMBER(TRIM(f.CodigoMatricula)), 0)    AS codigo_matricula,
       NVL(TO_NUMBER(TRIM(f.ano_lectivo)), 0)        AS ano_lectivo_fatura,
+      al.Designacao                                AS ano_lectivo_fatura_designacao,
       f.Referencia                                  AS reference,
       f.ValorAPagar                                 AS ValorAPagar,
       f.ValorEntregue                               AS valorEntregue,
@@ -250,7 +251,8 @@ export class NegotiationService {
     const precoTotal = totalDivida - desconto + totalIVA;
     const size = itensPendentes.length + outrosServicos.length;
 
-    const anoLectivoSelecionado = Number(codAnoLectivo) || this.anoAtualPrincipal;
+    const anoLectivoSelecionado =
+      Number(codAnoLectivo) || this.anoAtualPrincipal;
     const designacao = await this.anoLectivoUtil.getDesignacaoAnoLectivo(
       anoLectivoSelecionado,
     );

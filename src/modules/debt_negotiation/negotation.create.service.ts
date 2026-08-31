@@ -35,14 +35,22 @@ export class CreateDebtNegotiationService {
 
   constructor(
     private readonly anoLectivoUtil: AnoLectivoUtil,
-    @InjectRepository(Invoice) private readonly invoiceRepo: Repository<Invoice>,
-    @InjectRepository(InvoiceItem) private readonly invoiceItemRepo: Repository<InvoiceItem>,
-    @InjectRepository(TbPreinscricao) private readonly preinscricaoRepo: Repository<TbPreinscricao>,
-    @InjectRepository(TbMatricula) private readonly matriculaRepo: Repository<TbMatricula>,
-    @InjectRepository(TbAdmissao) private readonly admissaoRepo: Repository<TbAdmissao>,
-    @InjectRepository(AcademicYear) private readonly academicYearRepo: Repository<AcademicYear>,
-    @InjectRepository(DebtNegotiation) private readonly negotiationRepo: Repository<DebtNegotiation>,
-    @InjectRepository(InscricaoAvaliacao) private readonly avaliacaoRepo: Repository<InscricaoAvaliacao>,
+    @InjectRepository(Invoice)
+    private readonly invoiceRepo: Repository<Invoice>,
+    @InjectRepository(InvoiceItem)
+    private readonly invoiceItemRepo: Repository<InvoiceItem>,
+    @InjectRepository(TbPreinscricao)
+    private readonly preinscricaoRepo: Repository<TbPreinscricao>,
+    @InjectRepository(TbMatricula)
+    private readonly matriculaRepo: Repository<TbMatricula>,
+    @InjectRepository(TbAdmissao)
+    private readonly admissaoRepo: Repository<TbAdmissao>,
+    @InjectRepository(AcademicYear)
+    private readonly academicYearRepo: Repository<AcademicYear>,
+    @InjectRepository(DebtNegotiation)
+    private readonly negotiationRepo: Repository<DebtNegotiation>,
+    @InjectRepository(InscricaoAvaliacao)
+    private readonly avaliacaoRepo: Repository<InscricaoAvaliacao>,
     private readonly dataSource: DataSource,
     private readonly invoiceService: InvoiceService,
   ) {
@@ -76,7 +84,8 @@ export class CreateDebtNegotiationService {
       const anoLectivo = await this.academicYearRepo.findOne({
         where: { codigo: this.anoAtualPrincipal },
       });
-      if (!anoLectivo) throw new BadRequestException('Ano letivo não encontrado');
+      if (!anoLectivo)
+        throw new BadRequestException('Ano letivo não encontrado');
 
       // 3. Verificar se já existe negociação neste ano
       const negociacaoExistente = await this.negotiationRepo.findOne({
@@ -102,10 +111,8 @@ export class CreateDebtNegotiationService {
       const tipo_negociacao_id = isTotal ? 2 : 1;
       const valorOriginal = parseFloat((dto.totalDivida ?? 0).toFixed(2));
 
-      const { primeiroValorApagar, valorRestante } = this.calcularValoresPagamento(
-        isTotal,
-        valorOriginal,
-      );
+      const { primeiroValorApagar, valorRestante } =
+        this.calcularValoresPagamento(isTotal, valorOriginal);
 
       // 6. Montar base da fatura
       const totalMulta = todosItensDto.reduce((s, d) => s + (d.multa ?? 0), 0);
@@ -138,7 +145,8 @@ export class CreateDebtNegotiationService {
       //    Exemplo com 5 mensalidades + 3 serviços:
       //      fatura 1: 3 mensalidades + 2 serviços
       //      fatura 2: 2 mensalidades + 1 serviço
-      const itensMapeadosMensalidades = this.mapMensalidadesParaItens(itensMensalidades);
+      const itensMapeadosMensalidades =
+        this.mapMensalidadesParaItens(itensMensalidades);
       const itensMapeadosServicos = this.mapServicosParaItens(itensServicos);
 
       let itensFatura1: InvoiceItemDto[];
@@ -155,37 +163,48 @@ export class CreateDebtNegotiationService {
       }
 
       // 8. Criar fatura de entrada
-      const faturaEntrada = await this.invoiceService.create({
-        ...baseInvoiceDto,
-        Descricao: isTotal
-          ? 'Negociação de Dívida - Pagamento Total'
-          : 'Negociação de Dívida - Entrada 50%',
-        TotalPreco: dto.totalDivida ?? dto.precoTotal ?? 0,
-        ValorAPagar: primeiroValorApagar,
+      const faturaEntrada = await this.invoiceService.create(
+        {
+          ...baseInvoiceDto,
+          Descricao: isTotal
+            ? 'Negociação de Dívida - Pagamento Total'
+            : 'Negociação de Dívida - Entrada 50%',
+          TotalPreco: dto.totalDivida ?? dto.precoTotal ?? 0,
+          ValorAPagar: primeiroValorApagar,
 
-        itens: itensFatura1,
-      } as CreateInvoiceDto, undefined, await generateDueDate(3), queryRunner.manager);
+          itens: itensFatura1,
+        } as CreateInvoiceDto,
+        undefined,
+        await generateDueDate(3),
+        queryRunner.manager,
+      );
 
       // 9. Criar fatura de saldo restante (apenas parcelado)
       let faturaSaldo: Invoice | null = null;
 
       if (!isTotal && valorRestante > 0) {
-        faturaSaldo = await this.invoiceService.create({
-          ...baseInvoiceDto,
-          Descricao: 'Negociação de Dívida - Saldo Restante (Parcelado)',
-          TotalPreco: valorRestante,
-          ValorAPagar: valorRestante,
-          itens: itensFatura2,
-        } as CreateInvoiceDto, undefined, await generateDueDate(150), queryRunner.manager);
+        faturaSaldo = await this.invoiceService.create(
+          {
+            ...baseInvoiceDto,
+            Descricao:
+              'Negociação de Dívida - Saldo Restante (Parcelado) - Pagamento deve ser feito em até 3 meses',
+            TotalPreco: valorRestante,
+            ValorAPagar: valorRestante,
+            itens: itensFatura2,
+          } as CreateInvoiceDto,
+          undefined,
+          await generateDueDate(150),
+          queryRunner.manager,
+        );
       }
 
       // 10. Anular faturas antigas e redirecionar avaliações
       const codigosAntigos: number[] = [
         ...itensMensalidades
-          .map(item => item.codigo_factura)
+          .map((item) => item.codigo_factura)
           .filter((id): id is number => id !== undefined && id !== null),
         ...itensServicos
-          .map(item => item.codfacturaoutrosservicos)
+          .map((item) => item.codfacturaoutrosservicos)
           .filter((id): id is number => id !== undefined && id !== null),
       ];
 
@@ -259,17 +278,23 @@ export class CreateDebtNegotiationService {
         estado: 1,
       } as DeepPartial<DebtNegotiation>);
       await queryRunner.manager.save(negociacao);
-      console.log(negociacao)
+      console.log(negociacao);
       // 13. Registar faturas na tabela de relação
       await queryRunner.manager.query(
         `INSERT INTO FK2_TB_NEGOCIACAO_FACTURA (CODIGO_FACTURA, CODIGO_NEGOCIACAO, CREATED_AT) VALUES (:codigo_factura, :codigo_negociacao, SYSDATE)`,
-        { codigo_factura: faturaEntrada.Codigo, codigo_negociacao: negociacao.id } as any,
+        {
+          codigo_factura: faturaEntrada.Codigo,
+          codigo_negociacao: negociacao.id,
+        } as any,
       );
 
       if (!isTotal && faturaSaldo?.Codigo) {
         await queryRunner.manager.query(
           `INSERT INTO FK2_TB_NEGOCIACAO_FACTURA (CODIGO_FACTURA, CODIGO_NEGOCIACAO, CREATED_AT) VALUES (:codigo_factura, :codigo_negociacao, SYSDATE)`,
-          { codigo_factura: faturaSaldo.Codigo, codigo_negociacao: negociacao.id } as any,
+          {
+            codigo_factura: faturaSaldo.Codigo,
+            codigo_negociacao: negociacao.id,
+          } as any,
         );
       }
 
@@ -286,7 +311,9 @@ export class CreateDebtNegotiationService {
       this.logger.error('Erro na negociação de dívida', error?.stack ?? error);
       throw error instanceof BadRequestException
         ? error
-        : new BadRequestException(error.message || 'Erro ao processar negociação de dívida');
+        : new BadRequestException(
+            error.message || 'Erro ao processar negociação de dívida',
+          );
     } finally {
       await queryRunner.release();
     }
@@ -330,8 +357,10 @@ export class CreateDebtNegotiationService {
     };
   }
 
-  private mapMensalidadesParaItens(itensMensalidades: MensalidadeItemDto[]): InvoiceItemDto[] {
-    return itensMensalidades.map(d => ({
+  private mapMensalidadesParaItens(
+    itensMensalidades: MensalidadeItemDto[],
+  ): InvoiceItemDto[] {
+    return itensMensalidades.map((d) => ({
       CodigoProduto: d.codigo_servico ?? null,
       Quantidade: 1,
       Total: safeNumber(d.total),
@@ -357,14 +386,20 @@ export class CreateDebtNegotiationService {
     }));
   }
 
-  private mapServicosParaItens(itensServicos: ServicoItemDto[]): InvoiceItemDto[] {
-    return itensServicos.map(d => ({
+  private mapServicosParaItens(
+    itensServicos: ServicoItemDto[],
+  ): InvoiceItemDto[] {
+    return itensServicos.map((d) => ({
       CodigoProduto: safeNumber(d.codidigo_servico),
       Quantidade: 1,
       Total: safeNumber(d.total),
-      obs: (d.servico || d.obs)
-        ? `${d.servico ?? 'Serviço/Taxa'}: ${d.obs ?? d.servico}`.substring(0, 45)
-        : '',
+      obs:
+        d.servico || d.obs
+          ? `${d.servico ?? 'Serviço/Taxa'}: ${d.obs ?? d.servico}`.substring(
+              0,
+              45,
+            )
+          : '',
       taxaIva: safeNumber(d.multa),
       valorIva: safeNumber(d.valor_iva),
       preco: safeNumber(d.valor),
@@ -380,7 +415,9 @@ export class CreateDebtNegotiationService {
     }));
   }
 
-  private async getAlunoPorMatricula(codigo_matricula: number): Promise<AlunoInfo | null> {
+  private async getAlunoPorMatricula(
+    codigo_matricula: number,
+  ): Promise<AlunoInfo | null> {
     const sql = `
         SELECT 
             m.Codigo AS matricula,

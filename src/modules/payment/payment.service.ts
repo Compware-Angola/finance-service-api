@@ -898,7 +898,7 @@ OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       }
 
       // 4. Siglas semestrais
-      if (this.hasMatchingSigla(itens, ['SEMESTRAL'])) {
+      if (this.hasMatchingSigla(itens, ['IPUC'])) {
         await this.handleSemestral(queryRunner, invoice);
       }
       if (invoice.CodigoMatricula && this.hasMatchingSigla(itens, ['TdMPP'])) {

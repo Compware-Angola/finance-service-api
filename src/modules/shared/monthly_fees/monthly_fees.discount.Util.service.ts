@@ -273,6 +273,15 @@ export class MonthlyFeesDiscountUtilService {
     };
   }
 
+  private async obterDesignacaoAnoLectivo(codigo: number): Promise<string> {
+    const [row] = await this.dataSource.query(
+      `SELECT Designacao FROM fk2_tb_ano_lectivo WHERE codigo = :codigo FETCH FIRST 1 ROW ONLY`,
+      { codigo } as any,
+    );
+
+    return row?.DESIGNACAO ?? row?.Designacao ?? '';
+  }
+
   // ====================== CÁLCULO DE DESCONTO ======================
   private async calcularDesconto({
     anoLectivo,
@@ -448,6 +457,9 @@ export class MonthlyFeesDiscountUtilService {
     const multa = fix(mensalidadeComDesconto * percentagemMulta);
     const valorFinal = fix(mensalidadeComDesconto + multa);
     const valorPago = isPago ? mensalidade.preco : 0;
+    const anoLectivoFaturaDesignacao = await this.obterDesignacaoAnoLectivo(
+      Number(anoLectivo),
+    );
 
     return {
       mes_temp_id: mesTemp.id,
@@ -458,6 +470,7 @@ export class MonthlyFeesDiscountUtilService {
       id_item: 0,
       codigo_matricula: codigoMatricula,
       ano_lectivo_fatura: anoLectivo,
+      ano_lectivo_fatura_designacao: anoLectivoFaturaDesignacao,
       estado_fatura: statusPagamento,
       ValorAPagar: valorFinal,
       valorEntregue: 0,

@@ -491,7 +491,7 @@ export class NegotiationService {
       valor: Number(raw.fi_preco),
       multa: Number(raw.fi_multa),
       total: Number(raw.fi_total),
-      servico: raw.servico,
+      servico: raw.servico || raw.ts_descricao || 'Outros Serviços',
       ano_lectivo: raw.al_designacao,
       taxa_multa: 0,
       taxa_desconto: 0,

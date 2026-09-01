@@ -199,22 +199,12 @@ export class NegotiationService {
     });
 
     const data = [...results, ...generated];
-
-    // ── Outros Serviços: recorrências ligadas a avaliações (recurso, melhoria, exame especial) ──
-    const recorrenciasAvaliacao = await this.mapRecorrenciasAdicionais(
+    const recorrencias = await this.mapRecorrenciasAdicionais(
       await this.obterRecorrenciasAdicionais(codigo_matricula, codAnoLectivo),
     );
 
-    // ── Outros Serviços: itens de fatura avulsos (não são mensalidade e não estão ligados a avaliação) ──
-    const outrosDiversos = this.mapOutrosServicosDiversos(
-      await this.obterOutrosServicosDiversos(codigo_matricula, codAnoLectivo),
-    );
-
     const mensalidades = toLowerCaseKeys(data);
-    const outrosServicos = toLowerCaseKeys([
-      ...recorrenciasAvaliacao,
-      ...outrosDiversos,
-    ]);
+    const outrosServicos = toLowerCaseKeys(recorrencias);
 
     // Apenas itens não pagos (status_pagamento != 1)
     const itensPendentes = mensalidades.filter(
@@ -385,95 +375,6 @@ export class NegotiationService {
 
     return toLowerCaseKeys(result);
   }
-
-  /**
-   * Busca itens de fatura que NÃO são mensalidade (não têm mes_temp_id)
-   * e que também NÃO estão ligados a uma avaliação (recurso/melhoria/exame
-   * especial), ou seja, todo o "resto" que hoje fica de fora de
-   * Mensalidades e de OutrosServicos (ex: matrícula, seguro escolar,
-   * material didático, etc.).
-   *
-   * ATENÇÃO: o NOT EXISTS abaixo verifica pela FATURA inteira
-   * (f.Codigo = ia.codigo_factura), igual ao que já é feito em
-   * obterRecorrenciasAdicionais. Se uma mesma fatura puder conter, ao
-   * mesmo tempo, um item de avaliação e um item diverso (ex: matrícula +
-   * recurso na mesma fatura), esse item diverso será incorretamente
-   * excluído aqui. Se a ligação em FK2_INSCRICAO_AVALIACOES existir por
-   * ITEM (ex: uma coluna tipo codigo_factura_item / fi_codigo), troque o
-   * NOT EXISTS para comparar por fi.codigo em vez de f.Codigo.
-   */
-  private async obterOutrosServicosDiversos(
-    codigo_matricula: number,
-    codAnoLectivo?: number,
-  ) {
-    const params: any = { codigo_matricula };
-
-    const filtroAno = codAnoLectivo
-      ? (() => {
-        params.codAnoLectivo = codAnoLectivo;
-        return `AND f.ano_lectivo = :codAnoLectivo`;
-      })()
-      : '';
-
-    const sql = `
-      SELECT
-        fi.codigo                AS fi_codigo,
-        fi.CodigoProduto         AS ts_codigo,
-        ts.Descricao             AS servico,
-        ts.TipoServico           AS tipo_servico,
-        fi.preco                 AS fi_preco,
-        fi.Multa                 AS fi_multa,
-        fi.descontoProduto       AS fi_descontoproduto,
-        fi.Total                 AS fi_total,
-        fi.incidencia            AS fi_incidencia,
-        fi.valor_iva             AS fi_valor_iva,
-        fi.taxa_iva              AS fi_taxa_iva,
-        tt.descricao             AS tt_descricao,
-        f.Codigo                 AS f_codigo,
-        al.Codigo                AS al_codigo,
-        al.Designacao            AS al_designacao
-      FROM FK2_FACTURA_ITEMS fi
-      INNER JOIN FK2_FACTURA f          ON f.Codigo = fi.CodigoFactura
-      LEFT  JOIN FK2_TB_TIPO_SERVICOS ts ON ts.Codigo = fi.CodigoProduto
-      LEFT  JOIN FK2_TIPO_TAXAS tt       ON tt.id = ts.taxa_iva_id
-      INNER JOIN fk2_tb_ano_lectivo al   ON al.codigo = f.ano_lectivo
-      WHERE f.CodigoMatricula = :codigo_matricula
-        AND f.estado != 3
-        AND TRIM(UPPER(al.estado)) != 'ACTIVO'
-        AND fi.mes_temp_id IS NULL
-        AND NOT EXISTS (
-          SELECT 1 FROM FK2_INSCRICAO_AVALIACOES ia
-          WHERE ia.codigo_factura = f.Codigo
-        )
-        ${filtroAno}
-    `;
-
-    const result = await this.dataSource.query(sql, params);
-
-    return toLowerCaseKeys(result);
-  }
-
-  private mapOutrosServicosDiversos(rows: any[]) {
-    return rows.map((raw: any) => ({
-      codGradeCurricular: null,
-      codFacturaOutrosServicos: raw.f_codigo,
-      valor: Number(raw.fi_preco),
-      multa: Number(raw.fi_multa),
-      total: Number(raw.fi_total),
-      servico: raw.servico,
-      ano_lectivo: raw.al_designacao,
-      taxa_multa: 0,
-      taxa_desconto: 0,
-      codidigo_servico: Number(raw.ts_codigo),
-      codigo_anoLectivo: Number(raw.al_codigo),
-      desconto: Number(raw.fi_descontoproduto),
-      incidencia: Number(raw.fi_incidencia),
-      valor_iva: Number(raw.fi_valor_iva),
-      tipo_taxas: Number(raw.fi_taxa_iva),
-      taxa_descricao: raw.tt_descricao,
-    }));
-  }
-
   private async mapRecorrenciasAdicionais(recorrenciasAdicionaisRaw: any[]) {
     let recorrencias: any[] = [];
 

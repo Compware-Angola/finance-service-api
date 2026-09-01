@@ -470,7 +470,7 @@ export class NegotiationService {
       LEFT  JOIN FK2_TIPO_TAXAS tt       ON tt.id = ts.taxa_iva_id
       INNER JOIN fk2_tb_ano_lectivo al   ON al.codigo = f.ano_lectivo
       WHERE f.CodigoMatricula = :codigo_matricula
-        AND f.estado != 3
+        AND f.estado NOT IN(3, 1)
         AND TRIM(UPPER(al.estado)) != 'ACTIVO'
         AND fi.mes_temp_id IS NULL
         AND NOT EXISTS (

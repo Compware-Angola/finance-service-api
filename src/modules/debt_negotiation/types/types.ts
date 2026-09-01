@@ -39,6 +39,8 @@ export interface DebtNegotiationItem {
 
   ano_lectivo_fatura: number;
 
+  ano_lectivo_fatura_designacao: string;
+
   reference: string;
 
   valorapagar: number;

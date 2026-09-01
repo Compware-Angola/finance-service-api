@@ -439,6 +439,7 @@ export class NegotiationService {
       INNER JOIN fk2_tb_ano_lectivo al   ON al.codigo = f.ano_lectivo
       WHERE f.CodigoMatricula = :codigo_matricula
         AND f.estado != 3
+        AND TRIM(UPPER(al.estado)) != 'ACTIVO'
         AND fi.mes_temp_id IS NULL
         AND NOT EXISTS (
           SELECT 1 FROM FK2_INSCRICAO_AVALIACOES ia

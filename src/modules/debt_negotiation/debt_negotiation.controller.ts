@@ -9,6 +9,7 @@ import {
   Body,
   ParseIntPipe,
   Param,
+  Delete,
 } from '@nestjs/common';
 
 import { GetDebtDto } from './dto/get-debt.dto';
@@ -62,6 +63,23 @@ export class DebtNegotiationController {
 
 
 
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Eliminar negociação de dívida' })
+  @ApiParam({
+    name: 'id',
+    type: 'integer',
+    description: 'ID da negociação',
+    example: 1,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Negociação eliminada com sucesso',
+  })
+  @ApiResponse({ status: 404, description: 'Negociação não encontrada' })
+  async deleteNegotiation(@Param('id', ParseIntPipe) id: number) {
+    return this.createDebtNegotiationService.deleteNegotiation(id);
+  }
 
   @Get("get-debts-information")
   @ApiOperation({ summary: 'Obter dívidas pendentes do aluno' })

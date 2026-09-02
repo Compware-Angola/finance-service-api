@@ -75,6 +75,7 @@ export class ListDebtNegotiationService {
     nd.CODIGO_ANO_LECTIVO           AS ano_lectivo,
     fa.estado                       AS factura_estado,
     nd.TIPO_NEGOCIACAO_ID           AS tipo_negociacao_id,
+    nd.ESTADO                       AS estado,
     c.FACULDADE_ID                  AS faculdade_id,
     f.DESIGNACAO                    AS faculdade
   FROM FK2_NEGOCIACAO_DIVIDAS nd
@@ -302,6 +303,7 @@ export class ListDebtNegotiationService {
       nd.CODIGO_FATURA                AS codigo_factura,
       nd.CODIGO_ANO_LECTIVO           AS ano_lectivo,
       nd.TIPO_NEGOCIACAO_ID           AS tipo_negociacao_id,
+      nd.ESTADO           AS estado,
       c.FACULDADE_ID                  AS faculdade_id,
       f.DESIGNACAO                    AS faculdade
     FROM FK2_NEGOCIACAO_DIVIDAS nd

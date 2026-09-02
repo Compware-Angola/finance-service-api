@@ -1,6 +1,17 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In as TypeOrmIn, DeepPartial } from 'typeorm';
+import {
+  Repository,
+  DataSource,
+  In as TypeOrmIn,
+  DeepPartial,
+  In,
+} from 'typeorm';
 import { CreateDebtNegotiationDto } from './dto/create-debt_negotiation.dto';
 import { TbPreinscricao } from './entities/tb-preinscricao.entity';
 import { Invoice } from '../invoice/entities/invoice.entity';
@@ -67,6 +78,59 @@ export class CreateDebtNegotiationService {
   // MÉTODO PRINCIPAL
   // ============================================================
 
+  async deleteNegotiation(id: number): Promise<void> {
+    const negociacao = await this.negotiationRepo.findOne({ where: { id } });
+
+    if (!negociacao) {
+      throw new NotFoundException('Negociação de dívida não encontrada');
+    }
+
+    const faturasLigadas: { CODIGO_FACTURA: number }[] =
+      await this.dataSource.query(
+        `SELECT CODIGO_FACTURA FROM FK2_TB_NEGOCIACAO_FACTURA WHERE CODIGO_NEGOCIACAO = :id`,
+        { id } as any,
+      );
+
+    const codigosFactura = faturasLigadas
+      .map((f) => Number(f.CODIGO_FACTURA))
+      .filter((codigo) => !Number.isNaN(codigo));
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      if (codigosFactura.length > 0) {
+        await queryRunner.manager.update(
+          Invoice,
+          { Codigo: In(codigosFactura) },
+          { estado: 3 },
+        );
+
+        await queryRunner.manager.update(
+          InvoiceItem,
+          { CodigoFactura: In(codigosFactura) },
+          { estado: 3 },
+        );
+      }
+
+      await queryRunner.manager.update(DebtNegotiation, { id }, { estado: 0 });
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(
+        'Erro ao eliminar negociação de dívida',
+        error?.stack ?? error,
+      );
+      throw new BadRequestException(
+        error.message || 'Erro ao eliminar negociação de dívida',
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
   async createDebtNegotiation(
     dto: CreateDebtNegotiationDto,
     codigo_matricula: number,
@@ -92,6 +156,7 @@ export class CreateDebtNegotiationService {
         where: {
           codigo_matricula: aluno.matricula,
           codigo_ano_lectivo: this.anoAtualPrincipal,
+          estado: 1, // Apenas negociações ativas
         },
       });
 

@@ -13,11 +13,14 @@ import { CreateInvoiceDto } from 'src/modules/invoice/dto/create-invoice.dto';
 import { ReconciliacaoNegociacaoDivida } from './entities/conciliacao-divida.entity';
 import { FindConciliacaoDividaDto } from './dto/find-conciliacao-divida.dto';
 import { PagedResult } from '../debt_negotiation/list_debt_negotiation.service';
-import { ReconciliacaoDecisaoEnum, ValidarConciliacaoDividaDto } from './dto/validar-conciliacao-divida.dto';
+import {
+  ReconciliacaoDecisaoEnum,
+  ValidarConciliacaoDividaDto,
+} from './dto/validar-conciliacao-divida.dto';
 import { toLowerCaseKeys } from '../util/toLowerCaseKeys';
 
 const ESTADO_FATURA_ELIMINADO = 3;
-const ESTADO_INVOICE_PENDENTE = 0
+const ESTADO_INVOICE_PENDENTE = 0;
 
 @Injectable()
 export class ConciliacaoDividasService {
@@ -30,13 +33,14 @@ export class ConciliacaoDividasService {
     private readonly reconciliacaoRepo: Repository<ReconciliacaoNegociacaoDivida>,
     private readonly invoiceService: InvoiceService,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   async create(
     createConciliacaoDividaDto: CreateConciliacaoDividaDto,
     createdBy: number,
   ) {
-    const { invoices, descricao, codigoNegociacaoDivida } = createConciliacaoDividaDto;
+    const { invoices, descricao, codigoNegociacaoDivida } =
+      createConciliacaoDividaDto;
 
     // ============================================================
     // 1. PRÉ-VALIDAÇÃO — confere TUDO antes de criar qualquer coisa
@@ -137,6 +141,15 @@ export class ConciliacaoDividasService {
           invoiceDto.invoiceId,
         )!;
 
+        // =========================================================
+        // 2.2 EXCLUSÃO - EXCLUIR ITENS QUE NÃO DEVE PERTENCER A FACTURA
+        // =========================================================
+        const idsExcluidos = new Set(
+          (invoiceDto.itensExcluidos ?? []).map((i) => i.InvoiceItemId),
+        );
+        const itensParaIncluir = itensOriginais.filter(
+          (item: any) => !idsExcluidos.has(item.codigo),
+        );
 
         // Mapa InvoiceItemId (original) -> novo valor conciliado.
         // Só contém entradas para os itens que o usuário quis MUDAR.
@@ -157,8 +170,8 @@ export class ConciliacaoDividasService {
           return {
             CodigoProduto: item.CodigoProduto,
             Quantidade: item.Quantidade,
-            Total: usarNovoValor ? novoValor : item.total,       // item não alterado mantém o Total original
-            preco: usarNovoValor ? novoValor : item.preco,       // item não alterado mantém o preco original
+            Total: usarNovoValor ? novoValor : item.total, // item não alterado mantém o Total original
+            preco: usarNovoValor ? novoValor : item.preco, // item não alterado mantém o preco original
             obs: item.obs,
             taxaIva: item.taxaIva,
             valorIva: item.valorIva,
@@ -175,9 +188,7 @@ export class ConciliacaoDividasService {
           };
         });
 
-
         console.log(novosItens, 'NOVO');
-
 
         // Soma o total usando SOMENTE novosItens, porque ele já contém
         // TODOS os itens (alterados e não alterados). Somar de novo os
@@ -197,7 +208,8 @@ export class ConciliacaoDividasService {
           TotalPreco: novoTotalPreco,
           ValorAPagar: novoTotalPreco,
           Descricao:
-            descricao ?? `Proposta de conciliação da fatura ${faturaOriginal.Codigo}`,
+            descricao ??
+            `Proposta de conciliação da fatura ${faturaOriginal.Codigo}`,
           codigo_descricao: faturaOriginal.codigoDescricao,
           polo_id: faturaOriginal.poloId,
           canal: faturaOriginal.canal,
@@ -256,7 +268,10 @@ export class ConciliacaoDividasService {
     } catch (err) {
       await queryRunner.rollbackTransaction();
 
-      if (err instanceof BadRequestException || err instanceof NotFoundException) {
+      if (
+        err instanceof BadRequestException ||
+        err instanceof NotFoundException
+      ) {
         throw err;
       }
       throw new BadRequestException(
@@ -347,12 +362,21 @@ export class ConciliacaoDividasService {
       await queryRunner.commitTransaction();
       return {
         message: 'Conciliação validada com sucesso.',
-        estadoFacturaOriginal: dto.decisao === ReconciliacaoDecisaoEnum.REJEITADO ? 'ANULADA' : ESTADO_INVOICE_PENDENTE,
-        estadoFacturaPropostaAlteracao: dto.decisao === ReconciliacaoDecisaoEnum.APROVADO ? ESTADO_INVOICE_PENDENTE : 'ANULADA',
+        estadoFacturaOriginal:
+          dto.decisao === ReconciliacaoDecisaoEnum.REJEITADO
+            ? 'ANULADA'
+            : ESTADO_INVOICE_PENDENTE,
+        estadoFacturaPropostaAlteracao:
+          dto.decisao === ReconciliacaoDecisaoEnum.APROVADO
+            ? ESTADO_INVOICE_PENDENTE
+            : 'ANULADA',
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      if (err instanceof BadRequestException || err instanceof NotFoundException) {
+      if (
+        err instanceof BadRequestException ||
+        err instanceof NotFoundException
+      ) {
         throw err;
       }
       throw new BadRequestException(
@@ -366,9 +390,7 @@ export class ConciliacaoDividasService {
   /**
    * Lista todas as reconciliações, com filtros e paginação.
    */
-  async findAll(
-    filter: FindConciliacaoDividaDto,
-  ): Promise<PagedResult<any>> {
+  async findAll(filter: FindConciliacaoDividaDto): Promise<PagedResult<any>> {
     const {
       page = 1,
       limit = 10,
@@ -511,14 +533,14 @@ export class ConciliacaoDividasService {
       },
       facturaPropostaAlteracao: row.factura_proposta_id
         ? {
-          codigo: row.factura_proposta_id,
-          descricao: row.factura_proposta_descricao,
-          referencia: row.factura_proposta_referencia,
-          estado: row.factura_proposta_estado,
-          totalPreco: Number(row.factura_proposta_total_preco ?? 0),
-          valorApagar: Number(row.factura_proposta_valor_apagar ?? 0),
-          data: row.factura_proposta_data,
-        }
+            codigo: row.factura_proposta_id,
+            descricao: row.factura_proposta_descricao,
+            referencia: row.factura_proposta_referencia,
+            estado: row.factura_proposta_estado,
+            totalPreco: Number(row.factura_proposta_total_preco ?? 0),
+            valorApagar: Number(row.factura_proposta_valor_apagar ?? 0),
+            data: row.factura_proposta_data,
+          }
         : null,
       estudante: {
         codigoMatricula: row.codigo_matricula,
@@ -617,8 +639,10 @@ export class ConciliacaoDividasService {
        Busca única trazendo a descrição do serviço
        via JOIN com FK2_TB_TIPO_SERVICOS
        ============================================= */
-    const facturaIds = [row.factura_original_id, row.factura_proposta_id]
-      .filter((v) => v !== null && v !== undefined);
+    const facturaIds = [
+      row.factura_original_id,
+      row.factura_proposta_id,
+    ].filter((v) => v !== null && v !== undefined);
 
     const itensPorFactura = new Map<number, any[]>();
 
@@ -663,9 +687,10 @@ export class ConciliacaoDividasService {
       }
     }
 
-    const itensFacturaOriginal = itensPorFactura.get(Number(row.factura_original_id)) ?? [];
+    const itensFacturaOriginal =
+      itensPorFactura.get(Number(row.factura_original_id)) ?? [];
     const itensFacturaProposta = row.factura_proposta_id
-      ? itensPorFactura.get(Number(row.factura_proposta_id)) ?? []
+      ? (itensPorFactura.get(Number(row.factura_proposta_id)) ?? [])
       : [];
 
     return {
@@ -693,15 +718,15 @@ export class ConciliacaoDividasService {
 
       facturaPropostaAlteracao: row.factura_proposta_id
         ? {
-          codigo: row.factura_proposta_id,
-          descricao: row.factura_proposta_descricao,
-          referencia: row.factura_proposta_referencia,
-          estado: row.factura_proposta_estado,
-          totalPreco: Number(row.factura_proposta_total_preco ?? 0),
-          valorApagar: Number(row.factura_proposta_valor_apagar ?? 0),
-          data: row.factura_proposta_data,
-          itens: itensFacturaProposta,
-        }
+            codigo: row.factura_proposta_id,
+            descricao: row.factura_proposta_descricao,
+            referencia: row.factura_proposta_referencia,
+            estado: row.factura_proposta_estado,
+            totalPreco: Number(row.factura_proposta_total_preco ?? 0),
+            valorApagar: Number(row.factura_proposta_valor_apagar ?? 0),
+            data: row.factura_proposta_data,
+            itens: itensFacturaProposta,
+          }
         : null,
 
       estudante: {

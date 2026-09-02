@@ -73,6 +73,7 @@ export class ListDebtNegotiationService {
     nd.VALORRESTANTE                AS valor_restante,
     nd.CODIGO_FATURA                AS codigo_factura,
     nd.CODIGO_ANO_LECTIVO           AS ano_lectivo,
+    fa.estado                       AS factura_estado,
     nd.TIPO_NEGOCIACAO_ID           AS tipo_negociacao_id,
     c.FACULDADE_ID                  AS faculdade_id,
     f.DESIGNACAO                    AS faculdade
@@ -138,10 +139,10 @@ export class ListDebtNegotiationService {
         fa.DATAVENCIMENTO           AS factura_data_vencimento,
         fa.ESTADO                   AS factura_estado,
         fa.ANO_LECTIVO              AS factura_ano_lectivo
-  
+
       FROM FK2_TB_NEGOCIACAO_FACTURA nf
       LEFT JOIN FK2_FACTURA fa        ON fa.CODIGO = nf.CODIGO_FACTURA
-      
+
       WHERE nf.CODIGO_NEGOCIACAO IN (${negociacaoIds.join(',')})
         AND nf.DELETED_AT IS NULL
       ORDER BY nf.CODIGO_NEGOCIACAO, fa.CODIGO

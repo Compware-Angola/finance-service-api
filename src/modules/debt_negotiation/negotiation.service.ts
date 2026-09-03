@@ -311,7 +311,6 @@ export class NegotiationService {
       `ia.codigo_matricula = :codigo_matricula`,
       `ia.estado != 'anulado'`,
       `f.estado NOT IN (1, 3)`,
-      `f.corrente = 1`,
       `ia.codigo_tipo_avaliacao IN (7,11,22)`,
     ];
 
@@ -324,56 +323,91 @@ export class NegotiationService {
       params.codAnoLectivo = codAnoLectivo;
     }
 
+    // Cada avaliação (ia) corresponde a uma disciplina em recurso/exame
+    // especial/melhoria. Como os itens de factura desses serviços partilham
+    // o mesmo CodigoProduto e não têm ligação directa à grade, emparelhamos
+    // 1:1 a nª avaliação com o nª item da factura (ordenados por código) para
+    // que cada valor (total, incidência, IVA, desconto) seja lido uma única
+    // vez e não haja duplicação nos somatórios.
     const sql = `
-        SELECT 
-          f.Codigo                        AS f_codigo,
-          MAX(f.ValorAPagar)              AS f_valorapagar,
-          gc.Codigo                       AS gc_codigo,
-          ia.codigo_tipo_avaliacao        AS codigo_tipo_avaliacao,
-          MAX(fi.preco)                   AS fi_preco,
-          MAX(fi.Multa)                   AS fi_multa,
-          MAX(fi.descontoProduto)         AS fi_descontoproduto,
-          MAX(fi.Total)                   AS fi_total,
-          MAX(d.Designacao)               AS d_designacao,
-          MAX(al.Codigo)                  AS al_codigo,
-          MAX(al.Designacao)              AS al_designacao,
-          MAX(ts.Codigo)                  AS ts_codigo,
-          MAX(fi.incidencia)              AS fi_incidencia,
-          MAX(fi.valor_iva)               AS fi_valor_iva,
-          MAX(fi.taxa_iva)                AS fi_taxa_iva,
-          MAX(tt.descricao)               AS tt_descricao
+        WITH ia_filtrada AS (
+          SELECT
+            ia.codigo                 AS ia_codigo,
+            ia.codigo_factura         AS codigo_factura,
+            ia.codigo_tipo_avaliacao  AS codigo_tipo_avaliacao,
+            ia.codigo_grade_aluno     AS codigo_grade_aluno,
+            ROW_NUMBER() OVER (
+              PARTITION BY ia.codigo_factura ORDER BY ia.codigo
+            ) AS rn
+          FROM FK2_INSCRICAO_AVALIACOES ia
+          LEFT JOIN FK2_FACTURA f
+            ON f.Codigo = ia.codigo_factura
+          WHERE ${filtros.join(' AND ')}
+        ),
+        fi_numerada AS (
+          SELECT
+            fi.CodigoFactura   AS codigo_factura,
+            fi.CodigoProduto   AS codigo_produto,
+            fi.preco           AS preco,
+            fi.Multa           AS multa,
+            fi.descontoProduto AS desconto_produto,
+            fi.Total           AS total,
+            fi.incidencia      AS incidencia,
+            fi.valor_iva       AS valor_iva,
+            fi.taxa_iva        AS taxa_iva,
+            ROW_NUMBER() OVER (
+              PARTITION BY fi.CodigoFactura ORDER BY fi.codigo
+            ) AS rn
+          FROM FK2_FACTURA_ITEMS fi
+          WHERE fi.mes_temp_id IS NULL
+        )
+        SELECT
+          ia.ia_codigo              AS ia_codigo,
+          f.Codigo                  AS f_codigo,
+          f.ValorAPagar             AS f_valorapagar,
+          gc.Codigo                 AS gc_codigo,
+          ia.codigo_tipo_avaliacao  AS codigo_tipo_avaliacao,
+          fi.preco                  AS fi_preco,
+          fi.multa                  AS fi_multa,
+          fi.desconto_produto       AS fi_descontoproduto,
+          fi.total                  AS fi_total,
+          d.Designacao              AS d_designacao,
+          al.Codigo                 AS al_codigo,
+          al.Designacao             AS al_designacao,
+          ts.Codigo                 AS ts_codigo,
+          fi.incidencia             AS fi_incidencia,
+          fi.valor_iva              AS fi_valor_iva,
+          fi.taxa_iva               AS fi_taxa_iva,
+          tt.descricao              AS tt_descricao
 
-        FROM FK2_INSCRICAO_AVALIACOES ia
+        FROM ia_filtrada ia
 
         LEFT JOIN FK2_FACTURA f
           ON f.Codigo = ia.codigo_factura
 
-        LEFT JOIN FK2_FACTURA_ITEMS fi
-          ON fi.CodigoFactura = f.Codigo
+        LEFT JOIN fi_numerada fi
+          ON fi.codigo_factura = ia.codigo_factura
+         AND fi.rn = ia.rn
 
         LEFT JOIN FK2_TB_ANO_LECTIVO al
           ON al.Codigo = f.ano_lectivo
 
         LEFT JOIN FK2_TB_TIPO_SERVICOS ts
-          ON ts.Codigo = fi.CodigoProduto
+          ON ts.Codigo = fi.codigo_produto
 
         LEFT JOIN FK2_TIPO_TAXAS tt
           ON tt.id = ts.taxa_iva_id
 
+        LEFT JOIN FK2_TB_GRADE_CURRICULAR_ALUNO gca
+          ON gca.Codigo = ia.codigo_grade_aluno
+
         LEFT JOIN FK2_TB_GRADE_CURRICULAR gc
-          ON gc.Codigo = ts.CODIGO_GRADE_CURRILULAR
+          ON gc.Codigo = gca.codigo_grade_curricular
 
         LEFT JOIN FK2_TB_DISCIPLINAS d
           ON d.Codigo = gc.Codigo_Disciplina
 
-        WHERE ${filtros.join(' AND ')}
-
-        GROUP BY
-          gc.Codigo,
-          f.Codigo,
-          ia.codigo_tipo_avaliacao
-
-        ORDER BY gc.Codigo
+        ORDER BY ia.ia_codigo
     `;
 
     const result = await this.dataSource.query(sql, params);
@@ -384,8 +418,6 @@ export class NegotiationService {
     let recorrencias: any[] = [];
 
     for (const raw of recorrenciasAdicionaisRaw) {
-      console.log(raw);
-
       const codGradeCurricular = raw.gc_codigo;
 
       const servico = this.montarNomeServico(
